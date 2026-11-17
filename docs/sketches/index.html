@@ -1,0 +1,487 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Sunken Covenant Sketches</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=IM+Fell+English:ital@0;1&family=IM+Fell+English+SC&display=swap">
+<style>
+/* Layout: an engraver's portfolio — a dark table, five numbered plates, each a framed mockup with margin notes. */
+:root{
+  color-scheme: dark;
+  --ink:#0d0b08; --sepia:#2a2116; --amber:#d9a441; --parch:#e8d5a3;
+  --brass:#b08d3c; --wax:#8c2f1b; --wood:#3b2a18; --muted:#a8946a;
+  --display:"IM Fell English SC","Iowan Old Style",Georgia,serif;
+  --body:"IM Fell English","Iowan Old Style",Georgia,serif;
+  --label:"Cinzel","Trajan Pro",Georgia,serif;
+}
+*{box-sizing:border-box}
+body{background:var(--ink);color:var(--parch);font-family:var(--body);font-size:18px;line-height:1.5;
+  padding-block:40px 80px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1240px;margin:0 auto;display:flex;flex-direction:column;gap:64px}
+header{display:flex;flex-direction:column;gap:12px;border-bottom:1px solid var(--brass);padding-bottom:28px}
+.eyebrow{font-family:var(--label);font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--muted)}
+h1{font-family:var(--display);font-weight:400;font-size:clamp(34px,6vw,64px);line-height:1.05;margin:0;color:var(--amber);letter-spacing:.03em;text-wrap:balance}
+.lead{max-width:65ch;margin:0;color:var(--parch)}
+.plate{display:flex;flex-direction:column;gap:18px}
+.plate-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 18px}
+.plate-no{font-family:var(--label);font-size:13px;letter-spacing:.25em;color:var(--amber)}
+h2{font-family:var(--display);font-weight:400;font-size:clamp(24px,3.4vw,34px);margin:0;color:var(--parch);text-wrap:balance}
+.frame{border:1px solid var(--brass);outline:1px solid var(--sepia);outline-offset:5px;background:var(--ink);overflow-x:auto;margin:6px}
+.frame svg{display:block;width:100%;min-width:860px;height:auto}
+.notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px 32px;margin:0;padding:0;list-style:none}
+.notes li{min-width:0;font-size:16px;color:var(--muted);border-top:1px solid var(--sepia);padding-top:10px}
+.notes b{font-weight:400;color:var(--amber);font-family:var(--display);letter-spacing:.04em}
+.swatches{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:14px}
+.sw{display:flex;flex-direction:column;gap:6px;font-family:var(--label);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.sw i{display:block;height:64px;border:1px solid var(--brass)}
+.types{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:24px}
+.types div{min-width:0;border-top:1px solid var(--sepia);padding-top:12px}
+.types small{display:block;font-family:var(--label);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.t1{font-family:var(--display);font-size:34px;color:var(--amber);line-height:1.1}
+.t2{font-family:var(--body);font-style:italic;font-size:21px}
+.t3{font-family:var(--label);font-weight:700;font-size:15px;letter-spacing:.2em}
+.lever{transition:transform .9s cubic-bezier(.3,1.5,.5,1)}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{animation:spin 30s linear infinite}
+@media (prefers-reduced-motion:reduce){.spin{animation:none}.lever{transition:none}}
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">Fase 0 · Bocetos visuales</span>
+    <h1>The Sunken Covenant</h1>
+    <p class="lead">Cinco láminas con la dirección visual del juego: el mar como una carta náutica grabada, barcos de formas simples y una interfaz de madera y latón con piezas que giran. Son maquetas dibujadas, no el juego; sirven para decidir el aspecto antes de programar.</p>
+  </header>
+
+  <section class="plate">
+    <div class="plate-head"><span class="plate-no">PLATE I</span><h2>La partida</h2></div>
+    <div class="frame"><svg id="p1" viewBox="0 0 1200 780" role="img" aria-label="Boceto de la pantalla de partida"></svg></div>
+    <ul class="notes">
+      <li><b>Una sola carta.</b> Las aguas enemigas quedan al fondo, bajo un rayado de niebla; las tuyas, delante. La cámara 3D mira desde tu lado de la mesa.</li>
+      <li><b>Telégrafo de máquinas.</b> La palanca elige la acción: Fire, Sail, Turn o Ability. Cada acción gasta balas de la bandeja de puntos de acción.</li>
+      <li><b>Cabrestante.</b> Girarlo termina el turno. La rosa de los vientos marca de quién es el turno y el tiempo que queda.</li>
+      <li><b>Sub-objetivos a la vista.</b> Cofres, sellos del pacto, el faro y la tormenta están sobre la carta; las órdenes del Almirantazgo, en el panel izquierdo.</li>
+    </ul>
+  </section>
+
+  <section class="plate">
+    <div class="plate-head"><span class="plate-no">PLATE II</span><h2>La sala</h2></div>
+    <div class="frame"><svg id="p2" viewBox="0 0 1200 600" role="img" aria-label="Boceto del lobby"></svg></div>
+    <ul class="notes">
+      <li><b>Sin cuentas.</b> Un capitán crea la sala y recibe un código de cuatro caracteres; el otro lo introduce girando los tambores de latón.</li>
+      <li><b>Un contrato.</b> El lobby es el documento del pacto: los dos capitanes "firman" y la partida empieza.</li>
+    </ul>
+  </section>
+
+  <section class="plate">
+    <div class="plate-head"><span class="plate-no">PLATE III</span><h2>Despliegue de la flota</h2></div>
+    <div class="frame"><svg id="p3" viewBox="0 0 1200 680" role="img" aria-label="Boceto de la colocación de barcos"></svg></div>
+    <ul class="notes">
+      <li><b>Astillero.</b> Cinco clases del siglo XIX, cada una con su tamaño y su rasgo. El barco seleccionado aparece como silueta punteada sobre la carta.</li>
+      <li><b>Rueda de timón.</b> Gira el barco 90° antes de soltarlo. El cabrestante confirma la flota.</li>
+    </ul>
+  </section>
+
+  <section class="plate">
+    <div class="plate-head"><span class="plate-no">PLATE IV</span><h2>La llamada del Kraken</h2></div>
+    <div class="frame"><svg id="p4" viewBox="0 0 1200 700" role="img" aria-label="Boceto de la invocación del Kraken"></svg></div>
+    <ul class="notes">
+      <li><b>La carta se hace de noche.</b> Al romper los tres sellos, el pergamino se oscurece y la tinta pasa a ámbar: el único momento en que la paleta se invierte.</li>
+      <li><b>Zona de 3×3.</b> Durante dos turnos los tentáculos golpean casillas al azar y los barcos atrapados no pueden moverse.</li>
+    </ul>
+  </section>
+
+  <section class="plate">
+    <div class="plate-head"><span class="plate-no">PLATE V</span><h2>Piezas, paleta y tipografía</h2></div>
+    <div class="frame"><svg id="p5" viewBox="0 0 1200 430" role="img" aria-label="Hoja de componentes de la interfaz"></svg></div>
+    <div class="swatches">
+      <div class="sw"><i style="background:#0d0b08"></i>Ink · #0d0b08</div>
+      <div class="sw"><i style="background:#2a2116"></i>Sepia · #2a2116</div>
+      <div class="sw"><i style="background:#3b2a18"></i>Oak · #3b2a18</div>
+      <div class="sw"><i style="background:#b08d3c"></i>Brass · #b08d3c</div>
+      <div class="sw"><i style="background:#d9a441"></i>Amber · #d9a441</div>
+      <div class="sw"><i style="background:#e8d5a3"></i>Parchment · #e8d5a3</div>
+      <div class="sw"><i style="background:#8c2f1b"></i>Sealing wax · #8c2f1b</div>
+    </div>
+    <div class="types">
+      <div><small>Títulos · IM Fell English SC</small><span class="t1">Fire at Will</span></div>
+      <div><small>Bitácora y texto · IM Fell English</small><span class="t2">The Frigate struck at E5 and held her course.</span></div>
+      <div><small>Etiquetas de latón · Cinzel</small><span class="t3">END TURN · 3 AP</span></div>
+    </div>
+  </section>
+</div>
+
+<script>
+(function(){
+const NS='http://www.w3.org/2000/svg';
+const C={ink:'#0d0b08',sepia:'#2a2116',amber:'#d9a441',parch:'#e8d5a3',brass:'#b08d3c',wax:'#8c2f1b',wood:'#3b2a18',woodHi:'#5a4026',muted:'#a8946a',sail:'#f3e6c2'};
+const F={d:'"IM Fell English SC",Georgia,serif',b:'"IM Fell English",Georgia,serif',l:'Cinzel,Georgia,serif'};
+const DAY={fill:'#d6c08a',fog:'#b39a62',line:'rgba(13,11,8,.42)',edge:C.ink,label:C.muted,hull:C.ink,deck:'#6b4e2c',stroke:C.ink};
+const NIGHT={fill:'#15110b',fog:'#15110b',line:'rgba(217,164,65,.28)',edge:C.brass,label:C.muted,hull:'#2a2116',deck:'#4a3720',stroke:C.amber};
+
+function el(p,tag,a,t){const e=document.createElementNS(NS,tag);for(const k in a)e.setAttribute(k,a[k]);if(t!=null)e.textContent=t;p.appendChild(e);return e;}
+function txt(p,x,y,s,o){o=o||{};return el(p,'text',{x:x,y:y,'font-family':o.font||F.b,'font-size':o.size||14,fill:o.fill||C.parch,'text-anchor':o.anchor||'start','letter-spacing':o.ls||0,'font-style':o.italic?'italic':'normal','font-weight':o.weight||400,opacity:o.op==null?1:o.op},s);}
+function rng(seed){let s=seed;return function(){s=(s*16807)%2147483647;return s/2147483647;};}
+function polar(x,y,r,deg){const a=deg*Math.PI/180;return [x+r*Math.cos(a),y-r*Math.sin(a)];}
+
+function defs(svg,id){
+  const d=el(svg,'defs',{});
+  let g=el(d,'linearGradient',{id:id+'wood',x1:0,y1:0,x2:0,y2:1});
+  el(g,'stop',{offset:0,'stop-color':'#5a4026'});el(g,'stop',{offset:.5,'stop-color':'#3b2a18'});el(g,'stop',{offset:1,'stop-color':'#22170c'});
+  g=el(d,'radialGradient',{id:id+'brass',cx:.35,cy:.3,r:.9});
+  el(g,'stop',{offset:0,'stop-color':'#f0d489'});el(g,'stop',{offset:.45,'stop-color':'#b08d3c'});el(g,'stop',{offset:1,'stop-color':'#5e4717'});
+  g=el(d,'radialGradient',{id:id+'ball',cx:.35,cy:.3,r:.8});
+  el(g,'stop',{offset:0,'stop-color':'#8a7a55'});el(g,'stop',{offset:.4,'stop-color':'#2a2116'});el(g,'stop',{offset:1,'stop-color':'#050403'});
+  g=el(d,'radialGradient',{id:id+'table',cx:.5,cy:.45,r:.75});
+  el(g,'stop',{offset:0,'stop-color':'#2a2116'});el(g,'stop',{offset:1,'stop-color':'#0d0b08'});
+  g=el(d,'radialGradient',{id:id+'vig',cx:.5,cy:.5,r:.7});
+  el(g,'stop',{offset:.45,'stop-color':'#000','stop-opacity':0});el(g,'stop',{offset:1,'stop-color':'#000','stop-opacity':.8});
+  const p=el(d,'pattern',{id:id+'hatch',width:7,height:7,patternUnits:'userSpaceOnUse',patternTransform:'rotate(35)'});
+  el(p,'line',{x1:0,y1:0,x2:0,y2:7,stroke:C.ink,'stroke-width':1.6});
+  return {wood:'url(#'+id+'wood)',brass:'url(#'+id+'brass)',ball:'url(#'+id+'ball)',table:'url(#'+id+'table)',vig:'url(#'+id+'vig)',hatch:'url(#'+id+'hatch)'};
+}
+
+/* ---------- perspective board ---------- */
+function Board(o){
+  const a=o.far/o.near,b=1-a,norm=a+b/2,cell=o.near/10;
+  return {cell:cell,P:function(x,y,z){const u=y/o.rows,s=a+b*u,t=(a*u+b*u*u/2)/norm;return [o.cx+(x-5)*cell*s,o.top+o.h*t-(z||0)*cell*s*.95,s];}};
+}
+function pp(B,a){return a.map(function(p){const q=B.P(p[0],p[1],p[2]);return q[0].toFixed(1)+','+q[1].toFixed(1);}).join(' ');}
+function sea(g,B,y0,th,o){
+  o=o||{};const y1=y0+10;
+  el(g,'polygon',{points:pp(B,[[0,y0],[10,y0],[10,y1],[0,y1]]),fill:o.fog?th.fog:th.fill,stroke:th.edge,'stroke-width':2});
+  if(o.fog&&o.hatch)el(g,'polygon',{points:pp(B,[[0,y0],[10,y0],[10,y1],[0,y1]]),fill:o.hatch,opacity:.16});
+  for(let i=1;i<10;i++){
+    let p=B.P(i,y0),q=B.P(i,y1);el(g,'line',{x1:p[0],y1:p[1],x2:q[0],y2:q[1],stroke:th.line,'stroke-width':1});
+    p=B.P(0,y0+i);q=B.P(10,y0+i);el(g,'line',{x1:p[0],y1:p[1],x2:q[0],y2:q[1],stroke:th.line,'stroke-width':1});
+  }
+  const r=rng(o.seed||11);
+  for(let n=0;n<38;n++){const p=B.P(r()*9.2+.2,y0+r()*9.4+.3),w=6*p[2];
+    el(g,'path',{d:'M'+(p[0]-w)+','+p[1]+' q'+w/2+','+(-w/2.2)+' '+w+',0 q'+w/2+','+w/2.2+' '+w+',0',fill:'none',stroke:th.line,'stroke-width':1.1});}
+  if(o.letters)for(let i=0;i<10;i++){const p=B.P(i+.5,y0);txt(g,p[0],p[1]-6,'ABCDEFGHIJ'[i],{font:F.l,size:10,fill:th.label,anchor:'middle'});}
+  if(o.numbers)for(let i=0;i<10;i++){const p=B.P(0,y0+i+.68);txt(g,p[0]-7,p[1],String(i+1),{font:F.l,size:Math.max(8,11*p[2]),fill:th.label,anchor:'end'});}
+}
+function ship(g,B,x,y,L,dir,th,o){
+  o=o||{};const h=.32;
+  const fp=[[.12,.24],[L-.75,.18],[L-.08,.5],[L-.75,.82],[.12,.76],[.04,.5]];
+  const W=function(t,w,z){return dir==='h'?[x+t,y+w,z]:[x+w,y+t,z];};
+  const poly=function(z){return pp(B,fp.map(function(p){return W(p[0],p[1],z);}));};
+  if(o.ghost){el(g,'polygon',{points:poly(0),fill:'rgba(140,47,27,.18)',stroke:C.wax,'stroke-width':2.5,'stroke-dasharray':'7 5'});return;}
+  if(o.sunk){el(g,'polygon',{points:poly(0),fill:'rgba(13,11,8,.55)',stroke:th.stroke,'stroke-width':1,'stroke-dasharray':'3 3'});return;}
+  for(let i=0;i<=6;i++)el(g,'polygon',{points:poly(h*i/6),fill:th.hull,stroke:th.hull,'stroke-width':1});
+  el(g,'polygon',{points:poly(h),fill:th.deck,stroke:th.stroke,'stroke-width':1.2});
+  const masts=L>=4?[L*.26,L*.5,L*.74]:L===3?[L*.34,L*.68]:[L*.5];
+  masts.forEach(function(t,i){
+    const k=(i===1&&masts.length===3)?1.15:1,z0=h+.3,z1=h+1.2*k;
+    let a=B.P.apply(null,W(t,.5,h)),b=B.P.apply(null,W(t,.5,z1+.3));
+    el(g,'line',{x1:a[0],y1:a[1],x2:b[0],y2:b[1],stroke:th.stroke,'stroke-width':2*a[2]});
+    el(g,'polygon',{points:pp(B,dir==='h'?[W(t-.36,.5,z0),W(t+.36,.5,z0),W(t+.28,.5,z1),W(t-.28,.5,z1)]:[W(t,.1,z0),W(t+.3,.5,z0+.04),W(t,.9,z0),W(t,.84,z1),W(t+.24,.5,z1+.04),W(t,.16,z1)]),fill:C.sail,stroke:C.ink,'stroke-width':1});
+    const f=B.P.apply(null,W(t+.4,.5,z1+.2));
+    el(g,'polygon',{points:b[0]+','+b[1]+' '+f[0]+','+f[1]+' '+b[0]+','+(b[1]+7*b[2]),fill:C.wax});
+  });
+}
+function hit(g,B,cx,cy,z){const p=B.P(cx+.5,cy+.5,z||0),k=B.cell*p[2];
+  el(g,'ellipse',{cx:p[0],cy:p[1],rx:k*.32,ry:k*.17,fill:C.wax,stroke:C.ink,'stroke-width':1});
+  el(g,'path',{d:'M'+(p[0]-k*.16)+','+p[1]+' Q'+(p[0]-k*.2)+','+(p[1]-k*.4)+' '+p[0]+','+(p[1]-k*.75)+' Q'+(p[0]+k*.24)+','+(p[1]-k*.35)+' '+(p[0]+k*.16)+','+p[1]+'Z',fill:C.amber,stroke:C.wax,'stroke-width':1.2});
+  [[.1,-.95,.13],[-.08,-1.2,.17],[.16,-1.5,.21]].forEach(function(s){el(g,'circle',{cx:p[0]+k*s[0],cy:p[1]+k*s[1],r:k*s[2],fill:C.ink,opacity:.55});});}
+function miss(g,B,cx,cy,col){const p=B.P(cx+.5,cy+.5),k=B.cell*p[2];
+  el(g,'ellipse',{cx:p[0],cy:p[1],rx:k*.3,ry:k*.15,fill:'none',stroke:col||C.ink,'stroke-width':1.6});
+  el(g,'ellipse',{cx:p[0],cy:p[1],rx:k*.13,ry:k*.065,fill:'none',stroke:col||C.ink,'stroke-width':1.2});}
+function chest(g,B,cx,cy){
+  for(let i=0;i<=5;i++)el(g,'polygon',{points:pp(B,[[cx+.25,cy+.3,i*.07],[cx+.75,cy+.3,i*.07],[cx+.75,cy+.7,i*.07],[cx+.25,cy+.7,i*.07]]),fill:i===5?C.amber:'#7a5a1e',stroke:C.ink,'stroke-width':1});
+  const p=B.P(cx+.5,cy+.5,.9);el(g,'path',{d:'M'+p[0]+','+(p[1]-6)+' l3,6 l-3,6 l-3,-6z',fill:C.amber,stroke:C.ink,'stroke-width':.8});}
+function relic(g,B,cx,cy){const p=B.P(cx+.5,cy+.5),k=B.cell*p[2];
+  el(g,'ellipse',{cx:p[0],cy:p[1],rx:k*.3,ry:k*.16,fill:C.wax,stroke:C.amber,'stroke-width':1.5});
+  el(g,'path',{d:'M'+(p[0]-k*.12)+','+p[1]+' q'+k*.12+','+(-k*.12)+' '+k*.24+',0',fill:'none',stroke:C.amber,'stroke-width':1.5});}
+function mine(g,B,cx,cy){const p=B.P(cx+.5,cy+.5,.15),k=B.cell*p[2]*.2;
+  for(let a=0;a<8;a++){const q=polar(p[0],p[1],k*1.6,a*45);el(g,'line',{x1:p[0],y1:p[1],x2:q[0],y2:q[1],stroke:C.ink,'stroke-width':2});}
+  el(g,'circle',{cx:p[0],cy:p[1],r:k,fill:C.sepia,stroke:C.ink,'stroke-width':1.5});}
+function lighthouse(g,B,cx,cy){
+  const a=B.P(cx+.3,cy+.5),b=B.P(cx+.7,cy+.5),c=B.P(cx+.6,cy+.5,2),d=B.P(cx+.4,cy+.5,2),t=B.P(cx+.5,cy+.5,2.25);
+  el(g,'polygon',{points:t[0]+','+t[1]+' '+(t[0]-150)+','+(t[1]-34)+' '+(t[0]-150)+','+(t[1]+26),fill:C.amber,opacity:.2});
+  el(g,'polygon',{points:[a,b,c,d].map(function(p){return p[0]+','+p[1];}).join(' '),fill:C.sail,stroke:C.ink,'stroke-width':1.4});
+  const m1=B.P(cx+.34,cy+.5,.8),m2=B.P(cx+.66,cy+.5,.8),m3=B.P(cx+.64,cy+.5,1.2),m4=B.P(cx+.36,cy+.5,1.2);
+  el(g,'polygon',{points:[m1,m2,m3,m4].map(function(p){return p[0]+','+p[1];}).join(' '),fill:C.wax});
+  el(g,'circle',{cx:t[0],cy:t[1],r:7*t[2],fill:C.amber,stroke:C.ink,'stroke-width':1.2});}
+function storm(g,B,cx,cy){
+  [[0,0,1.25],[1,.2,1.5],[2,0,1.2],[.6,-.5,1.1],[1.6,-.4,1.2]].forEach(function(s){const p=B.P(cx+s[0],cy+s[1],1.5),k=B.cell*p[2];
+    el(g,'ellipse',{cx:p[0],cy:p[1],rx:k*s[2]*.8,ry:k*s[2]*.42,fill:C.ink,opacity:.82});});
+  const p=B.P(cx+1.1,cy+.2,1.3),k=B.cell*p[2];
+  el(g,'polyline',{points:[[0,0],[-.2,.4],[.05,.4],[-.2,.95]].map(function(q){return (p[0]+q[0]*k)+','+(p[1]+q[1]*k);}).join(' '),fill:'none',stroke:C.amber,'stroke-width':2.2});}
+function reticle(g,B,cx,cy){
+  el(g,'polygon',{points:pp(B,[[cx,cy],[cx+1,cy],[cx+1,cy+1],[cx,cy+1]]),fill:'rgba(140,47,27,.25)',stroke:C.wax,'stroke-width':2.5});
+  const p=B.P(cx+.5,cy+.5),k=B.cell*p[2]*.5;
+  el(g,'line',{x1:p[0]-k,y1:p[1],x2:p[0]+k,y2:p[1],stroke:C.wax,'stroke-width':1.5});
+  el(g,'line',{x1:p[0],y1:p[1]-k*.5,x2:p[0],y2:p[1]+k*.5,stroke:C.wax,'stroke-width':1.5});}
+function tentacle(g,B,bx,by,H,amp,ph){
+  const N=46;
+  for(let i=0;i<=N;i++){const u=i/N,curl=u>.7?(u-.7)/.3:0;
+    const dx=Math.sin(u*3.2+ph)*amp*u+Math.sin(curl*4.2)*amp*.9*curl;
+    const z=u*H-curl*curl*H*.28;
+    const p=B.P(bx+dx,by,z),r=B.cell*p[2]*(.3*(1-u*.86));
+    el(g,'circle',{cx:p[0],cy:p[1],r:r,fill:'#1d1710',stroke:C.amber,'stroke-width':.9,'stroke-opacity':.75});
+    if(i%4===2&&u<.85)el(g,'circle',{cx:p[0]+r*.35,cy:p[1],r:r*.28,fill:C.amber,opacity:.7});}
+}
+
+/* ---------- brass & oak hardware ---------- */
+function woodBar(g,G,x,y,w,h,seed){
+  el(g,'rect',{x:x,y:y,width:w,height:h,fill:G.wood});
+  const r=rng(seed||5);
+  for(let i=0;i<14;i++){const yy=y+4+r()*(h-8),xx=x+r()*w*.6,ww=w*(.2+r()*.5);
+    el(g,'path',{d:'M'+xx+','+yy+' q'+ww/2+','+(r()*6-3)+' '+ww+',0',fill:'none',stroke:C.ink,'stroke-width':1,opacity:.35});}
+  el(g,'line',{x1:x,y1:y+.5,x2:x+w,y2:y+.5,stroke:C.brass,'stroke-width':1.5});
+  el(g,'line',{x1:x,y1:y+h-.5,x2:x+w,y2:y+h-.5,stroke:C.brass,'stroke-width':1.5});
+  [[x+12,y+12],[x+w-12,y+12],[x+12,y+h-12],[x+w-12,y+h-12]].forEach(function(p){el(g,'circle',{cx:p[0],cy:p[1],r:4,fill:G.brass,stroke:C.ink,'stroke-width':.8});});
+}
+function compass(g,G,x,y,r,frac,needle){
+  el(g,'circle',{cx:x,cy:y,r:r,fill:G.brass,stroke:C.ink,'stroke-width':1.5});
+  el(g,'circle',{cx:x,cy:y,r:r*.86,fill:C.ink,stroke:'#5e4717','stroke-width':1});
+  for(let i=0;i<32;i++){const a=polar(x,y,r*(i%4?.78:.72),i*11.25),b=polar(x,y,r*.84,i*11.25);
+    el(g,'line',{x1:a[0],y1:a[1],x2:b[0],y2:b[1],stroke:C.amber,'stroke-width':i%4?.7:1.4});}
+  for(let k=0;k<4;k++){const d=45+k*90,t=polar(x,y,r*.46,d),a=polar(x,y,r*.1,d+90),b=polar(x,y,r*.1,d-90);
+    el(g,'polygon',{points:t+' '+a+' '+b,fill:C.brass});}
+  for(let k=0;k<4;k++){const d=k*90,t=polar(x,y,r*.7,d),a=polar(x,y,r*.13,d+45),b=polar(x,y,r*.13,d-45);
+    el(g,'polygon',{points:t+' '+a+' '+x+','+y,fill:C.parch});el(g,'polygon',{points:t+' '+b+' '+x+','+y,fill:'#8a6f2c'});}
+  const n=el(g,'g',{transform:'rotate('+(needle||0)+' '+x+' '+y+')'});
+  el(n,'polygon',{points:x+','+(y-r*.66)+' '+(x+r*.06)+','+y+' '+(x-r*.06)+','+y,fill:C.wax,stroke:C.ink,'stroke-width':.6});
+  el(g,'circle',{cx:x,cy:y,r:r*.07,fill:G.brass,stroke:C.ink,'stroke-width':.8});
+  if(frac){const e=polar(x,y,r*.93,90-360*frac);
+    el(g,'path',{d:'M'+x+','+(y-r*.93)+' A'+r*.93+','+r*.93+' 0 '+(frac>.5?1:0)+' 1 '+e[0]+','+e[1],fill:'none',stroke:C.wax,'stroke-width':r*.07});}
+}
+const ACTIONS=['FIRE','SAIL','TURN','ABILITY'];
+function telegraph(g,G,x,y,r,sel){
+  const o=polar(x,y,r*1.06,180),o2=polar(x,y,r*1.06,0);
+  el(g,'path',{d:'M'+o[0]+','+o[1]+' A'+r*1.06+','+r*1.06+' 0 0 1 '+o2[0]+','+o2[1]+'Z',fill:G.brass,stroke:C.ink,'stroke-width':1.5});
+  const secs=[];
+  for(let i=0;i<4;i++){const t1=180-45*i,t0=t1-45,ri=r*.34;
+    const a=polar(x,y,ri,t1),b=polar(x,y,r,t1),c=polar(x,y,r,t0),d=polar(x,y,ri,t0);
+    const s=el(g,'path',{d:'M'+a+' L'+b+' A'+r+','+r+' 0 0 1 '+c+' L'+d+' A'+ri+','+ri+' 0 0 0 '+a+'Z',fill:i===sel?C.amber:C.ink,stroke:'#5e4717','stroke-width':1.5});
+    const m=polar(x,y,r*.7,t1-22.5);
+    const tx=txt(g,m[0],m[1]+r*.04,ACTIONS[i],{font:F.l,size:r*.105,fill:i===sel?C.ink:C.parch,anchor:'middle',ls:1,weight:700});
+    tx.setAttribute('transform','rotate('+(90-(t1-22.5))+' '+m[0]+' '+m[1]+')');
+    secs.push([s,tx]);}
+  el(g,'rect',{x:x-r*1.16,y:y,width:r*2.32,height:r*.14,fill:G.wood,stroke:C.ink,'stroke-width':1});
+  const lv=el(g,'g',{'class':'lever'});
+  lv.style.transformOrigin=x+'px '+y+'px';
+  el(lv,'line',{x1:x,y1:y,x2:x,y2:y-r*1.12,stroke:'#5e4717','stroke-width':r*.09,'stroke-linecap':'round'});
+  el(lv,'line',{x1:x,y1:y,x2:x,y2:y-r*1.12,stroke:C.brass,'stroke-width':r*.05,'stroke-linecap':'round'});
+  el(lv,'circle',{cx:x,cy:y-r*1.16,r:r*.1,fill:C.wood,stroke:C.amber,'stroke-width':1.5});
+  el(g,'circle',{cx:x,cy:y,r:r*.2,fill:G.brass,stroke:C.ink,'stroke-width':1.5});
+  el(g,'circle',{cx:x,cy:y,r:r*.06,fill:C.ink});
+  const set=function(i){lv.style.transform='rotate('+(90-(157.5-45*i))+'deg)';
+    secs.forEach(function(s,k){s[0].setAttribute('fill',k===i?C.amber:C.ink);s[1].setAttribute('fill',k===i?C.ink:C.parch);});};
+  set(sel);return set;
+}
+function capstan(g,G,x,y,r,spin){
+  el(g,'circle',{cx:x,cy:y,r:r*1.02,fill:'none',stroke:C.brass,'stroke-width':1,'stroke-dasharray':'2 6'});
+  const s=el(g,'g',spin?{'class':'spin'}:{});s.style.transformOrigin=x+'px '+y+'px';
+  for(let k=0;k<6;k++)el(s,'rect',{x:x-r*.07,y:y-r,width:r*.14,height:r*.7,rx:r*.06,fill:C.woodHi,stroke:C.ink,'stroke-width':1.2,transform:'rotate('+k*60+' '+x+' '+y+')'});
+  el(s,'circle',{cx:x,cy:y,r:r*.5,fill:G.wood,stroke:C.ink,'stroke-width':1.5});
+  el(s,'circle',{cx:x,cy:y,r:r*.28,fill:G.brass,stroke:C.ink,'stroke-width':1.2});
+  el(s,'line',{x1:x-r*.18,y1:y,x2:x+r*.18,y2:y,stroke:C.ink,'stroke-width':2});
+}
+function ball(g,G,x,y,r,spent){
+  el(g,'circle',{cx:x,cy:y+r*.15,r:r*1.12,fill:C.ink,stroke:'#5e4717','stroke-width':1.5});
+  if(!spent)el(g,'circle',{cx:x,cy:y,r:r,fill:G.ball,stroke:C.amber,'stroke-width':1});
+}
+function sealc(g,x,y,r,lit){
+  el(g,'circle',{cx:x,cy:y,r:r,fill:lit?C.wax:C.ink,stroke:lit?C.amber:C.brass,'stroke-width':1.5,'stroke-dasharray':lit?'':'3 3'});
+  el(g,'path',{d:'M'+(x-r*.45)+','+(y+r*.25)+' q'+r*.1+','+(-r*.8)+' '+r*.45+','+(-r*.5)+' q'+r*.4+','+r*.35+' '+r*.1+','+r*.55+' q-'+r*.25+','+r*.1+' -'+r*.2+',-'+r*.2,fill:'none',stroke:lit?C.amber:'#5e4717','stroke-width':r*.13,'stroke-linecap':'round'});
+}
+function slot(g,G,x,y,s,icon){
+  el(g,'rect',{x:x,y:y,width:s,height:s,rx:4,fill:G.brass,stroke:C.ink,'stroke-width':1.2});
+  el(g,'rect',{x:x+4,y:y+4,width:s-8,height:s-8,rx:2,fill:C.ink});
+  const cx=x+s/2,cy=y+s/2,k=s/56;
+  if(icon==='spy'){el(g,'line',{x1:cx-14*k,y1:cy+10*k,x2:cx+8*k,y2:cy-8*k,stroke:C.amber,'stroke-width':6*k,'stroke-linecap':'round'});el(g,'circle',{cx:cx+11*k,cy:cy-11*k,r:7*k,fill:'none',stroke:C.parch,'stroke-width':2*k});}
+  if(icon==='mine'){for(let a=0;a<8;a++){const q=polar(cx,cy,15*k,a*45);el(g,'line',{x1:cx,y1:cy,x2:q[0],y2:q[1],stroke:C.amber,'stroke-width':2.4*k});}el(g,'circle',{cx:cx,cy:cy,r:9*k,fill:C.sepia,stroke:C.amber,'stroke-width':1.6*k});}
+  if(icon==='fog'){[-9,0,9].forEach(function(d,i){el(g,'path',{d:'M'+(cx-15*k+i*2)+','+(cy+d*k)+' q'+7*k+','+(-6*k)+' '+14*k+',0 q'+7*k+','+6*k+' '+14*k+',0',fill:'none',stroke:C.amber,'stroke-width':2.2*k,'stroke-linecap':'round'});});}
+}
+function card(g,x,y,w,h,title){
+  el(g,'rect',{x:x,y:y,width:w,height:h,fill:C.parch,stroke:C.ink,'stroke-width':1});
+  el(g,'rect',{x:x+5,y:y+5,width:w-10,height:h-10,fill:'none',stroke:'rgba(13,11,8,.45)','stroke-width':1});
+  if(title){txt(g,x+16,y+28,title,{font:F.l,size:11.5,fill:C.ink,ls:2,weight:700});el(g,'line',{x1:x+16,y1:y+37,x2:x+w-16,y2:y+37,stroke:C.ink,'stroke-width':.8});}
+}
+function plaque(g,G,x,y,w,h,label,o){o=o||{};
+  el(g,'rect',{x:x,y:y,width:w,height:h,rx:5,fill:G.brass,stroke:C.ink,'stroke-width':1.4});
+  el(g,'rect',{x:x+4,y:y+4,width:w-8,height:h-8,rx:3,fill:o.dark?C.ink:'none',stroke:'rgba(13,11,8,.5)','stroke-width':1});
+  txt(g,x+w/2,y+h/2+(o.size||13)*.36,label,{font:F.l,size:o.size||13,fill:o.dark?C.amber:C.ink,anchor:'middle',ls:2,weight:700});
+}
+function pips(g,x,y,n,hits){for(let i=0;i<n;i++)el(g,'rect',{x:x+i*13,y:y,width:10,height:10,fill:i<(hits||0)?C.wax:C.ink});}
+function byDepth(list){list.sort(function(a,b){return a[0]-b[0];}).forEach(function(i){i[1]();});}
+
+/* ================= PLATE I — battle ================= */
+(function(){
+  const svg=document.getElementById('p1'),G=defs(svg,'a');
+  el(svg,'rect',{width:1200,height:780,fill:G.table});
+  const B=Board({cx:600,top:108,h:498,near:600,far:330,rows:21});
+  sea(svg,B,0,DAY,{fog:true,hatch:G.hatch,letters:true,numbers:true,seed:23});
+  sea(svg,B,11,DAY,{numbers:true,seed:41});
+  txt(svg,600,96,'',{});
+  let p=B.P(5,10.72);txt(svg,p[0],p[1],'· YOUR WATERS ·',{font:F.l,size:11,fill:C.amber,anchor:'middle',ls:4});
+  p=B.P(10,1.2);txt(svg,p[0]+14,p[1],'ENEMY',{font:F.l,size:11,fill:C.amber,ls:4});txt(svg,p[0]+14,p[1]+15,'WATERS',{font:F.l,size:11,fill:C.amber,ls:4});
+  byDepth([
+    [2.2,function(){storm(svg,B,6.2,2.2);}],
+    [1.1,function(){miss(svg,B,2,1);}],[2,function(){miss(svg,B,5,2);}],[6,function(){miss(svg,B,3,6);}],[7,function(){miss(svg,B,8,7);}],[8,function(){miss(svg,B,1,8);}],
+    [3,function(){relic(svg,B,8,3);}],
+    [4,function(){hit(svg,B,3,4);hit(svg,B,4,4);reticle(svg,B,5,4);}],
+    [5,function(){ship(svg,B,7,5,2,'v',DAY,{sunk:true});hit(svg,B,7,5);hit(svg,B,7,6);}],
+    [6.5,function(){chest(svg,B,1,5);}],
+    [12,function(){ship(svg,B,1,12,5,'h',DAY);hit(svg,B,3,12,.4);}],
+    [12.1,function(){ship(svg,B,7,12,4,'v',DAY);}],
+    [14,function(){miss(svg,B,5,14);}],
+    [15,function(){ship(svg,B,2,15,3,'h',DAY);}],
+    [16,function(){mine(svg,B,5,16);lighthouse(svg,B,9,16);}],
+    [17,function(){miss(svg,B,0,17);ship(svg,B,4,17,3,'v',DAY);}],
+    [18,function(){miss(svg,B,8,17);}],
+    [19,function(){chest(svg,B,1,19);ship(svg,B,7,19,2,'h',DAY);}]
+  ]);
+  // top rail
+  woodBar(svg,G,0,0,1200,70,3);
+  txt(svg,600,45,'THE SUNKEN COVENANT',{font:F.d,size:28,fill:C.amber,anchor:'middle',ls:5});
+  compass(svg,G,62,58,46,.36,28);
+  txt(svg,124,30,'YOUR TURN',{font:F.l,size:14,fill:C.amber,ls:3,weight:700});
+  txt(svg,124,52,'0:48 on the glass · Round 7',{size:14,italic:true});
+  txt(svg,1018,28,'COVENANT SEALS',{font:F.l,size:10,fill:C.muted,ls:2,anchor:'end'});
+  txt(svg,1018,48,'2 of 3 recovered',{size:13,italic:true,anchor:'end'});
+  sealc(svg,1052,36,17,true);sealc(svg,1098,36,17,true);sealc(svg,1144,36,17,false);
+  // left panel
+  card(svg,20,128,236,124,'ADMIRALTY ORDERS');
+  txt(svg,36,188,'Sink a ship within three turns.',{size:15,fill:C.ink,italic:true});
+  txt(svg,36,210,'Two turns remain.',{size:14,fill:C.ink});
+  txt(svg,36,236,'REWARD · 40 DOUBLOONS',{font:F.l,size:10,fill:C.wax,ls:1.5,weight:700});
+  el(svg,'circle',{cx:44,cy:288,r:15,fill:G.brass,stroke:C.ink,'stroke-width':1.2});el(svg,'circle',{cx:44,cy:288,r:10,fill:'none',stroke:C.ink,'stroke-width':.8});
+  txt(svg,70,284,'65',{font:F.d,size:26,fill:C.amber});txt(svg,70,302,'DOUBLOONS',{font:F.l,size:9.5,fill:C.muted,ls:2});
+  card(svg,20,322,236,206,'YOUR FLEET');
+  [['Ship of the Line',5,1],['Frigate',4,0],['Ironclad',3,0],['Schooner',3,0],['Cutter',2,0]].forEach(function(s,i){
+    txt(svg,36,384+i*28,s[0],{size:15,fill:C.ink});pips(svg,170,374+i*28,s[1],s[2]);});
+  // right panel
+  card(svg,944,100,236,428,"CAPTAIN'S LOG");
+  [['Round 7',1],['You fire at D5 — a hit.',0],['You fire at E5 — a hit.',0],['',0],['Round 6',1],['Enemy fires at D2 — hit on',0],['your Ship of the Line.',0],['Enemy lays a course unseen.',0],['',0],['Round 5',1],['Your Cutter sights 2 hulls',0],['in D4–F6.',0],['A seal is raised at I4.',0],['Storm front enters from N.',0]].forEach(function(l,i){
+    if(l[0])txt(svg,960,160+i*24,l[0],l[1]?{font:F.l,size:10.5,fill:C.wax,ls:2,weight:700}:{size:14.5,fill:C.ink,italic:true});});
+  // bottom rail
+  woodBar(svg,G,0,640,1200,140,9);
+  telegraph(svg,G,196,762,100,0);
+  txt(svg,480,672,'ACTION POINTS',{font:F.l,size:10.5,fill:C.muted,ls:2.5,anchor:'middle'});
+  el(svg,'rect',{x:404,y:686,width:152,height:58,rx:29,fill:C.ink,stroke:C.brass,'stroke-width':1.5});
+  ball(svg,G,434,713,17,false);ball(svg,G,480,713,17,false);ball(svg,G,526,713,17,true);
+  txt(svg,480,764,'2 of 3 remaining',{size:13,italic:true,anchor:'middle'});
+  txt(svg,702,672,'QUARTERMASTER',{font:F.l,size:10.5,fill:C.muted,ls:2.5,anchor:'middle'});
+  slot(svg,G,610,686,56,'spy');slot(svg,G,674,686,56,'mine');slot(svg,G,738,686,56,'fog');
+  txt(svg,702,764,'Spyglass · Sea Mine · Fog Bank',{size:13,italic:true,anchor:'middle'});
+  plaque(svg,G,832,690,170,48,'SUMMON KRAKEN',{dark:true,size:12});
+  txt(svg,917,764,'needs one more seal',{size:13,italic:true,anchor:'middle',fill:C.muted});
+  capstan(svg,G,1104,706,48,false);
+  txt(svg,1104,772,'END TURN',{font:F.l,size:10.5,fill:C.amber,ls:2.5,anchor:'middle',weight:700});
+})();
+
+/* ================= PLATE II — lobby ================= */
+(function(){
+  const svg=document.getElementById('p2'),G=defs(svg,'b');
+  el(svg,'rect',{width:1200,height:600,fill:G.table});
+  for(let i=0;i<32;i++){const q=polar(190,300,1400,i*11.25);el(svg,'line',{x1:190,y1:300,x2:q[0],y2:q[1],stroke:C.amber,'stroke-width':.7,opacity:.13});}
+  compass(svg,G,190,300,120,0,-35);
+  txt(svg,190,462,'Waiting for the second captain…',{size:16,italic:true,anchor:'middle',fill:C.muted});
+  card(svg,380,50,480,500);
+  txt(svg,620,104,'ARTICLES OF ENGAGEMENT',{font:F.d,size:27,fill:C.ink,anchor:'middle',ls:2});
+  txt(svg,620,132,'Two captains. One sea. No quarter.',{size:17,fill:C.ink,italic:true,anchor:'middle'});
+  el(svg,'line',{x1:430,y1:152,x2:810,y2:152,stroke:C.ink,'stroke-width':.8});
+  txt(svg,430,188,"CAPTAIN'S NAME",{font:F.l,size:10.5,fill:C.wax,ls:2,weight:700});
+  txt(svg,430,222,'Capt. Halloran',{size:26,fill:C.ink,italic:true});
+  el(svg,'line',{x1:430,y1:232,x2:810,y2:232,stroke:C.ink,'stroke-width':1.2});
+  plaque(svg,G,430,258,180,52,'CREATE A ROOM');plaque(svg,G,630,258,180,52,'JOIN WITH CODE',{dark:true});
+  txt(svg,620,350,'ROOM CODE',{font:F.l,size:10.5,fill:C.wax,ls:3,anchor:'middle',weight:700});
+  ['K','7','R','N'].forEach(function(ch,i){const x=478+i*74;
+    el(svg,'rect',{x:x,y:366,width:62,height:92,rx:8,fill:G.brass,stroke:C.ink,'stroke-width':1.5});
+    el(svg,'rect',{x:x+5,y:371,width:52,height:82,rx:4,fill:C.ink});
+    txt(svg,x+31,388,'JKLM6QRM'[i],{font:F.l,size:13,fill:C.muted,anchor:'middle',op:.45});
+    txt(svg,x+31,428,ch,{font:F.l,size:38,fill:C.amber,anchor:'middle',weight:700});
+    txt(svg,x+31,449,'L8SP'[i],{font:F.l,size:13,fill:C.muted,anchor:'middle',op:.45});});
+  txt(svg,620,492,'Send this code to your rival. The room is free',{size:15,fill:C.ink,italic:true,anchor:'middle'});
+  txt(svg,620,512,'and needs no account.',{size:15,fill:C.ink,italic:true,anchor:'middle'});
+  el(svg,'circle',{cx:812,cy:520,r:26,fill:C.wax,stroke:C.ink,'stroke-width':1});sealc(svg,812,520,17,true);
+  capstan(svg,G,1030,290,84,false);
+  txt(svg,1030,410,'WEIGH ANCHOR',{font:F.l,size:12,fill:C.amber,ls:3,anchor:'middle',weight:700});
+  txt(svg,1030,432,'turns when both have signed',{size:15,italic:true,anchor:'middle',fill:C.muted});
+})();
+
+/* ================= PLATE III — placement ================= */
+(function(){
+  const svg=document.getElementById('p3'),G=defs(svg,'c');
+  el(svg,'rect',{width:1200,height:680,fill:G.table});
+  const B=Board({cx:420,top:128,h:440,near:640,far:410,rows:10});
+  sea(svg,B,0,DAY,{letters:true,numbers:true,seed:67});
+  byDepth([
+    [1,function(){ship(svg,B,1,1,5,'h',DAY);}],
+    [2,function(){ship(svg,B,8,2,4,'v',DAY);}],
+    [4,function(){ship(svg,B,5,4,3,'v',DAY,{ghost:true});}],
+    [7,function(){ship(svg,B,1,7,3,'h',DAY);}]
+  ]);
+  let p=B.P(6.4,5.5);
+  el(svg,'path',{d:'M'+(p[0]+4)+','+(p[1]-26)+' a30,30 0 0 1 22,44',fill:'none',stroke:C.wax,'stroke-width':2.5});
+  el(svg,'polygon',{points:(p[0]+18)+','+(p[1]+18)+' '+(p[0]+32)+','+(p[1]+14)+' '+(p[0]+24)+','+(p[1]+28),fill:C.wax});
+  woodBar(svg,G,0,0,1200,70,13);
+  txt(svg,600,45,'DEPLOY YOUR FLEET',{font:F.d,size:28,fill:C.amber,anchor:'middle',ls:5});
+  compass(svg,G,62,58,46,.7,-60);
+  txt(svg,124,42,'1:24 to make ready',{size:15,italic:true});
+  card(svg,810,100,370,372,'THE SHIPYARD');
+  [['Ship of the Line',5,'Broadside · a line of three',1],['Frigate',4,'Chain shot · pins a ship',1],['Schooner',3,'Swift · sails two squares',2],['Ironclad',3,'Armour · shrugs off one hit',1],['Cutter',2,'Spyglass · counts hulls nearby',0]].forEach(function(s,i){
+    const y=152+i*62;
+    if(s[3]===2)el(svg,'rect',{x:820,y:y-6,width:350,height:56,fill:'rgba(140,47,27,.16)',stroke:C.wax,'stroke-width':1.5});
+    txt(svg,832,y+16,s[0],{font:F.d,size:18,fill:C.ink});pips(svg,1000,y+5,s[1]);
+    txt(svg,832,y+38,s[2],{size:14.5,fill:C.ink,italic:true,op:.8});
+    txt(svg,1158,y+18,s[3]===1?'PLACED':s[3]===2?'PLACING':'',{font:F.l,size:9.5,fill:C.wax,anchor:'end',ls:1.5,weight:700});});
+  // helm wheel
+  const hx=880,hy=574;
+  for(let k=0;k<8;k++){const a=polar(hx,hy,60,k*45);el(svg,'line',{x1:hx,y1:hy,x2:a[0],y2:a[1],stroke:C.woodHi,'stroke-width':7,'stroke-linecap':'round'});}
+  el(svg,'circle',{cx:hx,cy:hy,r:44,fill:'none',stroke:G.wood,'stroke-width':12});el(svg,'circle',{cx:hx,cy:hy,r:44,fill:'none',stroke:C.brass,'stroke-width':1.5});
+  el(svg,'circle',{cx:hx,cy:hy,r:13,fill:G.brass,stroke:C.ink,'stroke-width':1.2});
+  txt(svg,hx,hy+84,'ROTATE',{font:F.l,size:11,fill:C.amber,ls:3,anchor:'middle',weight:700});
+  capstan(svg,G,1090,566,56,false);
+  txt(svg,1090,658,'READY',{font:F.l,size:11,fill:C.amber,ls:3,anchor:'middle',weight:700});
+  txt(svg,420,628,'Three of five ships placed. The enemy cannot see this chart.',{size:16,italic:true,anchor:'middle',fill:C.muted});
+})();
+
+/* ================= PLATE IV — kraken ================= */
+(function(){
+  const svg=document.getElementById('p4'),G=defs(svg,'d');
+  el(svg,'rect',{width:1200,height:700,fill:C.ink});
+  const B=Board({cx:600,top:170,h:440,near:780,far:500,rows:10});
+  sea(svg,B,0,NIGHT,{letters:true,numbers:true,seed:91});
+  el(svg,'polygon',{points:pp(B,[[4,3],[7,3],[7,6],[4,6]]),fill:'rgba(140,47,27,.38)',stroke:C.amber,'stroke-width':2.5,'stroke-dasharray':'10 6'});
+  [[5.5,4.5,2.3,1.2],[5.5,4.5,3,.8]].forEach(function(r){const p=B.P(r[0],r[1]),k=B.cell*p[2];
+    el(svg,'ellipse',{cx:p[0],cy:p[1],rx:k*r[2],ry:k*r[2]*.5,fill:'none',stroke:C.amber,'stroke-width':r[3],opacity:.35});});
+  byDepth([
+    [1,function(){miss(svg,B,2,1,C.muted);miss(svg,B,8,2,C.muted);}],
+    [3.4,function(){tentacle(svg,B,4.6,3.4,3.4,.7,0);}],
+    [3.6,function(){tentacle(svg,B,6.5,3.6,2.6,-.6,1.4);}],
+    [4,function(){ship(svg,B,4,4,4,'h',NIGHT);hit(svg,B,5,4,.4);}],
+    [4.8,function(){tentacle(svg,B,6.3,4.8,3.1,.8,2.2);}],
+    [5.5,function(){tentacle(svg,B,4.5,5.5,2.4,-.7,.6);hit(svg,B,6,5);}],
+    [7,function(){miss(svg,B,1,7,C.muted);}]
+  ]);
+  el(svg,'rect',{width:1200,height:700,fill:G.vig});
+  txt(svg,600,62,'THE COVENANT IS CALLED',{font:F.d,size:40,fill:C.amber,anchor:'middle',ls:6});
+  txt(svg,600,94,'The Kraken holds E4–G6 for two turns. Ships within cannot sail.',{size:18,italic:true,anchor:'middle'});
+  sealc(svg,90,620,24,true);sealc(svg,150,620,24,true);sealc(svg,210,620,24,true);
+  txt(svg,150,672,'THREE SEALS BROKEN',{font:F.l,size:10.5,fill:C.amber,ls:2.5,anchor:'middle',weight:700});
+  plaque(svg,G,960,596,200,48,'TURN 1 OF 2',{dark:true});
+  txt(svg,1060,672,'three strikes fall each turn',{size:14,italic:true,anchor:'middle',fill:C.muted});
+})();
+
+/* ================= PLATE V — components ================= */
+(function(){
+  const svg=document.getElementById('p5'),G=defs(svg,'e');
+  el(svg,'rect',{width:1200,height:430,fill:G.table});
+  const cap=function(x,t,s){txt(svg,x,356,t,{font:F.l,size:11.5,fill:C.amber,ls:2.5,anchor:'middle',weight:700});txt(svg,x,380,s,{size:15,italic:true,anchor:'middle',fill:C.muted});};
+  const set=telegraph(svg,G,180,270,130,0);cap(180,'ENGINE TELEGRAPH','elige la acción');
+  compass(svg,G,470,190,96,.36,28);cap(470,'COMPASS ROSE','turno y reloj');
+  capstan(svg,G,700,190,92,true);cap(700,'CAPSTAN','termina el turno');
+  el(svg,'rect',{x:836,y:118,width:152,height:58,rx:29,fill:C.ink,stroke:C.brass,'stroke-width':1.5});
+  ball(svg,G,866,145,17,false);ball(svg,G,912,145,17,false);ball(svg,G,958,145,17,true);
+  sealc(svg,866,246,19,true);sealc(svg,912,246,19,true);sealc(svg,958,246,19,false);
+  cap(912,'SHOT & SEALS','puntos de acción · pacto');
+  slot(svg,G,1040,96,56,'spy');slot(svg,G,1104,96,56,'mine');slot(svg,G,1040,160,56,'fog');plaque(svg,G,1034,232,132,40,'FIRE',{size:13});
+  cap(1100,'QUARTERMASTER','power-ups y placas');
+  if(!(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches)){let i=0;setInterval(function(){i=(i+1)%4;set(i);},2400);}
+})();
+})();
+</script>
