@@ -1,97 +1,244 @@
-// Phase 1 controller: one human captain against the computer.
+// Controller: lobby → session → one Client driving the scene and the HUD.
 import './ui/hud.css';
-import { chooseAction } from './game/bot';
-import { Game, Ship, canSail, canTurn, cellName, endTurn, fire, fits, newGame, randomFleet, sail, shipAt, shipCells, startBattle, turn } from './game/rules';
+import { Client, Msg, Snapshot } from './game/engine';
+import { ITEMS, ITEM_IDS, Item } from './game/powerups';
+import { Dir, Ship, ZONE, attackCells, cellName, fits, inBoard, randomFleet, shipAt, shipCells } from './game/rules';
+import { verify } from './game/verify';
+import { createRoom, firebaseConfigured, joinRoom } from './net/firebase';
+import { LocalSession, Session } from './net/session';
 import { Cell, Highlight, SeaScene } from './render/scene';
 import { Hud, Mode } from './ui/hud';
+import { Lobby } from './ui/lobby';
 
-const AMBER = 0xd9a441, WAX = 0x8c2f1b, INK = 0x0d0b08;
+const AMBER = 0xd9a441, WAX = 0x8c2f1b, INK = 0x0d0b08, FOG = 0xcfc4a8;
 const canvas = document.getElementById('sea') as HTMLCanvasElement;
 const scene = new SeaScene(canvas);
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-let g: Game;
+let session: Session | null = null;
+let c: Client;
 let mode: Mode = 'fire';
-let busy = false;
+let aimDir: Dir = 'h';
+let busy = false; // animations playing
 let selected: Ship | null = null; // ship chosen for sailing, or lifted during placement
-let lifted: { x: number; y: number; dir: Ship['dir'] } | null = null;
+let lifted: { x: number; y: number; dir: Dir } | null = null;
 let hover: Cell | null = null;
+let foeOnline = true;
+const queue: Msg[] = [];
 
-const HINTS: Record<Mode, string> = {
+const HINTS: Record<string, string> = {
   fire: 'Fire — pick a square in enemy waters. One point a shot.',
-  sail: 'Sail — pick one of your ships, then the square ahead or astern.',
+  sail: 'Sail — pick one of your ships, then a square ahead or astern.',
   turn: 'Turn — pick one of your ships to swing it a quarter turn.',
+  broadside: 'Broadside — three squares in a line. Press R to swing the line.',
+  chain: 'Chain shot — a hit pins that ship for its next turn.',
+  spy: 'Cutter’s glass — count hull sections in a 5×5 patch of enemy water.',
+  spyglass: 'Spyglass — count hull sections in a 5×5 patch of enemy water.',
+  fireship: 'Fire ship — five squares in a cross.',
+  fog: 'Fog bank — pick the centre of a 5×5 patch of your own water.',
+  shipwright: 'Shipwright — pick a damaged section of one of your ships.',
 };
 
 const hud = new Hud({
   mode: setMode,
-  endTurn: () => { if (myTurn()) finishTurn(); },
-  shuffle: () => { if (g.phase === 'placement') { g.players[0].ships = randomFleet(Math.random); selected = lifted = null; refresh(); } },
+  buy: (item) => { if (c.buy(item)) setMode(item === 'winds' ? mode : item); },
+  endTurn: () => { if (!busy) c.endTurn(); },
+  shuffle: () => { if (canPlace()) { c.ships = randomFleet(Math.random); selected = lifted = null; refresh(); } },
   rotate: rotateLifted,
-  ready: () => {
-    if (g.phase !== 'placement' || lifted) return;
-    startBattle(g);
-    hud.log('Round 1', 'head');
-    setMode('fire');
-  },
-  restart: reset,
+  ready: () => { if (canPlace() && !lifted) void c.ready(); },
+  leave,
 });
+const lobby = new Lobby({
+  bot: (name) => start(new LocalSession(), name),
+  create: async (name) => {
+    lobby.busy(true);
+    try {
+      const s = await createRoom();
+      lobby.showCode(s.code);
+      location.hash = s.code;
+      await s.guest();
+      start(s, name);
+    } catch (e) { lobby.busy(false); lobby.status((e as Error).message, true); }
+  },
+  join: async (name, code) => {
+    lobby.busy(true);
+    lobby.status('Hailing the room…');
+    try { const s = await joinRoom(code); location.hash = code; start(s, name); }
+    catch (e) { lobby.busy(false); lobby.status((e as Error).message, true); }
+  },
+}, firebaseConfigured);
 
-function reset() {
-  g = newGame();
-  selected = lifted = null;
-  busy = false;
+const storeKey = () => (session?.code ? `tsc:room:${session.code}:${session.me}` : '');
+function save() { const k = storeKey(); if (k) try { localStorage.setItem(k, JSON.stringify(c.snapshot())); } catch { /* ignore */ } }
+
+function start(s: Session, name: string) {
+  session = s;
+  c = new Client(s.me, s.seed, (m) => s.send(m), Math.random, name);
+  let snap: Snapshot | null = null;
+  try { snap = JSON.parse(localStorage.getItem(storeKey()) || 'null'); } catch { /* ignore */ }
+  if (snap) c.restore(snap);
+  mode = 'fire'; selected = lifted = null; busy = false; queue.length = 0; foeOnline = true;
   hud.clearLog();
-  hud.log('Arrange your fleet, then turn the capstan.');
+  hud.log(s.code ? `Room ${s.code}. Arrange your fleet, then turn the capstan.` : 'Arrange your fleet, then turn the capstan.');
+  c.onNote = (t) => hud.log(t, 'good');
+  c.onChange = (m, ok, replay) => {
+    save();
+    if (!ok) return;
+    if (replay) { refresh(); return; }
+    queue.push(m);
+    if (!busy) void drain();
+  };
+  lobby.show(false);
+  hud.show(true);
+  hud.setHint(HINTS.fire);
   refresh();
-  (window as any).__game = g;
-  (window as any).__screen = (c: Cell) => scene.screen(c);
+  s.listen((m) => c.receive(m), (on) => { foeOnline = on; refresh(); });
+  Object.assign(window, { __client: c, __screen: (cell: Cell) => scene.screen(cell), __bot: (s as LocalSession).bot });
 }
 
-const myTurn = () => g.phase === 'battle' && g.current === 0 && !busy;
+function leave() {
+  try { localStorage.removeItem(storeKey()); } catch { /* ignore */ }
+  session?.close();
+  session = null;
+  history.replaceState(null, '', location.pathname + location.search);
+  hud.show(false);
+  lobby.status('');
+  lobby.show(true);
+}
+
+/* ---------- message → animation + log ---------- */
+async function drain() {
+  busy = true;
+  while (queue.length) {
+    const m = queue.shift()!;
+    const mine = m.by === c.me;
+    if (m.t === 'result') {
+      refreshHud();
+      const side = mine ? 'own' : 'enemy';
+      await Promise.all(m.results.map((r, i) => wait(i * 110).then(() => scene.shot({ side, x: r.x, y: r.y }))));
+    }
+    describe(m, mine);
+    refresh();
+  }
+  busy = false;
+  refresh();
+  if (c.pub.phase === 'battle' && c.can() && c.pub.ap === 0) {
+    const options = (c.has('winds') && !c.pub.windsUsed) || ITEM_IDS.some((i) => c.canBuy(i));
+    if (options) hud.setHint('No points left — visit the Quartermaster or turn the capstan to end your turn.');
+    else { await wait(400); if (c.can() && c.pub.ap === 0 && !busy) c.endTurn(); }
+  }
+}
+
+function describe(m: Msg, mine: boolean) {
+  const foe = c.foeSide.name || 'The enemy';
+  switch (m.t) {
+    case 'ready': if (!mine) hud.log(`${m.name} has committed a fleet.`); if (c.pub.phase === 'battle') hud.log('Round 1', 'head'); break;
+    case 'result':
+      for (const r of m.results) {
+        const at = cellName(r.x, r.y);
+        if (!mine) { // my shot, answered by the enemy
+          if (r.r === 'miss') hud.log(`Your shot at ${at} — only water.`);
+          else if (r.r === 'wreck') hud.log(`Your shot at ${at} — wreckage, no new damage.`);
+          else if (r.r === 'clang') hud.log(`Your shot at ${at} rings off iron plate — an Ironclad!`, 'good');
+          else if (r.r === 'hit') hud.log(`Your shot at ${at} — a hit!`, 'good');
+          else hud.log(`Your shot at ${at} — the enemy ${r.ship!.cls} goes down!`, 'good');
+        } else {
+          if (r.r === 'miss') hud.log(`Enemy shot at ${at} — only water.`);
+          else if (r.r === 'wreck') hud.log(`Enemy shot at ${at} — wreckage.`);
+          else if (r.r === 'clang') hud.log(`Enemy shot at ${at} glances off your Ironclad.`, 'bad');
+          else if (r.r === 'hit') hud.log(`Enemy shot at ${at} — a hit on your fleet.`, 'bad');
+          else hud.log(`Enemy shot at ${at} — your ${r.ship!.cls} is lost.`, 'bad');
+        }
+      }
+      if (m.chained) hud.log(mine ? 'Chain shot fouls your rigging — that ship is pinned.' : 'Your chain shot pins the ship.', mine ? 'bad' : 'good');
+      break;
+    case 'move':
+      hud.log(mine ? (m.kind === 'turn' ? 'You bring a ship about.' : 'You shift a ship.') : `${foe} shifts a ship, unseen.`);
+      for (const [x, y] of m.debris) if (!mine) hud.log(`Wreckage drifts at ${cellName(x, y)}.`, 'good');
+      if (m.treasure) hud.log(mine ? 'Treasure hauled aboard — but your ship was sighted.' : `${foe} lifts a treasure at ${cellName(...m.treasure)} — a ship is there.`, 'good');
+      break;
+    case 'scan': if (!mine) hud.log(`${foe} trains a spyglass on ${cellName(m.x, m.y)}.`, 'bad'); break;
+    case 'scanResult': if (!mine) hud.log(m.count < 0 ? `Spyglass on ${cellName(m.x, m.y)}: nothing but fog.` : `Spyglass on ${cellName(m.x, m.y)}: ${m.count} hull section${m.count === 1 ? '' : 's'}.`, m.count > 0 ? 'good' : ''); break;
+    case 'buy': hud.log(mine ? `You buy ${ITEMS[m.item].name}.` : `${foe} buys ${ITEMS[m.item].name}.`); break;
+    case 'fog': hud.log(mine ? 'Fog rolls over your waters.' : `Fog rolls over enemy waters near ${cellName(m.x, m.y)}.`); break;
+    case 'repair': hud.log(mine ? 'Your shipwrights patch a section.' : 'Enemy shipwrights are at work.'); break;
+    case 'winds': hud.log(mine ? 'The trade winds fill your sails: one more point.' : `${foe} catches the trade winds.`); break;
+    case 'order': if (!mine) hud.log(`The Admiralty rewards ${foe} with ${m.reward} doubloons.`); break;
+    case 'endTurn': if (c.pub.current === 0 && c.pub.phase === 'battle') hud.log(`Round ${c.pub.round}`, 'head'); break;
+    case 'reveal':
+      if (!mine && session?.code) void verify(c.log, c.foe).then((bad) => hud.setVerdict(bad ? `The enemy's log does not add up: ${bad}.` : "The enemy's log checks out: every shot was answered truthfully."));
+      break;
+  }
+}
+
+/* ---------- view ---------- */
+const canPlace = () => !!session && c.pub.phase === 'placement' && !c.side.ready;
+const myTurn = () => !!session && c.can() && !busy;
 
 function setMode(m: Mode) {
+  if (m === 'winds') { c.winds(); return; }
   mode = m;
   selected = null;
-  hud.setMode(m);
-  hud.setHint(HINTS[m]);
+  hud.setHint(HINTS[m] || '');
   refresh();
 }
 
-function sailTargets(s: Ship): { cell: Cell; delta: 1 | -1 }[] {
-  const cs = shipCells(s), out: { cell: Cell; delta: 1 | -1 }[] = [];
+function sailTargets(s: Ship): { cell: Cell; delta: 1 | -1; steps: number }[] {
+  const cs = shipCells(s), out: { cell: Cell; delta: 1 | -1; steps: number }[] = [];
   const [dx, dy] = s.dir === 'h' ? [1, 0] : [0, 1];
   const bow = cs[cs.length - 1], stern = cs[0];
-  if (canSail(g, s.id, 1)) out.push({ cell: { side: 'own', x: bow[0] + dx, y: bow[1] + dy }, delta: 1 });
-  if (canSail(g, s.id, -1)) out.push({ cell: { side: 'own', x: stern[0] - dx, y: stern[1] - dy }, delta: -1 });
+  for (let k = 1; k <= c.reach(s.id, 1); k++) out.push({ cell: { side: 'own', x: bow[0] + dx * k, y: bow[1] + dy * k }, delta: 1, steps: k });
+  for (let k = 1; k <= c.reach(s.id, -1); k++) out.push({ cell: { side: 'own', x: stern[0] - dx * k, y: stern[1] - dy * k }, delta: -1, steps: k });
   return out;
 }
 
+function zone(side: Cell['side'], x: number, y: number, color: number, opacity: number): Highlight[] {
+  const out: Highlight[] = [];
+  for (let b = y - ZONE; b <= y + ZONE; b++) for (let a = x - ZONE; a <= x + ZONE; a++) if (inBoard(a, b)) out.push({ side, x: a, y: b, color, opacity });
+  return out;
+}
+
+function refreshHud() {
+  if (!session) return;
+  // Fall back to plain fire when the chosen tool is spent or its ship is lost.
+  const gone = (mode === 'broadside' && !c.alive('line')) || (mode === 'chain' && !c.alive('frigate')) || (mode === 'spy' && !c.alive('cutter')) || (mode in ITEMS && !c.has(mode as Item));
+  if (gone && c.pub.phase === 'battle') { mode = 'fire'; hud.setHint(HINTS.fire); }
+  hud.update(c, mode, foeOnline ? '' : 'lost at sea (disconnected)');
+}
+
 function refresh() {
-  const invalid = !!lifted && !fits(g.players[0].ships, selected!, selected!.id);
-  scene.sync(g, { revealEnemy: g.phase === 'over', selectedId: selected?.id ?? null, invalid });
+  if (!session) return;
+  refreshHud();
+  const invalid = !!lifted && !fits(c.ships, selected!, selected!.id);
+  scene.sync({ pub: c.pub, me: c.me, ships: c.ships, selectedId: selected?.id ?? null, invalid });
   const hl: Highlight[] = [];
-  if (myTurn()) {
-    if (mode === 'fire' && hover?.side === 'enemy') hl.push({ ...hover, color: WAX, opacity: 0.55 });
-    if (mode === 'sail' && selected) for (const t of sailTargets(selected)) hl.push({ ...t.cell, color: AMBER, opacity: 0.7 });
-    if (mode !== 'fire' && hover?.side === 'own' && !selected) {
-      const at = shipAt(g.players[0], hover.x, hover.y);
-      if (at && !at.ship.sunk) {
-        const ok = mode === 'sail' || canTurn(g, at.ship.id);
-        for (const [x, y] of shipCells(at.ship)) hl.push({ side: 'own', x, y, color: ok ? AMBER : INK, opacity: 0.4 });
+  if (myTurn() && hover) {
+    const { side, x, y } = hover;
+    if (side === 'enemy') {
+      if (mode === 'fire' || mode === 'chain') hl.push({ ...hover, color: WAX, opacity: 0.55 });
+      if (mode === 'broadside' || mode === 'fireship') for (const [a, b] of attackCells(mode, x, y, aimDir)) hl.push({ side, x: a, y: b, color: WAX, opacity: 0.55 });
+      if (mode === 'spy' || mode === 'spyglass') hl.push(...zone(side, x, y, AMBER, 0.3));
+    } else {
+      if (mode === 'fog') hl.push(...zone(side, x, y, FOG, 0.45));
+      if ((mode === 'sail' && !selected) || mode === 'turn' || mode === 'shipwright') {
+        const at = shipAt(c.ships, x, y);
+        if (at && !at.ship.sunk) {
+          const ok = mode === 'sail' ? c.reach(at.ship.id, 1) + c.reach(at.ship.id, -1) > 0 : mode === 'turn' ? c.canTurn(at.ship.id) : at.ship.hits.some(Boolean);
+          for (const [a, b] of shipCells(at.ship)) hl.push({ side, x: a, y: b, color: ok ? AMBER : INK, opacity: 0.4 });
+        }
       }
     }
   }
+  if (myTurn() && mode === 'sail' && selected) for (const t of sailTargets(selected)) hl.push({ ...t.cell, color: AMBER, opacity: 0.7 });
   scene.setHighlights(hl);
-  hud.update(g);
 }
 
 /* ---------- placement ---------- */
-function moveLifted(c: Cell) {
-  if (!selected || c.side !== 'own') return;
+function moveLifted(cell: Cell) {
+  if (!selected || cell.side !== 'own') return;
   const k = Math.floor(selected.len / 2);
-  selected.x = selected.dir === 'h' ? c.x - k : c.x;
-  selected.y = selected.dir === 'h' ? c.y : c.y - k;
+  selected.x = selected.dir === 'h' ? cell.x - k : cell.x;
+  selected.y = selected.dir === 'h' ? cell.y : cell.y - k;
 }
 function rotateLifted() {
   if (!lifted || !selected) return;
@@ -99,104 +246,67 @@ function rotateLifted() {
   if (hover) moveLifted(hover);
   refresh();
 }
-function placementClick(c: Cell) {
-  if (c.side !== 'own') return;
+function placementClick(cell: Cell) {
+  if (cell.side !== 'own' || !canPlace()) return;
   if (lifted && selected) {
-    if (fits(g.players[0].ships, selected, selected.id)) selected = lifted = null;
+    if (fits(c.ships, selected, selected.id)) selected = lifted = null;
   } else {
-    const at = shipAt(g.players[0], c.x, c.y);
-    if (at) { selected = at.ship; lifted = { x: at.ship.x, y: at.ship.y, dir: at.ship.dir }; moveLifted(c); }
+    const at = shipAt(c.ships, cell.x, cell.y);
+    if (at) { selected = at.ship; lifted = { x: at.ship.x, y: at.ship.y, dir: at.ship.dir }; moveLifted(cell); }
   }
   refresh();
 }
 
 /* ---------- battle ---------- */
-async function shoot(c: Cell, who: 0 | 1) {
-  busy = true;
-  refresh();
-  await scene.shot(c);
-  const r = fire(g, c.x, c.y)!;
-  const at = cellName(c.x, c.y), subj = who === 0 ? 'You fire' : 'Enemy fires';
-  if (r.result === 'miss') hud.log(`${subj} at ${at} — only water.`);
-  else if (r.result === 'wreck') hud.log(`${subj} at ${at} — wreckage, no new damage.`);
-  else if (r.result === 'hit') hud.log(who === 0 ? `${subj} at ${at} — a hit!` : `${subj} at ${at} — your ${r.ship!.cls} is hit.`, who === 0 ? 'good' : 'bad');
-  else hud.log(who === 0 ? `${subj} at ${at} — the enemy ${r.ship!.cls} goes down!` : `${subj} at ${at} — your ${r.ship!.cls} is lost.`, who === 0 ? 'good' : 'bad');
-  busy = false;
-  refresh();
-}
-
-async function afterMyAction() {
-  refresh();
-  if (g.phase === 'battle' && g.ap === 0) { await wait(350); finishTurn(); }
-}
-
-async function battleClick(c: Cell) {
+function battleClick(cell: Cell) {
   if (!myTurn()) return;
-  if (mode === 'fire') {
-    if (c.side !== 'enemy') return;
-    await shoot(c, 0);
-    return afterMyAction();
+  const { side, x, y } = cell;
+  if (side === 'enemy') {
+    if (mode === 'fire') c.attack('shot', x, y);
+    else if (mode === 'broadside' || mode === 'chain' || mode === 'fireship') c.attack(mode, x, y, aimDir);
+    else if (mode === 'spy') c.scan(x, y, 'cutter');
+    else if (mode === 'spyglass') c.scan(x, y, 'spyglass');
+    return;
   }
-  if (c.side !== 'own') return;
-  const at = shipAt(g.players[0], c.x, c.y);
+  if (mode === 'fog') { c.fog(x, y); return; }
+  if (mode === 'shipwright') { if (!c.repair(x, y)) hud.log('Nothing to repair there.'); return; }
+  const at = shipAt(c.ships, x, y);
   if (mode === 'turn') {
     if (!at || at.ship.sunk) return;
-    if (turn(g, at.ship.id)) hud.log(`Your ${at.ship.cls} comes about.`);
-    else hud.log(`The ${at.ship.cls} cannot turn — ${at.ship.hits.filter(Boolean).length >= 2 ? 'too badly damaged' : 'no sea room'}.`);
-    return afterMyAction();
+    if (!c.turn(at.ship.id)) hud.log(`The ${at.ship.cls} cannot turn — ${at.ship.chained ? 'she is pinned by chain shot' : at.ship.hits.filter(Boolean).length >= 2 ? 'too badly damaged' : 'no sea room'}.`);
+    return;
   }
+  if (mode !== 'sail') return;
   if (selected) {
-    const t = sailTargets(selected).find((q) => q.cell.x === c.x && q.cell.y === c.y);
-    if (t) {
-      const wounded = selected.hits.some(Boolean);
-      sail(g, selected.id, t.delta);
-      hud.log(`Your ${selected.cls} sails one square${wounded ? ', trailing wreckage' : ''}.`);
-      if (!sailTargets(selected).length || g.ap === 0) selected = null;
-      return afterMyAction();
-    }
+    const t = sailTargets(selected).find((q) => q.cell.x === x && q.cell.y === y);
+    if (t) { c.sail(selected.id, t.delta, t.steps); if (c.pub.ap === 0) selected = null; return; }
   }
   selected = at && !at.ship.sunk ? at.ship : null;
-  refresh();
-}
-
-async function finishTurn() {
-  selected = null;
-  endTurn(g);
-  busy = true;
-  refresh();
-  while (g.phase === 'battle' && g.current === 1) {
-    await wait(650);
-    const a = chooseAction(g);
-    if (a.type === 'fire') await shoot({ side: 'own', x: a.x, y: a.y }, 1);
-    else if (a.type === 'sail') { sail(g, a.shipId, a.delta); hud.log('The enemy shifts a ship, unseen.'); }
-    else if (a.type === 'turn') { turn(g, a.shipId); hud.log('The enemy shifts a ship, unseen.'); }
-    busy = true;
-    refresh();
-    if (g.phase === 'battle' && (g.ap === 0 || a.type === 'end')) { await wait(400); endTurn(g); }
-  }
-  busy = false;
-  if (g.phase === 'battle') hud.log(`Round ${g.round}`, 'head');
+  if (selected?.chained) hud.log(`The ${selected.cls} is pinned by chain shot this turn.`);
   refresh();
 }
 
 /* ---------- input ---------- */
 canvas.addEventListener('pointermove', (e) => {
-  const c = scene.pick(e);
-  if (c?.side === hover?.side && c?.x === hover?.x && c?.y === hover?.y) return;
-  hover = c;
-  if (g.phase === 'placement' && lifted && c) moveLifted(c);
+  if (!session) return;
+  const cell = scene.pick(e);
+  if (cell?.side === hover?.side && cell?.x === hover?.x && cell?.y === hover?.y) return;
+  hover = cell;
+  if (canPlace() && lifted && cell) moveLifted(cell);
   refresh();
 });
 canvas.addEventListener('click', (e) => {
-  const c = scene.pick(e);
-  if (!c) return;
-  hover = c;
-  if (g.phase === 'placement') placementClick(c);
-  else battleClick(c);
+  if (!session) return;
+  const cell = scene.pick(e);
+  if (!cell) return;
+  hover = cell;
+  if (c.pub.phase === 'placement') placementClick(cell);
+  else if (c.pub.phase === 'battle') battleClick(cell);
 });
 addEventListener('keydown', (e) => {
+  if (!session || (e.target as Element).tagName === 'INPUT') return;
   const k = e.key.toLowerCase();
-  if (g.phase === 'placement') {
+  if (c.pub.phase === 'placement') {
     if (k === 'r') rotateLifted();
     if (k === 'escape' && lifted && selected) { Object.assign(selected, lifted); selected = lifted = null; refresh(); }
     return;
@@ -204,9 +314,17 @@ addEventListener('keydown', (e) => {
   if (k === 'f' || k === '1') setMode('fire');
   if (k === 's' || k === '2') setMode('sail');
   if (k === 't' || k === '3') setMode('turn');
-  if (k === ' ' && myTurn()) { e.preventDefault(); finishTurn(); }
+  if (k === 'a' || k === '4') setMode('broadside');
+  if (k === 'r') { aimDir = aimDir === 'h' ? 'v' : 'h'; refresh(); }
+  if (k === ' ' && myTurn()) { e.preventDefault(); c.endTurn(); }
 });
 
-reset();
-hud.setMode('fire');
-hud.setHint(HINTS.fire);
+hud.show(false);
+lobby.show(true);
+// A room code in the address takes you straight back to your seat.
+const wanted = location.hash.slice(1).toUpperCase();
+if (firebaseConfigured && /^[A-Z0-9]{4}$/.test(wanted)) {
+  lobby.busy(true);
+  lobby.status(`Returning to room ${wanted}…`);
+  joinRoom(wanted).then((s) => start(s, localStorage.getItem('tsc:name') || 'Captain')).catch((e) => { lobby.busy(false); lobby.status(e.message, true); });
+}
