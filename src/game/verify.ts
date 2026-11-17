@@ -1,7 +1,11 @@
 // After the battle each captain reveals their placement and hidden moves.
 // Replaying them against the public log shows whether every answer was honest.
 import { Act, Msg, Placement, commitHash } from './engine';
-import { FLEET, Ship, countScan, fits, repairShip, resolveAttack, sailShip, turnShip } from './rules';
+import { CellResult, FLEET, Ship, XY, countScan, fits, repairShip, resolveAttack, sailShip, turnShip } from './rules';
+
+// Compare by value: a database may hand objects back with their keys in another order.
+const sig = (rs: CellResult[]) => rs.map((r) => [r.x, r.y, r.r, r.ship ? [r.ship.kind, r.ship.x, r.ship.y, r.ship.dir] : 0].join()).join('|');
+const cells = (cs: XY[]) => cs.map((c) => c[0] + ',' + c[1]).join('|');
 
 /** Returns null when `who` played honestly, or a description of the first discrepancy. */
 export async function verify(log: Msg[], who: 0 | 1): Promise<string | null> {
@@ -28,14 +32,14 @@ export async function verify(log: Msg[], who: 0 | 1): Promise<string | null> {
       if (m.t === 'repair') { if (a.k !== 'repair' || !repairShip(ships, a.id, a.idx)) return 'an impossible repair'; continue; }
       if (a.k === 'sail') {
         const debris = sailShip(ships, a.id, a.delta, a.steps);
-        if (!debris || JSON.stringify(debris) !== JSON.stringify(m.debris || [])) return 'a ship sailed where it could not, or hid its wreckage';
+        if (!debris || cells(debris) !== cells(m.debris || [])) return 'a ship sailed where it could not, or hid its wreckage';
       } else if (a.k !== 'turn' || !turnShip(ships, a.id)) return 'an impossible turn';
     }
     if (m.by === who && m.t === 'endTurn') for (const s of ships) s.chained = false;
-    if (m.by !== who && m.t === 'attack') expect = JSON.stringify(resolveAttack(ships, m.cells, m.src === 'chain').results);
+    if (m.by !== who && m.t === 'attack') expect = sig(resolveAttack(ships, m.cells, m.src === 'chain').results);
     if (m.by !== who && m.t === 'scan') expect = 'scan:' + countScan(ships, m.x, m.y);
     if (m.by === who && m.t === 'result' && expect !== null) {
-      if (JSON.stringify(m.results || []) !== expect) return 'a shot was answered falsely';
+      if (sig(m.results || []) !== expect) return 'a shot was answered falsely';
       expect = null;
     }
     if (m.by === who && m.t === 'scanResult' && expect !== null) {

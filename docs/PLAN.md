@@ -25,7 +25,7 @@ El juego en sí se construye después, por fases.
 ## 1. Diseño de juego
 
 ### Núcleo
-- Cada jugador tiene sus aguas: cuadrícula **10×10**. Gana quien hunde toda la flota rival.
+- Cada jugador tiene sus aguas: cuadrícula **16×16** (ampliada desde 10×10). Gana quien hunde toda la flota rival.
 - Colocación secreta inicial, luego turnos alternos con **3 AP** y temporizador de 75 s.
 - Los AP no gastados **no** se acumulan (salvo 1 con el power-up *Trade Winds*).
 
@@ -167,3 +167,15 @@ paleta y tipografías). Se publica además como Artifact para verla en el navega
   ancho escritorio y móvil, comprobar que las 5 láminas se ven y no hay errores de consola.
 - **Fases 1+**: `npm test` (Vitest sobre `src/game`), `npm run build`, y prueba end-to-end con
   Playwright abriendo dos pestañas contra el **emulador de Firebase** para jugar una partida completa.
+
+---
+
+## Estado (actualizado)
+
+- **Hecho:** fase 0 (plan y bocetos), fase 1 (partida contra la computadora), fase 2 (salas online
+  con Firebase, reconexión, verificación al final) y fase 3 (rasgos de clase, tesoros y doblones,
+  power-ups, Órdenes del Almirantazgo). Mapa de 16×16.
+- **Cambios respecto al plan original:** escaneos y niebla cubren 5×5 en vez de 3×3 por el mapa
+  grande; no hay minas ni señuelos; los sellos del pacto se dejan para la fase 4 junto al Kraken.
+- **Pendiente:** fase 4 (Kraken, sellos, tormenta, marea, remolino), fase 5 (pulido, sonido, tutorial,
+  temporizador de turno), fase 6 (modelos 3D detallados).

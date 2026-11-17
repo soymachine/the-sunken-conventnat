@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "emulators": "npx firebase-tools emulators:start --only auth,database --project demo-sunken-covenant",
+    "dev:emu": "VITE_FIREBASE_EMULATOR=1 vite"
   },
   "dependencies": {
     "firebase": "^13.4.0",
