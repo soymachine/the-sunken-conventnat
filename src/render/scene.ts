@@ -1,174 +1,193 @@
-// three.js view of the sea chart: enemy waters far, own waters near.
+// three.js view of the two sea charts. Ships are persistent objects that glide,
+// ride the swell and sink; everything else is rebuilt from the public state.
 import * as THREE from 'three';
 import { Pub, SidePub } from '../game/engine';
-import { N, Ship, ZONE, cellName } from '../game/rules';
+import { Kind, N, Ship, ShotOutcome, ZONE, shipCells } from '../game/rules';
+import { Fx } from './fx';
+import { Post } from './post';
+import { Sea, waveH } from './sea';
+import { ShipModel, buildShip, loadShipModels, setShipTime } from './ships';
 
 export type Side = 'own' | 'enemy';
 export interface Cell { side: Side; x: number; y: number }
 export interface Highlight extends Cell { color: number; opacity?: number }
-export interface View { pub: Pub; me: 0 | 1; ships: Ship[]; selectedId?: number | null; invalid?: boolean }
+export interface View { pub: Pub; me: 0 | 1; ships: Ship[]; selectedId?: number | null; invalid?: boolean; lifted?: boolean;
+  /** Rebuilding after a reload: show the present state without replaying how it came about. */
+  quiet?: boolean }
+export type Sound = 'cannon' | 'splash' | 'hit' | 'clang' | 'sink' | 'coin' | 'glass';
 
-const C = { ink: 0x0d0b08, sepia: 0x2a2116, amber: 0xd9a441, parch: 0xe8d5a3, brass: 0xb08d3c, wax: 0x8c2f1b, deck: 0x6b4e2c, sail: 0xf3e6c2 };
+const C = { ink: 0x0d0b08, amber: 0xd9a441, parch: 0xe8d5a3, brass: 0xb08d3c, wax: 0x8c2f1b };
 const HALF = N / 2;
 /** World position of each chart's (0,0) corner. Stacked on tall screens, side by side on wide ones. */
 const STACKED: Record<Side, { x: number; z: number }> = { enemy: { x: -HALF, z: -(N + 0.5) }, own: { x: -HALF, z: 0.5 } };
 const ABREAST: Record<Side, { x: number; z: number }> = { enemy: { x: -(N + 0.75), z: -HALF }, own: { x: 0.75, z: -HALF } };
 let origin = STACKED;
+const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 export function cellCenter(c: Cell): THREE.Vector3 {
   return new THREE.Vector3(origin[c.side].x + c.x + 0.5, 0, origin[c.side].z + c.y + 0.5);
 }
 
-function chartTexture(enemy: boolean): THREE.CanvasTexture {
-  const u = 64, m = 32, S = N * u + 2 * m;
+function sprite(draw: (g: CanvasRenderingContext2D) => void): THREE.Texture {
   const cv = document.createElement('canvas');
-  cv.width = cv.height = S;
-  const g = cv.getContext('2d')!;
-  g.fillStyle = enemy ? '#b39a62' : '#d6c08a';
-  g.fillRect(0, 0, S, S);
-  let seed = enemy ? 23 : 41;
-  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-  if (enemy) {
-    g.strokeStyle = 'rgba(13,11,8,.13)';
-    g.lineWidth = 2.5;
-    for (let i = -S; i < S; i += 12) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i + S, S); g.stroke(); }
-  }
-  g.fillStyle = '#17120b';
-  g.fillRect(0, 0, S, m); g.fillRect(0, S - m, S, m); g.fillRect(0, 0, m, S); g.fillRect(S - m, 0, m, S);
-  g.strokeStyle = 'rgba(13,11,8,.45)';
-  g.lineWidth = 1.6;
-  for (let n = 0; n < 110; n++) {
-    const x = m + 12 + rnd() * (S - 2 * m - 44), y = m + 12 + rnd() * (S - 2 * m - 24), w = 9;
-    g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + w / 2, y - 5, x + w, y); g.quadraticCurveTo(x + w * 1.5, y + 5, x + 2 * w, y); g.stroke();
-  }
-  g.strokeStyle = 'rgba(13,11,8,.5)';
-  for (let i = 0; i <= N; i++) {
-    g.lineWidth = i % 4 === 0 ? 2.4 : 1.2;
-    g.beginPath(); g.moveTo(m + i * u, m); g.lineTo(m + i * u, S - m); g.stroke();
-    g.beginPath(); g.moveTo(m, m + i * u); g.lineTo(S - m, m + i * u); g.stroke();
-  }
-  g.lineWidth = 5; g.strokeStyle = '#0d0b08'; g.strokeRect(m, m, S - 2 * m, S - 2 * m);
-  g.fillStyle = '#a8946a'; g.font = '600 19px Cinzel, Georgia, serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
-  for (let i = 0; i < N; i++) {
-    g.fillText(cellName(i, 0)[0], m + i * u + u / 2, enemy ? m / 2 : S - m / 2);
-    g.fillText(String(i + 1), m / 2, m + i * u + u / 2);
-    g.fillText(String(i + 1), S - m / 2, m + i * u + u / 2);
-  }
+  cv.width = cv.height = 128;
+  draw(cv.getContext('2d')!);
   const t = new THREE.CanvasTexture(cv);
   t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 8;
   return t;
 }
-
 const labels = new Map<string, THREE.SpriteMaterial>();
 function label(text: string, color: string): THREE.Sprite {
-  const key = text + color;
-  let m = labels.get(key);
+  let m = labels.get(text + color);
   if (!m) {
-    const cv = document.createElement('canvas');
-    cv.width = cv.height = 128;
-    const g = cv.getContext('2d')!;
-    g.fillStyle = '#0d0b08'; g.beginPath(); g.arc(64, 64, 50, 0, 7); g.fill();
-    g.strokeStyle = color; g.lineWidth = 6; g.stroke();
-    g.fillStyle = color; g.font = '700 56px Cinzel, Georgia, serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.fillText(text, 64, 68);
-    const t = new THREE.CanvasTexture(cv);
-    t.colorSpace = THREE.SRGBColorSpace;
-    m = new THREE.SpriteMaterial({ map: t, depthTest: false });
-    labels.set(key, m);
+    m = new THREE.SpriteMaterial({ depthTest: false, map: sprite((g) => {
+      g.fillStyle = '#0d0b08'; g.beginPath(); g.arc(64, 64, 50, 0, 7); g.fill();
+      g.strokeStyle = color; g.lineWidth = 6; g.stroke();
+      g.fillStyle = color; g.font = '700 56px Cinzel, Georgia, serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(text, 64, 68);
+    }) });
+    labels.set(text + color, m);
   }
   const s = new THREE.Sprite(m);
   s.scale.setScalar(1.5);
   return s;
 }
+const puffTex = sprite((g) => {
+  const r = g.createRadialGradient(64, 64, 4, 64, 64, 62);
+  r.addColorStop(0, 'rgba(232,222,196,.95)'); r.addColorStop(0.55, 'rgba(214,204,178,.5)'); r.addColorStop(1, 'rgba(214,204,178,0)');
+  g.fillStyle = r; g.fillRect(0, 0, 128, 128);
+});
 
-const mat = (color: number, extra: THREE.MeshLambertMaterialParameters = {}) => new THREE.MeshLambertMaterial({ color, ...extra });
-const M = {
-  hull: mat(0x1a140c), deck: mat(C.deck), sail: mat(C.sail, { side: THREE.DoubleSide }), mast: mat(0x2a2116), flag: mat(C.wax),
-  wreck: mat(0x241c12), flame: new THREE.MeshBasicMaterial({ color: C.amber }), smoke: mat(0x1a140c, { transparent: true, opacity: 0.55 }),
-  select: mat(C.amber), bad: mat(C.wax), debris: mat(0x2a2116), ball: mat(0x15110b), chest: mat(0x7a5a1e), gold: mat(C.amber),
-  fog: mat(0xcfc4a8, { transparent: true, opacity: 0.5, depthWrite: false }), chain: mat(C.wax),
-  line: new THREE.LineBasicMaterial({ color: C.ink }), lineAmber: new THREE.LineBasicMaterial({ color: C.amber }), lineWax: new THREE.LineBasicMaterial({ color: C.wax }),
-};
-
-const hullGeos = new Map<number, { hull: THREE.BufferGeometry; edges: THREE.BufferGeometry }>();
-function hullGeo(L: number) {
-  let e = hullGeos.get(L);
-  if (!e) {
-    const s = new THREE.Shape();
-    const pts = [[0.12, -0.26], [L - 0.75, -0.32], [L - 0.08, 0], [L - 0.75, 0.32], [0.12, 0.26], [0.04, 0]];
-    pts.forEach(([x, y], i) => (i ? s.lineTo(x, y) : s.moveTo(x, y)));
-    s.closePath();
-    const hull = new THREE.ExtrudeGeometry(s, { depth: 0.3, bevelEnabled: false });
-    hull.rotateX(-Math.PI / 2);
-    e = { hull, edges: new THREE.EdgesGeometry(hull) };
-    hullGeos.set(L, e);
-  }
-  return e;
-}
 const G = {
-  mast: new THREE.CylinderGeometry(0.025, 0.035, 1.3, 6), sail: new THREE.BoxGeometry(0.03, 0.72, 0.7), flag: new THREE.BoxGeometry(0.22, 0.1, 0.01),
   disc: new THREE.CircleGeometry(0.3, 20), ring: new THREE.RingGeometry(0.22, 0.3, 24), ring2: new THREE.RingGeometry(0.08, 0.13, 16),
-  flame: new THREE.ConeGeometry(0.16, 0.55, 8), smoke: new THREE.SphereGeometry(0.14, 8, 6), cell: new THREE.PlaneGeometry(0.94, 0.94),
-  plank: new THREE.BoxGeometry(0.34, 0.04, 0.08), ball: new THREE.SphereGeometry(0.13, 12, 8),
+  flame: new THREE.ConeGeometry(0.13, 0.5, 8), cell: new THREE.PlaneGeometry(0.94, 0.94),
+  plank: new THREE.BoxGeometry(0.34, 0.04, 0.08), ball: new THREE.SphereGeometry(0.16, 12, 8),
   chest: new THREE.BoxGeometry(0.5, 0.3, 0.36), lid: new THREE.BoxGeometry(0.54, 0.1, 0.4),
-  fog: new THREE.BoxGeometry(2 * ZONE + 1, 0.7, 2 * ZONE + 1), torus: new THREE.TorusGeometry(0.42, 0.05, 6, 20),
-  zone: new THREE.EdgesGeometry(new THREE.PlaneGeometry(2 * ZONE + 1, 2 * ZONE + 1)), eye: new THREE.RingGeometry(0.32, 0.42, 4),
+  torus: new THREE.TorusGeometry(0.4, 0.05, 6, 20), eye: new THREE.RingGeometry(0.32, 0.42, 4),
+  zone: new THREE.EdgesGeometry(new THREE.PlaneGeometry(2 * ZONE + 1, 2 * ZONE + 1)), beam: new THREE.PlaneGeometry(0.5, 2 * ZONE + 1),
 };
-for (const k of ['disc', 'ring', 'ring2', 'cell', 'zone', 'eye', 'torus'] as const) G[k].rotateX(-Math.PI / 2);
+for (const k of ['disc', 'ring', 'ring2', 'cell', 'zone', 'eye', 'torus', 'beam'] as const) G[k].rotateX(-Math.PI / 2);
+const M = {
+  flame: new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 1.5, 0.35) }), gold: new THREE.MeshBasicMaterial({ color: new THREE.Color(1.15, 0.72, 0.16) }),
+  chest: new THREE.MeshLambertMaterial({ color: 0x7a5a1e }), debris: new THREE.MeshLambertMaterial({ color: 0x2a2116 }), ball: new THREE.MeshLambertMaterial({ color: 0x15110b }),
+  chain: new THREE.MeshLambertMaterial({ color: C.wax }), line: new THREE.LineBasicMaterial({ color: C.ink }),
+  lineAmber: new THREE.LineBasicMaterial({ color: C.amber }), lineWax: new THREE.LineBasicMaterial({ color: C.wax }),
+};
+
+interface ShipObj {
+  root: THREE.Group; tilt: THREE.Group; model: ShipModel; decor: THREE.Group; decorKey: string;
+  kind: Kind; len: number; side: Side; pos: THREE.Vector3; yaw: number; phase: number;
+  state: 'afloat' | 'sinking' | 'wreck'; sink: number; lift: number; fires: THREE.Vector3[]; cells: [number, number][]; fresh: boolean;
+}
 
 export class SeaScene {
+  /** Set by the controller to play sounds in step with the effects. */
+  sound: (s: Sound) => void = () => {};
   private renderer: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
   private camera = new THREE.PerspectiveCamera(38, 1, 0.1, 400);
-  private dynamic = new THREE.Group();
   private marks = new THREE.Group();
-  private fx = new THREE.Group();
+  private shipsGroup = new THREE.Group();
+  private misc = new THREE.Group();
   private hl = new THREE.Group();
+  private fx = new Fx();
+  private post: Post | null = null;
+  private seas: Record<Side, Sea>;
+  private shadowPlanes = [] as THREE.Mesh[];
+  private sun = new THREE.DirectionalLight(0xffe2a8, 1.7);
+  private ships = new Map<string, ShipObj>();
   private flames: THREE.Object3D[] = [];
+  private embers: THREE.Vector3[] = [];
+  private puffs: { s: THREE.Sprite; base: THREE.Vector3; ph: number }[] = [];
+  private glints: THREE.Object3D[] = [];
   private ray = new THREE.Raycaster();
   private plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   private baseDist = 40;
   private zoom = 1;
   private target = new THREE.Vector3();
   private dir = new THREE.Vector3(0, 1, 0.95).normalize();
-  private charts = {} as Record<Side, THREE.Mesh>;
+  private camPos = new THREE.Vector3();
+  private shakeAmt = 0;
   private extent = { x: HALF, z: N };
   private last: View | null = null;
+  private quality: 'high' | 'low';
+  private frames = 0; private slow = 0; private laid = false;
+  private time = 0;
 
   constructor(private canvas: HTMLCanvasElement) {
+    const forced = new URLSearchParams(location.search).get('q');
+    this.quality = forced === 'low' ? 'low' : 'high';
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    this.renderer.shadowMap.enabled = true;
     this.scene.background = new THREE.Color(C.ink);
-    this.scene.add(new THREE.HemisphereLight(0xfff1cf, 0x2a2116, 2.1));
-    const sun = new THREE.DirectionalLight(0xffe2a8, 1.6);
-    sun.position.set(-6, 12, 8);
-    this.scene.add(sun);
-    const table = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), mat(0x120e09));
-    table.rotation.x = -Math.PI / 2; table.position.y = -0.05;
+    this.scene.add(new THREE.HemisphereLight(0xfff1cf, 0x2a2116, 2.0));
+    this.sun.position.set(-9, 16, 8);
+    this.sun.castShadow = true;
+    this.sun.shadow.mapSize.set(2048, 2048);
+    const sc = this.sun.shadow.camera;
+    sc.left = -N - 3; sc.right = N + 3; sc.top = N + 3; sc.bottom = -N - 3; sc.near = 1; sc.far = 60;
+    this.sun.shadow.bias = -0.002;
+    this.scene.add(this.sun);
+    const table = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), new THREE.MeshLambertMaterial({ color: 0x120e09 }));
+    table.rotation.x = -Math.PI / 2; table.position.y = -0.08;
     this.scene.add(table);
+    this.seas = { enemy: new Sea(true), own: new Sea(false) };
     for (const side of ['enemy', 'own'] as Side[]) {
-      const chart = new THREE.Mesh(new THREE.PlaneGeometry(N + 1, N + 1), new THREE.MeshLambertMaterial({ map: chartTexture(side === 'enemy') }));
-      chart.rotation.x = -Math.PI / 2;
-      this.charts[side] = chart;
-      this.scene.add(chart);
+      this.scene.add(this.seas[side].mesh);
+      // The chart is drawn by its own shader, so a separate plane catches the ships' shadows.
+      const sh = new THREE.Mesh(new THREE.PlaneGeometry(N, N), new THREE.ShadowMaterial({ opacity: 0.32 }));
+      sh.rotation.x = -Math.PI / 2; sh.receiveShadow = true;
+      this.shadowPlanes.push(sh);
+      this.scene.add(sh);
     }
-    this.scene.add(this.marks, this.dynamic, this.fx, this.hl);
+    this.scene.add(this.marks, this.shipsGroup, this.misc, this.hl, this.fx.group);
+    if (this.quality === 'high') this.post = new Post(this.renderer, this.scene, this.camera);
     addEventListener('resize', () => this.resize());
     canvas.addEventListener('wheel', (e) => { e.preventDefault(); this.wheel(e); }, { passive: false });
     this.resize();
-    const clock = new THREE.Clock();
+    void loadShipModels().then((n) => { if (n) { for (const o of this.ships.values()) this.shipsGroup.remove(o.root); this.ships.clear(); if (this.last) this.sync(this.last); } });
+    let prev = performance.now();
     const loop = () => {
-      const t = clock.getElapsedTime();
-      this.flames.forEach((f, i) => { const k = 1 + 0.18 * Math.sin(t * 9 + i * 1.7); f.scale.set(1, k, 1); });
-      this.renderer.render(this.scene, this.camera);
+      const now = performance.now(), dt = Math.min(0.05, (now - prev) / 1000);
+      prev = now;
+      this.time += dt;
+      this.frame(dt, this.time);
+      // Drop the expensive passes on machines that cannot keep up (unless a quality was forced).
+      if (!forced && this.quality === 'high' && this.frames++ > 20 && this.frames < 140) {
+        if (dt > 0.036) this.slow++;
+        if (this.frames === 139 && this.slow > 70) this.lower();
+      }
       requestAnimationFrame(loop);
     };
     loop();
   }
 
+  private lower() {
+    this.quality = 'low';
+    this.post = null;
+    this.renderer.shadowMap.enabled = false;
+    this.sun.castShadow = false;
+    for (const p of this.shadowPlanes) p.visible = false;
+    this.renderer.setPixelRatio(1);
+    this.resize();
+  }
+
+  /** Warm light on your turn, colder on the enemy's. */
+  setTurn(mine: boolean) { this.post?.grade.set(mine ? 1.04 : 0.8, mine ? 1 : 0.86, mine ? 0.94 : 0.96); }
+
+  /** Forget every ship and mark: a new battle is starting. */
+  reset() {
+    for (const o of this.ships.values()) this.shipsGroup.remove(o.root);
+    this.ships.clear(); this.marks.clear(); this.misc.clear(); this.hl.clear();
+    this.seas.own.clear(); this.seas.enemy.clear();
+    this.last = null;
+  }
+
+  /* ---------- camera ---------- */
   private place() {
-    this.camera.position.copy(this.dir).multiplyScalar(this.baseDist * this.zoom).add(this.target);
+    this.camPos.copy(this.dir).multiplyScalar(this.baseDist * this.zoom).add(this.target);
+    this.camera.position.copy(this.camPos);
     this.camera.lookAt(this.target);
     this.camera.updateMatrixWorld();
   }
@@ -176,14 +195,19 @@ export class SeaScene {
   private resize() {
     const w = this.canvas.clientWidth || innerWidth, h = this.canvas.clientHeight || innerHeight;
     this.renderer.setSize(w, h, false);
+    this.post?.setSize(w, h, this.renderer.getPixelRatio());
+    this.fx.setScale(h * this.renderer.getPixelRatio() * 1.4);
     this.camera.aspect = w / h;
-    // Back the camera off until both charts fit between the rails and side panels.
     const wide = w > 1000;
     const safe = { side: wide ? 266 : 6, top: 74, bottom: wide ? 196 : 150 };
     const layout = wide && w / h > 1.25 ? ABREAST : STACKED;
-    const changed = layout !== origin || !this.charts.own.position.z;
+    const changed = layout !== origin || !this.laid;
+    this.laid = true;
     origin = layout;
-    for (const side of ['enemy', 'own'] as Side[]) this.charts[side].position.set(origin[side].x + HALF, 0, origin[side].z + HALF);
+    (['enemy', 'own'] as Side[]).forEach((side, i) => {
+      this.seas[side].mesh.position.set(origin[side].x + HALF, 0, origin[side].z + HALF);
+      this.shadowPlanes[i].position.set(origin[side].x + HALF, 0.085, origin[side].z + HALF);
+    });
     this.dir.set(0, 1, layout === ABREAST ? 0.7 : 0.95).normalize();
     this.extent = layout === ABREAST ? { x: N + 0.75, z: HALF } : { x: HALF, z: N + 0.5 };
     this.camera.setViewOffset(w, h, 0, (safe.bottom - safe.top) / 2, w, h);
@@ -200,15 +224,16 @@ export class SeaScene {
       });
       if (ok) break;
     }
-    this.zoom = zoom; this.target.copy(target);
-    if (changed) { this.zoom = 1; this.target.set(0, 0, 0); }
+    if (!changed) { this.zoom = zoom; this.target.copy(target); }
     this.place();
-    if (changed && this.last) this.sync(this.last);
+    if (changed && this.last) { for (const o of this.ships.values()) o.fresh = true; this.sync(this.last); }
   }
 
   private ground(ev: { clientX: number; clientY: number }): THREE.Vector3 | null {
     const r = this.canvas.getBoundingClientRect();
     const p = new THREE.Vector2(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
+    this.camera.position.copy(this.camPos);
+    this.camera.updateMatrixWorld();
     this.ray.setFromCamera(p, this.camera);
     const hit = new THREE.Vector3();
     return this.ray.ray.intersectPlane(this.plane, hit) ? hit : null;
@@ -231,7 +256,10 @@ export class SeaScene {
 
   /** Screen position of a cell centre, in CSS pixels. */
   screen(c: Cell): { x: number; y: number } {
-    const r = this.canvas.getBoundingClientRect(), v = cellCenter(c).project(this.camera);
+    const r = this.canvas.getBoundingClientRect();
+    this.camera.position.copy(this.camPos);
+    this.camera.updateMatrixWorld();
+    const v = cellCenter(c).project(this.camera);
     return { x: r.left + ((v.x + 1) / 2) * r.width, y: r.top + ((1 - v.y) / 2) * r.height };
   }
 
@@ -246,56 +274,99 @@ export class SeaScene {
     return null;
   }
 
-  private shipMesh(s: Pick<Ship, 'len' | 'x' | 'y' | 'dir'> & Partial<Ship>, side: Side, tint?: THREE.Material): THREE.Group {
-    const grp = new THREE.Group();
-    const geo = hullGeo(s.len);
-    if (s.sunk) {
-      const hull = new THREE.Mesh(geo.hull, M.wreck);
-      hull.position.y = -0.2; hull.rotation.x = 0.35;
-      const edge = new THREE.LineSegments(geo.edges, M.lineAmber);
-      edge.position.copy(hull.position); edge.rotation.copy(hull.rotation);
-      grp.add(hull, edge);
-    } else {
-      grp.add(new THREE.Mesh(geo.hull, tint || M.hull), new THREE.LineSegments(geo.edges, tint ? M.line : M.lineAmber));
-      const deck = new THREE.Mesh(geo.hull, tint || M.deck);
-      deck.scale.set(0.96, 0.12, 0.9); deck.position.set(0.02 * s.len, 0.275, 0);
-      grp.add(deck);
-      const masts = s.len >= 4 ? [0.26, 0.5, 0.74] : s.len === 3 ? [0.34, 0.68] : [0.5];
-      masts.forEach((f, i) => {
-        const t = f * s.len, tall = masts.length === 3 && i === 1 ? 1.12 : 1;
-        const mast = new THREE.Mesh(G.mast, M.mast);
-        mast.scale.y = tall; mast.position.set(t, 0.3 + 0.65 * tall, 0);
-        const sail = new THREE.Mesh(G.sail, M.sail);
-        sail.scale.y = tall; sail.position.set(t + 0.04, 0.45 + 0.4 * tall, 0); sail.rotation.y = 0.55;
-        const flag = new THREE.Mesh(G.flag, M.flag);
-        flag.position.set(t + 0.12, 0.3 + 1.26 * tall, 0);
-        grp.add(mast, sail, flag);
-      });
-      (s.hits || []).forEach((h, i) => { if (h) grp.add(this.fire(i + 0.5, 0.32, 0)); });
-      if (s.chained) for (const t of [0.5, s.len - 0.5]) { const r = new THREE.Mesh(G.torus, M.chain); r.position.set(t, 0.36, 0); grp.add(r); }
+  private shake(a: number) { if (!calm) this.shakeAmt = Math.max(this.shakeAmt, a); }
+
+  /* ---------- per-frame ---------- */
+  private frame(dt: number, t: number) {
+    setShipTime(t);
+    this.embers.length = 0;
+    const k = 1 - Math.exp(-dt * 7);
+    for (const o of this.ships.values()) {
+      if (o.fresh) { o.root.position.copy(o.pos); o.root.rotation.y = o.yaw; o.fresh = false; }
+      const before = o.root.position.clone();
+      o.root.position.lerp(o.pos, k);
+      o.root.rotation.y += (o.yaw - o.root.rotation.y) * k;
+      const sea = this.seas[o.side], p = o.root.position;
+      if (o.state === 'afloat') {
+        // A moving hull leaves a wake and heels into its turn.
+        const speed = before.distanceTo(p) / Math.max(dt, 1e-3), turning = Math.abs(o.yaw - o.root.rotation.y);
+        if (speed > 0.3) sea.bump(Math.floor(before.x - origin[o.side].x), Math.floor(before.z - origin[o.side].z), 0.06);
+        const bob = calm ? 0 : 1;
+        o.tilt.position.y += (waveH(p.x, p.z, t) * 1.2 * bob + o.lift - o.tilt.position.y) * Math.min(1, k * 2);
+        o.tilt.rotation.x = bob * 0.055 * Math.sin(t * 1.25 + o.phase) + turning * 0.5;
+        o.tilt.rotation.z = bob * 0.022 * Math.sin(t * 0.9 + o.phase * 2.3) - Math.min(0.06, speed * 0.02);
+        for (const [x, y] of o.cells) sea.hold(x, y, 0.55);
+        if (o.model.funnel) this.fx.funnel(o.root.localToWorld(o.model.funnel.clone().setY(o.model.funnel.y + o.tilt.position.y)), dt);
+      } else {
+        if (o.state === 'sinking') {
+          o.sink = Math.min(1, o.sink + dt / 2.6);
+          this.fx.bubbles(p.clone().setY(0.1), dt);
+          for (const [x, y] of o.cells) sea.hold(x, y, 0.9);
+          if (o.sink > 0.45) o.model.sails.visible = false;
+          if (o.sink >= 1) o.state = 'wreck';
+        } else for (const [x, y] of o.cells) sea.hold(x, y, 0.28);
+        const e = o.sink * o.sink * (3 - 2 * o.sink);
+        o.tilt.position.y = -0.34 * e;
+        o.tilt.rotation.x = 0.55 * e;
+        o.tilt.rotation.z = -0.16 * e;
+        for (const m of o.model.mats) { m.uniforms.uTint.value.setHex(0x17120b); m.uniforms.uTintAmt.value = 0.55 * e; }
+      }
+      for (const f of o.fires) this.embers.push(o.tilt.localToWorld(f.clone()));
     }
-    const o = origin[side];
-    if (s.dir === 'h') grp.position.set(o.x + s.x, 0, o.z + s.y + 0.5);
-    else { grp.position.set(o.x + s.x + 0.5, 0, o.z + s.y); grp.rotation.y = -Math.PI / 2; }
-    return grp;
+    for (const e of this.embers0) this.embers.push(e);
+    for (const e of this.embers) this.fx.ember(e, dt);
+    this.flames.forEach((f, i) => { f.scale.y = 1 + 0.22 * Math.sin(t * 9 + i * 1.7); });
+    for (const p of this.puffs) { p.s.position.set(p.base.x + 0.5 * Math.sin(t * 0.3 + p.ph), p.base.y + 0.12 * Math.sin(t * 0.5 + p.ph * 2), p.base.z + 0.4 * Math.cos(t * 0.24 + p.ph)); }
+    this.glints.forEach((g, i) => { g.scale.setScalar(1 + 0.12 * Math.sin(t * 3 + i)); g.rotation.y = t * 0.6 + i; });
+    this.seas.own.update(dt, t); this.seas.enemy.update(dt, t);
+    this.fx.update(dt);
+    this.shakeAmt *= Math.exp(-dt * 7);
+    this.camera.position.copy(this.camPos);
+    if (this.shakeAmt > 0.002) this.camera.position.add(new THREE.Vector3((Math.random() - 0.5) * this.shakeAmt, (Math.random() - 0.5) * this.shakeAmt, 0));
+    if (this.post) this.post.render(t); else this.renderer.render(this.scene, this.camera);
   }
 
-  private fire(x: number, y: number, z: number): THREE.Group {
-    const g = new THREE.Group();
-    const flame = new THREE.Mesh(G.flame, M.flame);
-    flame.position.y = 0.27;
-    this.flames.push(flame);
-    g.add(flame);
-    [[0.05, 0.7, 0.8], [-0.06, 0.95, 1.1], [0.08, 1.25, 1.4]].forEach(([dx, dy, k]) => {
-      const p = new THREE.Mesh(G.smoke, M.smoke);
-      p.position.set(dx, dy, 0); p.scale.setScalar(k);
-      g.add(p);
+  /* ---------- ships ---------- */
+  private ship(key: string, kind: Kind, len: number, side: Side): ShipObj {
+    let o = this.ships.get(key);
+    if (o) return o;
+    const model = buildShip(kind, len), root = new THREE.Group(), tilt = new THREE.Group(), decor = new THREE.Group();
+    tilt.add(model.body, decor);
+    root.add(tilt);
+    this.shipsGroup.add(root);
+    o = { root, tilt, model, decor, decorKey: '', kind, len, side, pos: new THREE.Vector3(), yaw: 0, phase: Math.random() * 6.28, state: 'afloat', sink: 0, lift: 0, fires: [], cells: [], fresh: true };
+    this.ships.set(key, o);
+    return o;
+  }
+
+  private aim(o: ShipObj, s: Pick<Ship, 'x' | 'y' | 'dir' | 'len'>) {
+    const cs = shipCells(s), a = cellCenter({ side: o.side, x: cs[0][0], y: cs[0][1] }), b = cellCenter({ side: o.side, x: cs[cs.length - 1][0], y: cs[cs.length - 1][1] });
+    o.pos.copy(a).add(b).multiplyScalar(0.5);
+    o.yaw = s.dir === 'h' ? 0 : -Math.PI / 2;
+    o.cells = cs;
+  }
+
+  private decorate(o: ShipObj, hits: boolean[], chained: boolean) {
+    const key = hits.map((h) => (h ? 1 : 0)).join('') + (chained ? 'c' : '');
+    if (key === o.decorKey) return;
+    o.decorKey = key;
+    for (const c of o.decor.children) { const i = this.flames.indexOf(c); if (i >= 0) this.flames.splice(i, 1); }
+    o.decor.clear();
+    o.fires = [];
+    hits.forEach((h, i) => {
+      if (!h) return;
+      const at = new THREE.Vector3(i + 0.5 - o.len / 2, o.model.deckY + 0.05, 0);
+      const flame = new THREE.Mesh(G.flame, M.flame);
+      flame.position.copy(at).setY(at.y + 0.22);
+      o.decor.add(flame);
+      this.flames.push(flame);
+      o.fires.push(at.clone().setY(at.y + 0.3));
     });
-    g.position.set(x, y, z);
-    return g;
+    if (chained) for (const x of [-o.len / 2 + 0.5, o.len / 2 - 0.5]) { const r = new THREE.Mesh(G.torus, M.chain); r.position.set(x, o.model.deckY + 0.08, 0); o.decor.add(r); }
   }
 
-  private flat(geo: THREE.BufferGeometry, color: number, opacity: number, at: THREE.Vector3, y = 0.02) {
+  /* ---------- marks ---------- */
+  private flat(geo: THREE.BufferGeometry, color: number, opacity: number, at: THREE.Vector3, y = 0.1) {
     const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false }));
     m.position.set(at.x, y, at.z);
     this.marks.add(m);
@@ -307,9 +378,15 @@ export class SeaScene {
       const age = round - s.round, fade = Math.max(0.3, 1 - age * 0.14), at = cellCenter({ side, x: s.x, y: s.y });
       if (s.result === 'miss') { this.flat(G.ring, C.ink, fade, at); this.flat(G.ring2, C.ink, fade, at); }
       else if (side === 'enemy') {
-        this.flat(G.disc, s.result === 'clang' ? C.brass : C.wax, fade, at, 0.03);
-        if (s.result === 'clang') this.flat(G.ring2, C.ink, fade, at, 0.04);
-        else if (!s.sunk && age <= 1) this.marks.add(this.fire(at.x, 0.03, at.z));
+        this.flat(G.disc, s.result === 'clang' ? C.brass : C.wax, fade, at, 0.1);
+        if (s.result === 'clang') this.flat(G.ring2, C.ink, fade, at, 0.11);
+        else if (!s.sunk && age <= 1) {
+          const flame = new THREE.Mesh(G.flame, M.flame);
+          flame.position.set(at.x, 0.33, at.z);
+          this.marks.add(flame);
+          this.flames.push(flame);
+          this.embers0.push(new THREE.Vector3(at.x, 0.4, at.z));
+        }
       }
     }
     for (const d of p.debris) {
@@ -317,56 +394,86 @@ export class SeaScene {
       const at = cellCenter({ side, x: d.x, y: d.y });
       [[-0.15, -0.1, 0.4], [0.12, 0.08, -0.7], [0.02, 0.2, 1.3]].forEach(([dx, dz, r]) => {
         const pl = new THREE.Mesh(G.plank, M.debris);
-        pl.position.set(at.x + dx, 0.03, at.z + dz); pl.rotation.y = r;
+        pl.position.set(at.x + dx, 0.1, at.z + dz); pl.rotation.y = r;
         this.marks.add(pl);
       });
     }
     for (const s of p.spotted) {
       const age = round - s.round;
-      if (age > 3) continue;
-      this.flat(G.eye, side === 'enemy' ? C.amber : C.wax, Math.max(0.35, 1 - age * 0.25), cellCenter({ side, x: s.x, y: s.y }), 0.05);
+      if (age <= 3) this.flat(G.eye, side === 'enemy' ? C.amber : C.wax, Math.max(0.35, 1 - age * 0.25), cellCenter({ side, x: s.x, y: s.y }), 0.12);
     }
     for (const sc of p.scans) {
-      const age = round - sc.round;
-      if (age > 4) continue;
+      if (round - sc.round > 4) continue;
       const at = cellCenter({ side, x: sc.x, y: sc.y });
       const box = new THREE.LineSegments(G.zone, side === 'enemy' ? M.lineAmber : M.lineWax);
-      box.position.set(at.x, 0.05, at.z);
-      this.marks.add(box);
+      box.position.set(at.x, 0.12, at.z);
       const l = label(sc.count < 0 ? '?' : String(sc.count), side === 'enemy' ? '#d9a441' : '#c0563c');
       l.position.set(at.x, 0.9, at.z);
-      (l.material as THREE.SpriteMaterial).opacity = 1;
-      this.marks.add(l);
+      this.marks.add(box, l);
     }
-    for (const f of p.fogs) {
+    p.fogs.forEach((f, fi) => {
       const at = cellCenter({ side, x: f.x, y: f.y });
-      const m = new THREE.Mesh(G.fog, M.fog);
-      m.position.set(at.x, 0.4, at.z);
-      this.marks.add(m);
-    }
-    for (const s of p.sunk) this.dynamic.add(this.shipMesh({ ...s, sunk: true }, side));
+      for (let i = 0; i < 14; i++) {
+        const a = (i * 2.4 + fi) % 6.28, r = (ZONE + 0.3) * Math.sqrt(((i * 7 + 3) % 14) / 14);
+        const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: puffTex, transparent: true, opacity: 0.6, depthWrite: false }));
+        s.scale.setScalar(3 + (i % 3) * 0.6);
+        const base = new THREE.Vector3(at.x + Math.cos(a) * r, 0.7 + (i % 4) * 0.12, at.z + Math.sin(a) * r);
+        s.position.copy(base);
+        this.marks.add(s);
+        this.puffs.push({ s, base, ph: i * 1.7 });
+      }
+    });
   }
+  private embers0: THREE.Vector3[] = [];
 
-  /** Rebuild ships and markers from the current view. */
+  /** Bring the scene in line with the current view. */
   sync(v: View) {
     this.last = v;
-    this.dynamic.clear(); this.marks.clear(); this.flames = [];
-    const foe = (1 - v.me) as 0 | 1;
+    const foe = (1 - v.me) as 0 | 1, seen = new Set<string>();
+    const wreck = (o: ShipObj) => {
+      if (o.state !== 'afloat') return;
+      if (v.quiet) { o.state = 'wreck'; o.sink = 1; o.model.sails.visible = false; }
+      else { o.state = 'sinking'; this.sound('sink'); }
+    };
     for (const s of v.ships) {
-      if (s.sunk) continue; // drawn from the public list of wrecks
-      const tint = s.id === v.selectedId ? (v.invalid ? M.bad : M.select) : undefined;
-      this.dynamic.add(this.shipMesh(s, 'own', tint));
+      const key = 'o' + s.id, o = this.ship(key, s.kind, s.len, 'own');
+      seen.add(key);
+      this.aim(o, s);
+      if (s.sunk) { wreck(o); this.decorate(o, [], false); continue; }
+      this.decorate(o, s.hits, !!s.chained);
+      const sel = s.id === v.selectedId;
+      o.lift = sel && v.lifted ? 0.45 : 0;
+      for (const m of o.model.mats) { m.uniforms.uTint.value.setHex(v.invalid ? C.wax : C.amber); m.uniforms.uTintAmt.value = sel ? 0.5 : 0; }
     }
-    for (const s of v.pub.sides[foe].revealed || []) if (!s.sunk) this.dynamic.add(this.shipMesh(s, 'enemy'));
+    for (const s of v.pub.sides[foe].sunk) {
+      const key = 'e' + s.kind, o = this.ship(key, s.kind, s.len, 'enemy');
+      seen.add(key);
+      this.aim(o, s);
+      wreck(o);
+    }
+    for (const s of v.pub.sides[foe].revealed || []) {
+      if (s.sunk) continue;
+      const key = 'r' + s.id, o = this.ship(key, s.kind, s.len, 'enemy');
+      seen.add(key);
+      this.aim(o, s);
+      this.decorate(o, s.hits, false);
+    }
+    for (const [key, o] of this.ships) if (!seen.has(key)) { this.shipsGroup.remove(o.root); this.ships.delete(key); }
+
+    for (const c of this.marks.children) { const i = this.flames.indexOf(c); if (i >= 0) this.flames.splice(i, 1); }
+    this.marks.clear(); this.puffs = []; this.glints = []; this.embers0 = [];
     this.drawSide(v.pub.sides[v.me], 'own', v.pub.round);
     this.drawSide(v.pub.sides[foe], 'enemy', v.pub.round);
     for (const t of v.pub.treasures) {
       const at = cellCenter({ side: t.side === v.me ? 'own' : 'enemy', x: t.x, y: t.y });
-      const chest = new THREE.Mesh(G.chest, M.chest), lid = new THREE.Mesh(G.lid, M.gold);
-      chest.position.set(at.x, 0.15, at.z); lid.position.set(at.x, 0.35, at.z);
+      const g = new THREE.Group(), chest = new THREE.Mesh(G.chest, M.chest), lid = new THREE.Mesh(G.lid, M.gold);
+      chest.position.y = 0.15; lid.position.y = 0.35; chest.castShadow = true;
       const edge = new THREE.LineSegments(new THREE.EdgesGeometry(G.chest), M.line);
-      edge.position.copy(chest.position);
-      this.marks.add(chest, lid, edge);
+      edge.position.y = 0.15;
+      g.add(chest, lid, edge);
+      g.position.set(at.x, 0.08, at.z);
+      this.marks.add(g);
+      this.glints.push(g);
     }
   }
 
@@ -375,42 +482,67 @@ export class SeaScene {
     for (const h of list) {
       const m = new THREE.Mesh(G.cell, new THREE.MeshBasicMaterial({ color: h.color, transparent: true, opacity: h.opacity ?? 0.45, depthWrite: false }));
       const at = cellCenter(h);
-      m.position.set(at.x, 0.045, at.z);
+      m.position.set(at.x, 0.13, at.z);
       this.hl.add(m);
     }
   }
 
-  /** Lob a cannonball onto a cell; resolves when it lands. */
-  shot(target: Cell): Promise<void> {
+  /* ---------- effects ---------- */
+  /** Fire a shot at a cell and play out how it lands. Resolves on impact. */
+  shot(target: Cell, outcome: ShotOutcome): Promise<void> {
     const to = cellCenter(target);
-    const from = cellCenter({ side: target.side === 'enemy' ? 'own' : 'enemy', x: 3 + Math.random() * (N - 6), y: 3 + Math.random() * (N - 6) }).setY(0.6);
+    let from: THREE.Vector3;
+    const guns = [...this.ships.values()].filter((o) => o.side === 'own' && o.state === 'afloat');
+    if (target.side === 'enemy' && guns.length) {
+      const g = guns[Math.floor(Math.random() * guns.length)];
+      from = g.root.position.clone().setY(0.6);
+      this.fx.muzzle(from);
+      this.seas.own.bump(Math.floor(from.x - origin.own.x), Math.floor(from.z - origin.own.z), 0.25);
+    } else {
+      // The enemy's guns stay hidden: shots arrive from beyond their chart.
+      const c = cellCenter({ side: 'enemy', x: 2 + Math.random() * (N - 4), y: 2 + Math.random() * (N - 4) });
+      from = c.setY(0.6);
+    }
+    this.sound('cannon');
     const ball = new THREE.Mesh(G.ball, M.ball);
-    ball.scale.setScalar(1.6);
-    this.fx.add(ball);
-    const t0 = performance.now(), dur = 620;
+    this.misc.add(ball);
+    const t0 = performance.now(), dur = 560 + from.distanceTo(to) * 9, arc = 3 + from.distanceTo(to) * 0.18;
     return new Promise((res) => {
       const step = () => {
         const u = Math.min(1, (performance.now() - t0) / dur);
         ball.position.lerpVectors(from, to, u);
-        ball.position.y += Math.sin(u * Math.PI) * 7;
-        if (u < 1) requestAnimationFrame(step);
-        else { this.fx.remove(ball); this.splash(to); res(); }
+        ball.position.y += Math.sin(u * Math.PI) * arc;
+        this.fx.trail(ball.position);
+        if (u < 1) { requestAnimationFrame(step); return; }
+        this.misc.remove(ball);
+        const sea = this.seas[target.side], at = to.clone().setY(0.25);
+        sea.bump(target.x, target.y, 1);
+        if (outcome === 'miss' || outcome === 'wreck') { this.fx.water(at); this.sound('splash'); }
+        else if (outcome === 'clang') { this.fx.clang(at.setY(0.5)); this.shake(0.12); this.sound('clang'); }
+        else { this.fx.explosion(at.setY(0.45)); this.shake(outcome === 'sunk' ? 0.5 : 0.28); this.sound('hit'); }
+        res();
       };
       step();
     });
   }
 
-  private splash(at: THREE.Vector3) {
-    const m = new THREE.MeshBasicMaterial({ color: C.parch, transparent: true });
-    const ring = new THREE.Mesh(G.ring, m);
-    ring.position.set(at.x, 0.06, at.z);
-    this.fx.add(ring);
+  /** A spyglass sweeping its 5×5 patch. */
+  sweep(c: Cell): Promise<void> {
+    const at = cellCenter(c);
+    const m = new THREE.Mesh(G.beam, new THREE.MeshBasicMaterial({ color: c.side === 'enemy' ? C.amber : C.wax, transparent: true, opacity: 0.55, depthWrite: false }));
+    this.misc.add(m);
+    this.sound('glass');
     const t0 = performance.now();
-    const step = () => {
-      const u = (performance.now() - t0) / 450;
-      ring.scale.setScalar(0.6 + u * 2.2); m.opacity = 1 - u;
-      if (u < 1) requestAnimationFrame(step); else this.fx.remove(ring);
-    };
-    step();
+    return new Promise((res) => {
+      const step = () => {
+        const u = Math.min(1, (performance.now() - t0) / 650);
+        m.position.set(at.x - ZONE - 0.25 + u * (2 * ZONE + 0.5), 0.14, at.z);
+        (m.material as THREE.MeshBasicMaterial).opacity = 0.6 * Math.sin(u * Math.PI);
+        if (u < 1) requestAnimationFrame(step); else { this.misc.remove(m); res(); }
+      };
+      step();
+    });
   }
+
+  coins(c: Cell) { this.fx.coins(cellCenter(c).setY(0.4)); this.sound('coin'); }
 }

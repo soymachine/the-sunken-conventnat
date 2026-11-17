@@ -7,6 +7,7 @@ import { verify } from './game/verify';
 import { createRoom, firebaseConfigured, joinRoom } from './net/firebase';
 import { LocalSession, Session } from './net/session';
 import { Cell, Highlight, SeaScene } from './render/scene';
+import { Sfx } from './ui/audio';
 import { Hud, Mode } from './ui/hud';
 import { Lobby } from './ui/lobby';
 
@@ -14,6 +15,9 @@ const AMBER = 0xd9a441, WAX = 0x8c2f1b, INK = 0x0d0b08, FOG = 0xcfc4a8;
 const canvas = document.getElementById('sea') as HTMLCanvasElement;
 const scene = new SeaScene(canvas);
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const sfx = new Sfx();
+scene.sound = (s) => sfx.play(s);
+let quiet = false; // rebuilding the view from history: no animations
 
 let session: Session | null = null;
 let c: Client;
@@ -40,7 +44,8 @@ const HINTS: Record<string, string> = {
 };
 
 const hud = new Hud({
-  mode: setMode,
+  mode: (m) => { sfx.play('click'); setMode(m); },
+  mute: () => sfx.toggle(),
   buy: (item) => { if (c.buy(item)) setMode(item === 'winds' ? mode : item); },
   endTurn: () => { if (!busy) c.endTurn(); },
   shuffle: () => { if (canPlace()) { c.ships = randomFleet(Math.random); selected = lifted = null; refresh(); } },
@@ -78,13 +83,14 @@ function start(s: Session, name: string) {
   try { snap = JSON.parse(localStorage.getItem(storeKey()) || 'null'); } catch { /* ignore */ }
   if (snap) c.restore(snap);
   mode = 'fire'; selected = lifted = null; busy = false; queue.length = 0; foeOnline = true;
+  scene.reset();
   hud.clearLog();
   hud.log(s.code ? `Room ${s.code}. Arrange your fleet, then turn the capstan.` : 'Arrange your fleet, then turn the capstan.');
   c.onNote = (t) => hud.log(t, 'good');
   c.onChange = (m, ok, replay) => {
     save();
     if (!ok) return;
-    if (replay) { refresh(); return; }
+    if (replay) { quiet = true; refresh(); quiet = false; return; }
     queue.push(m);
     if (!busy) void drain();
   };
@@ -115,8 +121,13 @@ async function drain() {
     if (m.t === 'result') {
       refreshHud();
       const side = mine ? 'own' : 'enemy';
-      await Promise.all(m.results.map((r, i) => wait(i * 110).then(() => scene.shot({ side, x: r.x, y: r.y }))));
+      await Promise.all(m.results.map((r, i) => wait(i * 130).then(() => scene.shot({ side, x: r.x, y: r.y }, r.r))));
     }
+    if (m.t === 'scanResult') await scene.sweep({ side: mine ? 'own' : 'enemy', x: m.x, y: m.y });
+    if (m.t === 'move' && m.treasure) scene.coins({ side: mine ? 'own' : 'enemy', x: m.treasure[0], y: m.treasure[1] });
+    if (m.t === 'move' && mine) sfx.play('creak');
+    if (m.t === 'buy' && mine) sfx.play('coin');
+    if (m.t === 'endTurn' && c.myTurn) sfx.play('bell');
     describe(m, mine);
     refresh();
   }
@@ -210,7 +221,8 @@ function refresh() {
   if (!session) return;
   refreshHud();
   const invalid = !!lifted && !fits(c.ships, selected!, selected!.id);
-  scene.sync({ pub: c.pub, me: c.me, ships: c.ships, selectedId: selected?.id ?? null, invalid });
+  scene.sync({ pub: c.pub, me: c.me, ships: c.ships, selectedId: selected?.id ?? null, invalid, lifted: !!lifted, quiet });
+  scene.setTurn(c.pub.phase !== 'battle' || c.myTurn);
   const hl: Highlight[] = [];
   if (myTurn() && hover) {
     const { side, x, y } = hover;

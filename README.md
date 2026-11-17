@@ -35,9 +35,16 @@ Sink the whole enemy fleet. Each turn you have 3 action points.
 - Spend doubloons at the Quartermaster: Spyglass, Fire Ship, Fog Bank, Shipwright, Trade Winds.
 - Admiralty Orders are a secret side-mission that pays doubloons.
 
+## Look
+
+The sea is a parchment chart drawn by a shader: ink strokes drift with the wind, hulls raise foam and
+shots leave ripples. Ships are procedural and shaded like an engraving; to use hand-made models see
+`public/models/README.md`. Bloom, shadows and film grain switch off automatically on slow machines;
+add `?q=low` or `?q=high` to the address to force either.
+
 ## Layout
 
 - `src/game` — pure rules, message protocol (`engine.ts`), bot, orders, end-of-game verification
 - `src/net` — sessions: local (against the bot) and Firebase
-- `src/render` — three.js sea chart
-- `src/ui` — HUD and lobby
+- `src/render` — scene, sea shader, ships, particle effects, post-processing
+- `src/ui` — HUD, lobby and synthesised sound

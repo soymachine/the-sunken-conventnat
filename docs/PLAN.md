@@ -177,5 +177,7 @@ paleta y tipografías). Se publica además como Artifact para verla en el navega
   power-ups, Órdenes del Almirantazgo). Mapa de 16×16.
 - **Cambios respecto al plan original:** escaneos y niebla cubren 5×5 en vez de 3×3 por el mapa
   grande; no hay minas ni señuelos; los sellos del pacto se dejan para la fase 4 junto al Kraken.
+- **Pulido visual hecho:** mar animado por shader, barcos procedurales por clase con sombreado de
+  grabado, movimiento continuo, partículas, sombras, post-procesado y sonido sintetizado.
 - **Pendiente:** fase 4 (Kraken, sellos, tormenta, marea, remolino), fase 5 (pulido, sonido, tutorial,
   temporizador de turno), fase 6 (modelos 3D detallados).

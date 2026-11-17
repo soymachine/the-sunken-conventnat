@@ -26,6 +26,7 @@ const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 
 export interface HudHandlers {
   mode(m: Mode): void;
+  mute(): boolean;
   buy(item: Item): void;
   endTurn(): void;
   shuffle(): void;
@@ -45,7 +46,7 @@ export class Hud {
     this.root = document.getElementById('hud')!;
     this.root.innerHTML = `
       <header class="rail top">
-        <div class="turn"><svg class="compass" viewBox="0 0 100 100"></svg><div><b id="turnTitle"></b><i id="turnSub"></i></div></div>
+        <div class="turn"><svg class="compass" viewBox="0 0 100 100"></svg><div><b id="turnTitle"></b><i id="turnSub"></i></div><button id="mute" class="mini" aria-pressed="false">Sound on</button></div>
         <h1>The Sunken Covenant</h1>
         <div class="foe"><span id="foeName"></span><div id="foeFleet"></div></div>
       </header>
@@ -79,6 +80,7 @@ export class Hud {
     this.q<HTMLElement>('#shuffle').onclick = () => on.shuffle();
     this.q<HTMLElement>('#rotate').onclick = () => on.rotate();
     this.q<HTMLElement>('#leave').onclick = () => on.leave();
+    this.q<HTMLElement>('#mute').onclick = (e) => { const off = on.mute(), b = e.currentTarget as HTMLElement; b.textContent = off ? 'Sound off' : 'Sound on'; b.setAttribute('aria-pressed', String(off)); };
     this.q<HTMLElement>('#shop').onclick = (e) => { const b = (e.target as Element).closest('button'); if (b) on.buy(b.dataset.item as Item); };
     this.q<HTMLElement>('#belt').onclick = (e) => { const b = (e.target as Element).closest('button'); if (b) on.mode(b.dataset.tool as Mode); };
   }
@@ -147,7 +149,10 @@ export class Hud {
     this.q('#turnSub').textContent = p.phase === 'battle' ? `Round ${p.round}` : '';
     this.q<SVGElement>('#needle').style.transform = `rotate(${mine ? 20 : 200}deg)`;
     const shown = Math.max(3, mine ? p.ap : 0);
-    this.q('#tray').innerHTML = Array.from({ length: shown }, (_, k) => `<i class="${mine && k < p.ap ? '' : 'spent'}"></i>`).join('');
+    const tray = this.q('#tray');
+    while (tray.children.length < shown) tray.appendChild(document.createElement('i')).className = 'spent';
+    while (tray.children.length > shown) tray.lastChild!.remove();
+    [...tray.children].forEach((b, k) => b.classList.toggle('spent', !(mine && k < p.ap)));
     this.q<HTMLButtonElement>('#endTurn').disabled = !c.can();
     this.q<HTMLButtonElement>('#ready').disabled = me.ready;
     this.q<HTMLButtonElement>('#shuffle').disabled = this.q<HTMLButtonElement>('#rotate').disabled = me.ready;
