@@ -40,6 +40,7 @@ const HINTS: Record<string, string> = {
   spyglass: 'Spyglass — count hull sections in a 5×5 patch of enemy water.',
   fireship: 'Fire ship — five squares in a cross.',
   fog: 'Fog bank — pick the centre of a 5×5 patch of your own water.',
+  kraken: 'Summon the Kraken — pick the centre of a 3×3 patch of enemy water. It strikes now and again next turn, and holds the ships it finds.',
   shipwright: 'Shipwright — pick a damaged section of one of your ships.',
 };
 
@@ -84,6 +85,7 @@ function start(s: Session, name: string) {
   if (snap) c.restore(snap);
   mode = 'fire'; selected = lifted = null; busy = false; queue.length = 0; foeOnline = true;
   scene.reset();
+  seen.storm = seen.tide = seen.ring = 0;
   hud.clearLog();
   hud.log(s.code ? `Room ${s.code}. Arrange your fleet, then turn the capstan.` : 'Arrange your fleet, then turn the capstan.');
   c.onNote = (t) => hud.log(t, 'good');
@@ -119,11 +121,14 @@ async function drain() {
   while (queue.length) {
     const m = queue.shift()!;
     const mine = m.by === c.me;
+    if (m.t === 'kraken') { sfx.play('roar'); refresh(); await wait(1300); }
     if (m.t === 'result') {
       refreshHud();
       const side = mine ? 'own' : 'enemy';
-      await Promise.all(m.results.map((r, i) => wait(i * 130).then(() => scene.shot({ side, x: r.x, y: r.y }, r.r))));
+      if (m.kraken) await Promise.all(m.results.map((r, i) => wait(i * 420).then(() => scene.lash({ side, x: r.x, y: r.y }, r.r))));
+      else await Promise.all(m.results.map((r, i) => wait(i * 130).then(() => scene.shot({ side, x: r.x, y: r.y }, r.r))));
     }
+    if (m.t === 'drowned') for (const r of m.results) scene.drown({ side: mine ? 'own' : 'enemy', x: r.x, y: r.y }, r.r);
     if (m.t === 'powerResult') sfx.play('glass');
     if (m.t === 'scanResult') await scene.sweep({ side: mine ? 'own' : 'enemy', x: m.x, y: m.y });
     if (m.t === 'move' && m.treasure) scene.coins({ side: mine ? 'own' : 'enemy', x: m.treasure[0], y: m.treasure[1] });
@@ -146,7 +151,15 @@ function describe(m: Msg, mine: boolean) {
   const foe = c.foeSide.name || 'The enemy';
   switch (m.t) {
     case 'ready': if (!mine) hud.log(`${m.name} has committed a fleet.`); if (c.pub.phase === 'battle') hud.log('Round 1', 'head'); break;
+    case 'kraken': hud.log(mine ? `You break three seals. The Kraken rises at ${cellName(m.x, m.y)}!` : `${foe} breaks three seals — the Kraken rises under your ships at ${cellName(m.x, m.y)}!`, mine ? 'good' : 'bad'); break;
+    case 'drowned':
+      for (const r of m.results) {
+        if (r.r === 'sunk') hud.log(mine ? `The maelstrom takes your ${r.ship!.cls}.` : `The maelstrom takes the enemy ${r.ship!.cls}.`, mine ? 'bad' : 'good');
+        else if (r.r === 'hit') hud.log(mine ? `The maelstrom tears at your fleet at ${cellName(r.x, r.y)}.` : `The maelstrom tears at an enemy ship at ${cellName(r.x, r.y)}.`, mine ? 'bad' : 'good');
+      }
+      break;
     case 'result':
+      if (m.kraken) hud.log(mine ? 'The Kraken strikes your waters.' : 'The Kraken strikes.', 'head');
       for (const r of m.results) {
         const at = cellName(r.x, r.y);
         if (!mine) { // my shot, answered by the enemy
@@ -185,11 +198,23 @@ function describe(m: Msg, mine: boolean) {
       break;
     case 'powerResult': hud.log(mine ? `The Corsair has your merchantman's column: ${cellName(m.col, 0)[0]}.` : `Dead Reckoning: the merchantman is in column ${cellName(m.col, 0)[0]}.`, mine ? 'bad' : 'good'); break;
     case 'order': if (!mine) hud.log(`${foe} fulfils secret orders: ${m.reward} doubloons.`); break;
-    case 'endTurn': if (c.pub.current === 0 && c.pub.phase === 'battle') hud.log(`Round ${c.pub.round}`, 'head'); break;
+    case 'endTurn':
+      if (c.pub.current === 0 && c.pub.phase === 'battle') hud.log(`Round ${c.pub.round}`, 'head');
+      weather();
+      break;
     case 'reveal':
-      if (!mine && session?.code) void verify(c.log, c.foe, roleOf(c.pub, c.foe)).then((bad) => hud.setVerdict(bad ? `The enemy's log does not add up: ${bad}.` : "The enemy's log checks out: every shot was answered truthfully."));
+      if (!mine && session?.code) void verify(c.log, c.foe, roleOf(c.pub, c.foe), session.seed, session.mode).then((bad) => hud.setVerdict(bad ? `The enemy's log does not add up: ${bad}.` : "The enemy's log checks out: every shot was answered truthfully."));
       break;
   }
+}
+
+/** Announce storms, tides and the maelstrom once each as they arrive. */
+const seen = { storm: 0, tide: 0, ring: 0 };
+function weather() {
+  const p = c.pub;
+  if (p.storm && p.storm.until !== seen.storm) { seen.storm = p.storm.until; hud.log(`A storm front closes over rows ${p.storm.row + 1}–${p.storm.row + 3}: no guns or spyglasses there.`); }
+  if (p.tide && p.tide.round !== seen.tide) { seen.tide = p.tide.round; hud.log('The tide turns and carries the flotsam a square.'); }
+  if (p.ring !== seen.ring) { seen.ring = p.ring; if (p.ring) hud.log('The maelstrom swallows another ring of the chart!', 'bad'); }
 }
 
 /* ---------- view ---------- */
@@ -223,7 +248,7 @@ function zone(side: Cell['side'], x: number, y: number, color: number, opacity: 
 function refreshHud() {
   if (!session) return;
   // Fall back to plain fire when the chosen tool is spent or its ship is lost.
-  const gone = (mode === 'broadside' && !c.alive('line')) || (mode === 'chain' && !c.alive('frigate')) || (mode === 'spy' && !c.alive('cutter')) || (mode in ITEMS && !c.has(mode as Item));
+  const gone = (mode === 'kraken' && c.side.seals < 3) || (mode === 'broadside' && !c.alive('line')) || (mode === 'chain' && !c.alive('frigate')) || (mode === 'spy' && !c.alive('cutter')) || (mode in ITEMS && !c.has(mode as Item));
   if (gone && c.pub.phase === 'battle') { mode = 'fire'; hud.setHint(HINTS.fire); }
   hud.update(c, mode, foeOnline ? '' : 'lost at sea (disconnected)');
 }
@@ -242,6 +267,7 @@ function refresh() {
       if (mode === 'fire' || mode === 'chain') hl.push({ ...hover, color: WAX, opacity: 0.55 });
       if (mode === 'broadside' || mode === 'fireship') for (const [a, b] of attackCells(mode, x, y, aimDir)) hl.push({ side, x: a, y: b, color: WAX, opacity: 0.55 });
       if (mode === 'spy' || mode === 'spyglass') hl.push(...zone(side, x, y, AMBER, 0.3));
+      if (mode === 'kraken') for (let b = y - 1; b <= y + 1; b++) for (let a = x - 1; a <= x + 1; a++) if (inBoard(a, b)) hl.push({ side, x: a, y: b, color: WAX, opacity: 0.5 });
     } else {
       if (mode === 'fog') hl.push(...zone(side, x, y, FOG, 0.45));
       if ((mode === 'sail' && !selected) || mode === 'turn' || mode === 'shipwright') {
@@ -290,6 +316,7 @@ function battleClick(cell: Cell) {
     else if (mode === 'broadside' || mode === 'chain' || mode === 'fireship') c.attack(mode, x, y, aimDir);
     else if (mode === 'spy') c.scan(x, y, 'cutter');
     else if (mode === 'spyglass') c.scan(x, y, 'spyglass');
+    else if (mode === 'kraken') c.kraken(x, y);
     return;
   }
   if (mode === 'fog') { c.fog(x, y); return; }

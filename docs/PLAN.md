@@ -182,5 +182,7 @@ paleta y tipografías). Se publica además como Artifact para verla en el navega
 - **Modo Convoy hecho:** roles sorteados (Almirante con mercante contra Corsaria), dos flotas
   distintas, saqueo de cajas, estela que delata la fila, fecha límite en la ronda 12 y un poder por
   capitán. El modo clásico se mantiene. Bot contra bot gana el Almirante ~43 % de las veces.
-- **Pendiente:** fase 4 (Kraken, sellos, tormenta, marea, remolino), fase 5 (pulido, sonido, tutorial,
+- **Fase 4 hecha:** sellos del pacto, Kraken (3 sellos + 3 puntos, dos golpes, atrapa barcos),
+  tormenta, marea y remolino final en Classic.
+- **Pendiente:** fase 5 (pulido, sonido, tutorial,
   temporizador de turno), fase 6 (modelos 3D detallados).

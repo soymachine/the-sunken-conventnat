@@ -2,8 +2,8 @@
 // opponent would: its own fleet and the public state.
 import { Client } from './engine';
 import { ITEMS, Item } from './powerups';
-import { SEASON } from './engine';
-import { N, Rnd, ZONE, inBoard, inZone, shipCells } from './rules';
+import { SEASON, inStorm } from './engine';
+import { MAELSTROM_ROUND, N, Rnd, Ship, ZONE, inBoard, inZone, safe, shipCells, turned } from './rules';
 
 const NEIGH = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
@@ -46,6 +46,8 @@ function scoreGrid(c: Client, rnd: Rnd): number[][] {
     if (rk) { const age = round - rk.round; if (age <= 2) for (let y = 0; y < N; y++) for (let x = rk.col - 1; x <= rk.col + 1 + age * 2; x++) bump(x, y, 3 - age); }
   }
   for (const s of foe.sunk) for (const [x, y] of shipCells(s)) bump(x, y, -100);
+  // No gun can be laid under the storm, and nothing floats in the drowned rim.
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (inStorm(c.pub, y) || !safe(c.pub.ring, x, y)) score[y][x] = -1000;
   return score;
 }
 
@@ -83,6 +85,21 @@ export function botAct(c: Client, rnd: Rnd = Math.random): boolean {
   let best = { x: 0, y: 0, v: -Infinity };
   for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (score[y][x] > best.v) best = { x, y, v: score[y][x] };
   const lead = best.v >= 3.5;
+  const clamp = (v: number) => Math.min(N - 2, Math.max(1, v));
+  if (lead && c.canKraken()) return c.kraken(clamp(best.x), clamp(best.y));
+
+  // The maelstrom is coming: bring ships in from the rim before it takes them.
+  if (p.mode === 'classic' && p.round >= MAELSTROM_ROUND - 3 && p.ap >= 2) {
+    const risk = (s: Pick<Ship, 'x' | 'y' | 'dir' | 'len'>) => shipCells(s).filter(([x, y]) => !safe(p.ring + 1, x, y)).length;
+    for (const s of c.ships) {
+      if (s.sunk || !risk(s)) continue;
+      for (const d of [1, -1] as const) {
+        const n = c.reach(s.id, d);
+        if (n && risk(s.dir === 'h' ? { ...s, x: s.x + d * n } : { ...s, y: s.y + d * n }) < risk(s)) return c.sail(s.id, d, n);
+      }
+      if (c.canTurn(s.id) && risk(turned(s)) < risk(s)) return c.turn(s.id);
+    }
+  }
 
   const want: Item = lead ? 'fireship' : wounded.length && me.doubloons >= ITEMS.shipwright.price ? 'shipwright' : 'spyglass';
   if (!c.has(want) && c.canBuy(want) && c.buy(want)) return true;
@@ -122,11 +139,11 @@ export function botAct(c: Client, rnd: Rnd = Math.random): boolean {
       // A corsair sweeps the band of sea the merchantman should have reached.
       const band = c.role === 'corsair' ? Math.min(N - 1 - ZONE, Math.max(ZONE, Math.round(p.round * 1.1 + rnd() * 4 - 1))) : -1;
       const x = band >= 0 ? band : ZONE + Math.floor(rnd() * (N - 2 * ZONE)), y = ZONE + Math.floor(rnd() * (N - 2 * ZONE));
-      if (foe.scans.some((s) => p.round - s.round <= 5 && inZone(s.x, s.y, x, y))) continue;
+      if (inStorm(p, y) || foe.scans.some((s) => p.round - s.round <= 5 && inZone(s.x, s.y, x, y))) continue;
       return c.scan(x, y, c.has('spyglass') ? 'spyglass' : 'cutter');
     }
   }
-  return c.attack('shot', best.x, best.y);
+  return c.attack('shot', best.x, best.y) || c.endTurn();
 }
 
 /** Keep a bot playing. With `delay` null it acts synchronously (tests); otherwise it paces itself. */

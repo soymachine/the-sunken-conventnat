@@ -133,7 +133,7 @@ describe('protocol', () => {
   });
   it('collecting treasure pays and gives the ship away', async () => {
     const { a } = await duel();
-    a.pub.treasures.push({ side: 0, x: 5, y: 0, value: 40 });
+    a.pub.treasures.push({ side: 0, x: 5, y: 0, value: 40, kind: 'gold' });
     expect(a.sail(0, 1)).toBe(true);
     expect(a.side.doubloons).toBe(70);
     expect(a.side.spotted).toEqual([{ x: 5, y: 0, round: 1 }]);
@@ -282,6 +282,7 @@ describe('convoy', () => {
   });
   it('bots play Convoy to the end and neither role dominates', async () => {
     const wins = { admiral: 0, corsair: 0 }, why: Record<string, number> = {}, G = 60;
+    let kr = 0;
     for (let seed = 1; seed <= G; seed++) {
       const bus = new Bus(), rnd = seeded(seed * 131);
       const a = new Client(0, seed, bus.send, rnd, 'A', 'convoy'), b = new Client(1, seed, bus.send, rnd, 'B', 'convoy');
@@ -292,20 +293,120 @@ describe('convoy', () => {
       driveBot(a, null, rnd); driveBot(b, null, rnd);
       expect(a.pub.phase).toBe('over');
       expect(a.pub).toEqual(b.pub);
-      expect(await verify(bus.log, 0, a.role)).toBeNull();
-      expect(await verify(bus.log, 1, b.role)).toBeNull();
+      expect(await verify(bus.log, 0, a.role, seed, 'convoy')).toBeNull();
+      expect(await verify(bus.log, 1, b.role, seed, 'convoy')).toBeNull();
       wins[a.pub.winner === a.pub.admiral ? 'admiral' : 'corsair']++;
       why[a.pub.reason!] = (why[a.pub.reason!] || 0) + 1;
+      kr += bus.log.filter((m) => m.t === 'kraken').length;
     }
-    console.log('convoy bot v bot:', wins, why);
+    console.log('convoy bot v bot:', wins, why, 'krakens:', kr);
     expect(wins.admiral / G).toBeGreaterThan(0.3);
     expect(wins.admiral / G).toBeLessThan(0.7);
+  });
+});
+
+describe('the covenant', () => {
+  /** Hand a captain seals on both clients' public state. */
+  const seal = (cs: Client[], who: Client, n: number) => { for (const c of cs) c.pub.sides[who.me].seals = n; };
+
+  it('losing a ship pays a seal; relics give one too', async () => {
+    const { a, b } = await duel();
+    a.attack('shot', 5, 13); a.attack('shot', 6, 13);
+    expect(b.side.seals).toBe(1);
+    expect(a.pub.sides[1].seals).toBe(1);
+    for (const c of [a, b]) c.pub.treasures.push({ side: 0, x: 5, y: 0, value: 0, kind: 'seal' });
+    a.sail(0, 1);
+    expect(a.side.seals).toBe(1);
+  });
+  it('the Kraken needs three seals, strikes twice with the same cells for both, and holds ships', async () => {
+    const { bus, a, b } = await duel();
+    expect(a.kraken(6, 6)).toBe(false);
+    seal([a, b], a, 3);
+    expect(a.kraken(6, 6)).toBe(true);
+    expect(a.pub.ap).toBe(0);
+    expect(a.side.seals).toBe(0);
+    const first = bus.log.filter((m) => m.t === 'result');
+    expect(first.length).toBe(1);
+    expect(first[0]).toMatchObject({ by: 1, kraken: true });
+    if (first[0].t === 'result') { expect(first[0].results.length).toBe(3); for (const r of first[0].results) expect(Math.abs(r.x - 6) <= 1 && Math.abs(r.y - 6) <= 1).toBe(true); }
+    expect(a.pub.kraken).toMatchObject({ side: 1, x: 6, y: 6, left: 1 });
+    expect(a.pub).toEqual(b.pub);
+    a.endTurn();
+    // b's line (5..9,5) and frigate (5..8,7) lie in the patch: both are held; the cutter is free.
+    expect(b.held(0)).toBe(true);
+    expect(b.sail(0, 1)).toBe(false);
+    expect(b.turn(1)).toBe(false);
+    expect(b.sail(4, 1)).toBe(true);
+    b.endTurn();
+    expect(bus.log.filter((m) => m.t === 'result').length).toBe(2);
+    expect(a.pub.kraken).toBeUndefined();
+    expect(a.myTurn && a.can(1)).toBe(true);
+    expect(b.sail(0, 1)).toBe(false); // not b's turn
+    expect(a.pub).toEqual(b.pub);
+  });
+  it('a storm front blocks guns and spyglasses in its rows', async () => {
+    const { a, b } = await duel();
+    for (const c of [a, b]) c.pub.storm = { row: 4, until: 9 };
+    expect(a.attack('shot', 5, 5)).toBe(false);
+    expect(a.scan(7, 6, 'cutter')).toBe(false);
+    expect(a.attack('shot', 5, 7)).toBe(true);
+    expect(a.attack('broadside', 5, 7, 'v')).toBe(true); // the cell in the storm is left out
+    expect(a.pub.sides[1].shots.some((s) => s.y === 6)).toBe(false);
+    expect(a.pub).toEqual(b.pub);
+  });
+  it('storms, relics and tides arrive on schedule, identically for both', async () => {
+    const { a, b } = await duel();
+    const t0 = a.pub.treasures.map((t) => [t.x, t.y]);
+    for (let i = 0; i < 12; i++) (a.myTurn ? a : b).endTurn();
+    expect(a.pub.round).toBe(7);
+    expect(a.pub.treasures.filter((t) => t.kind === 'seal').length).toBe(2);
+    expect(a.pub.tide?.round).toBe(5);
+    expect(a.pub.treasures.slice(0, 4).map((t) => [t.x, t.y])).not.toEqual(t0);
+    expect(a.pub.storm).toBeUndefined();
+    for (let i = 0; i < 2; i++) (a.myTurn ? a : b).endTurn();
+    expect(a.pub.storm).toMatchObject({ until: 9 });
+    expect(a.pub).toEqual(b.pub);
+  });
+  it('the maelstrom swallows the rim from round 20 and its toll is verified', async () => {
+    const { bus, a, b } = await duel();
+    for (let guard = 0; guard < 400 && a.pub.phase === 'battle' && a.pub.round < 23; guard++) (a.myTurn ? a : b).endTurn();
+    expect(a.pub.ring).toBe(2);
+    // a's line lies along the top rim and drowns whole at ring 1; the rest sit on column 0 and lose a section per ring.
+    expect(a.ships[0].sunk).toBe(true);
+    expect(a.ships.slice(1).map((s) => s.hits.slice(0, 2))).toEqual([[true, true], [true, true], [true, true], [true, true]]);
+    expect(a.ships[4].sunk).toBe(true);
+    expect(a.side.seals).toBe(2);
+    expect(b.ships.every((s) => !s.hits.some(Boolean))).toBe(true);
+    expect(a.pub).toEqual(b.pub);
+    for (let guard = 0; guard < 400 && a.pub.phase === 'battle'; guard++) (a.myTurn ? a : b).endTurn();
+    expect(a.pub).toMatchObject({ phase: 'over', winner: 1, reason: 'fleet' });
+    expect(await verify(bus.log, 0, 'classic', 7)).toBeNull();
+    const forged: Msg[] = bus.log.map((m) => (m.t === 'drowned' && m.by === 0 && m.results.length ? { ...m, results: m.results.slice(1) } : m));
+    expect(await verify(forged, 0, 'classic', 7)).toMatch(/maelstrom/);
+  });
+  it('a ship that slips the Kraken\'s hold, or a false answer to its strike, is caught', async () => {
+    const { bus, a, b } = await duel();
+    // Earn the seals the hard way so the log can be replayed: b sinks three of a's ships.
+    const shots: [number, number][] = [[0, 8], [1, 8], [0, 6], [1, 6], [2, 6], [0, 4], [0, 4], [1, 4], [2, 4]];
+    a.endTurn();
+    while (shots.length) { if (b.myTurn) { if (b.pub.ap > 0) b.attack('shot', ...shots.shift()!); else b.endTurn(); } else a.endTurn(); }
+    if (b.myTurn) b.endTurn();
+    expect(a.side.seals).toBe(3);
+    expect(a.kraken(6, 6)).toBe(true);
+    a.endTurn(); b.endTurn();
+    for (let guard = 0; guard < 400 && a.pub.phase === 'battle'; guard++) (a.myTurn ? a : b).endTurn();
+    const honest = await verify(bus.log, 1, 'classic', 7);
+    expect(honest).toBeNull();
+    const lied: Msg[] = bus.log.map((m) => (m.t === 'result' && m.kraken ? { ...m, results: m.results.map((r) => ({ x: r.x, y: r.y, r: 'miss' as const })) } : m));
+    const caught = await verify(lied, 1, 'classic', 7);
+    expect(caught).toMatch(/Kraken/);
   });
 });
 
 describe('bot', () => {
   it('bots finish full games on the big chart in reasonable time', async () => {
     const rounds: number[] = [];
+    let krakens = 0, drowned = 0;
     for (let seed = 1; seed <= 6; seed++) {
       const bus = new Bus(), rnd = seeded(seed * 97);
       const a = new Client(0, seed, bus.send, rnd), b = new Client(1, seed, bus.send, rnd);
@@ -316,11 +417,13 @@ describe('bot', () => {
       driveBot(a, null, rnd); driveBot(b, null, rnd);
       expect(a.pub.phase).toBe('over');
       expect(a.pub).toEqual(b.pub);
-      expect(await verify(bus.log, 0)).toBeNull();
-      expect(await verify(bus.log, 1)).toBeNull();
+      expect(await verify(bus.log, 0, 'classic', seed)).toBeNull();
+      expect(await verify(bus.log, 1, 'classic', seed)).toBeNull();
       rounds.push(a.pub.round);
+      krakens += bus.log.filter((m) => m.t === 'kraken').length;
+      drowned += bus.log.filter((m) => m.t === 'drowned' && m.results.length).length;
     }
-    console.log('bot v bot rounds:', rounds.join(', '));
+    console.log('bot v bot rounds:', rounds.join(', '), '| krakens summoned:', krakens, '| maelstrom tolls:', drowned);
     expect(Math.max(...rounds)).toBeLessThan(120);
   });
 });

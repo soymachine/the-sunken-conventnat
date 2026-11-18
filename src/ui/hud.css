@@ -155,3 +155,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); out
 .role .pw { font-size: 15px; border-top: 1px solid var(--ink); padding-top: 10px; margin-bottom: 18px; } .role .pw b { font: 700 11px var(--label); letter-spacing: .12em; text-transform: uppercase; color: var(--wax); font-style: normal; }
 @media (max-width: 1000px) { .objective { font-size: 12px; gap: 12px; padding: 5px 10px; } }
 @media (max-width: 600px) { .objective { white-space: normal; flex-wrap: wrap; justify-content: center; width: calc(100% - 20px); } #lobby .modes { grid-template-columns: 1fr; } }
+
+/* ---------- covenant ---------- */
+.seals { display: flex; align-items: center; gap: 7px; margin-bottom: 14px; font-style: italic; font-size: 14px; }
+.seals i { width: 20px; height: 20px; border-radius: 50%; border: 1.5px dashed rgba(13, 11, 8, .5); display: block; transition: all .4s; }
+.seals i.lit { background: radial-gradient(circle at 35% 30%, #c0563c, var(--wax) 60%, #4a160c); border: 1.5px solid var(--ink); box-shadow: 0 1px 3px rgba(0, 0, 0, .5); }
+.seals span { margin-left: 4px; }
+.belt button[data-tool="kraken"] { background: radial-gradient(circle at 35% 20%, #c0563c, var(--wax) 60%, #4a160c); color: var(--parch); border-color: var(--amber); }

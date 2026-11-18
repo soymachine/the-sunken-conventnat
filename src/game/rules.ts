@@ -53,6 +53,19 @@ export interface CellResult { x: number; y: number; r: ShotOutcome; ship?: Revea
   /** The shot struck the merchantman: a crate of cargo is plundered. */
   cargo?: true }
 
+/** Seals needed to summon the Kraken, and the round the maelstrom begins (classic battles). */
+export const KRAKEN_SEALS = 3;
+export const MAELSTROM_ROUND = 20;
+/** The Kraken holds a 3×3 patch around its centre. */
+export const inKraken = (cx: number, cy: number, x: number, y: number) => Math.abs(x - cx) <= 1 && Math.abs(y - cy) <= 1;
+/** True while a cell is still inside the chart after `ring` outer rings have gone under. */
+export const safe = (ring: number, x: number, y: number) => Math.min(x, y, N - 1 - x, N - 1 - y) >= ring;
+/** Cells of ships afloat that lie in the drowned rim and are not yet hit. */
+export function rimCells(ships: Ship[], ring: number): XY[] {
+  const out: XY[] = [];
+  for (const s of ships) if (!s.sunk) shipCells(s).forEach(([x, y], i) => { if (!s.hits[i] && !safe(ring, x, y)) out.push([x, y]); });
+  return out;
+}
 export const inBoard = (x: number, y: number) => x >= 0 && y >= 0 && x < N && y < N;
 export const inZone = (cx: number, cy: number, x: number, y: number) => Math.abs(x - cx) <= ZONE && Math.abs(y - cy) <= ZONE;
 export const cellName = (x: number, y: number) => 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[x] + (y + 1);
@@ -165,7 +178,8 @@ export function sailShip(ships: Ship[], id: number, delta: 1 | -1, steps: number
   return debris;
 }
 
-function turned(s: Ship): Placed {
+/** Where a ship would lie after a quarter turn about its middle. */
+export function turned(s: Ship): Placed {
   const k = Math.floor(s.len / 2);
   const [px, py] = shipCells(s)[k];
   return s.dir === 'h' ? { x: px, y: py - k, dir: 'v', len: s.len } : { x: px - k, y: py, dir: 'h', len: s.len };

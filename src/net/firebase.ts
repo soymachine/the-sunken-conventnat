@@ -45,7 +45,7 @@ class FirebaseSession implements Session {
       const { uid: _u, ...m } = snap.val();
       // The database drops empty arrays; put them back.
       if (m.t === 'move') m.debris ||= [];
-      if (m.t === 'result') m.results ||= [];
+      if (m.t === 'result' || m.t === 'drowned') m.results ||= [];
       if (m.t === 'reveal') { m.acts ||= []; m.initial ||= []; m.final ||= []; }
       cb(m as Msg);
     });

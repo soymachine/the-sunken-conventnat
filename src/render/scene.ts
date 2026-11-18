@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { Pub, SidePub } from '../game/engine';
 import { Kind, N, START_COLS, Ship, ShotOutcome, ZONE, shipCells } from '../game/rules';
 import { Fx } from './fx';
+import { Kraken } from './kraken';
 import { Post } from './post';
 import { Sea, waveH } from './sea';
 import { ShipModel, buildShip, loadShipModels, setShipTime } from './ships';
@@ -16,7 +17,7 @@ export interface View { pub: Pub; me: 0 | 1; ships: Ship[]; selectedId?: number 
   convoy?: { side: Side; zone: boolean };
   /** Rebuilding after a reload: show the present state without replaying how it came about. */
   quiet?: boolean }
-export type Sound = 'cannon' | 'splash' | 'hit' | 'clang' | 'sink' | 'coin' | 'glass';
+export type Sound = 'cannon' | 'splash' | 'hit' | 'clang' | 'sink' | 'coin' | 'glass' | 'roar' | 'thunder';
 
 const C = { ink: 0x0d0b08, amber: 0xd9a441, parch: 0xe8d5a3, brass: 0xb08d3c, wax: 0x8c2f1b };
 const HALF = N / 2;
@@ -78,14 +79,14 @@ const G = {
   flame: new THREE.ConeGeometry(0.13, 0.5, 8), cell: new THREE.PlaneGeometry(0.94, 0.94),
   plank: new THREE.BoxGeometry(0.34, 0.04, 0.08), ball: new THREE.SphereGeometry(0.16, 12, 8),
   chest: new THREE.BoxGeometry(0.5, 0.3, 0.36), lid: new THREE.BoxGeometry(0.54, 0.1, 0.4),
-  torus: new THREE.TorusGeometry(0.4, 0.05, 6, 20), eye: new THREE.RingGeometry(0.32, 0.42, 4),
+  torus: new THREE.TorusGeometry(0.4, 0.05, 6, 20), seal: new THREE.CylinderGeometry(0.3, 0.3, 0.09, 20), sealRim: new THREE.TorusGeometry(0.3, 0.035, 6, 24), eye: new THREE.RingGeometry(0.32, 0.42, 4),
   zone: new THREE.EdgesGeometry(new THREE.PlaneGeometry(2 * ZONE + 1, 2 * ZONE + 1)), beam: new THREE.PlaneGeometry(0.5, 2 * ZONE + 1),
 };
 for (const k of ['disc', 'ring', 'ring2', 'cell', 'zone', 'eye', 'torus', 'beam'] as const) G[k].rotateX(-Math.PI / 2);
 const M = {
   flame: new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 1.5, 0.35) }), gold: new THREE.MeshBasicMaterial({ color: new THREE.Color(1.15, 0.72, 0.16) }),
   chest: new THREE.MeshLambertMaterial({ color: 0x7a5a1e }), debris: new THREE.MeshLambertMaterial({ color: 0x2a2116 }), ball: new THREE.MeshLambertMaterial({ color: 0x15110b }),
-  chain: new THREE.MeshLambertMaterial({ color: C.wax }), line: new THREE.LineBasicMaterial({ color: C.ink }),
+  chain: new THREE.MeshLambertMaterial({ color: C.wax }), seal: new THREE.MeshBasicMaterial({ color: new THREE.Color(0.75, 0.13, 0.06) }), line: new THREE.LineBasicMaterial({ color: C.ink }),
   lineAmber: new THREE.LineBasicMaterial({ color: C.amber }), lineWax: new THREE.LineBasicMaterial({ color: C.wax }),
 };
 
@@ -106,6 +107,9 @@ export class SeaScene {
   private misc = new THREE.Group();
   private hl = new THREE.Group();
   private fx = new Fx();
+  private kraken = new Kraken();
+  private stormy = false;
+  private nextBolt = 3;
   private post: Post | null = null;
   private seas: Record<Side, Sea>;
   private shadowPlanes = [] as THREE.Mesh[];
@@ -156,7 +160,7 @@ export class SeaScene {
       this.shadowPlanes.push(sh);
       this.scene.add(sh);
     }
-    this.scene.add(this.marks, this.shipsGroup, this.misc, this.hl, this.fx.group);
+    this.scene.add(this.marks, this.shipsGroup, this.misc, this.hl, this.fx.group, this.kraken.group);
     if (this.quality === 'high') this.post = new Post(this.renderer, this.scene, this.camera);
     addEventListener('resize', () => this.resize());
     canvas.addEventListener('wheel', (e) => { e.preventDefault(); this.wheel(e); }, { passive: false });
@@ -196,6 +200,7 @@ export class SeaScene {
     for (const o of this.ships.values()) this.shipsGroup.remove(o.root);
     this.ships.clear(); this.marks.clear(); this.misc.clear(); this.hl.clear();
     this.seas.own.clear(); this.seas.enemy.clear();
+    this.kraken.setZone(null);
     this.last = null;
   }
 
@@ -333,6 +338,12 @@ export class SeaScene {
     this.flames.forEach((f, i) => { f.scale.y = 1 + 0.22 * Math.sin(t * 9 + i * 1.7); });
     for (const p of this.puffs) { p.s.position.set(p.base.x + 0.5 * Math.sin(t * 0.3 + p.ph), p.base.y + 0.12 * Math.sin(t * 0.5 + p.ph * 2), p.base.z + 0.4 * Math.cos(t * 0.24 + p.ph)); }
     this.glints.forEach((g, i) => { g.scale.setScalar(1 + 0.12 * Math.sin(t * 3 + i)); g.rotation.y = t * 0.6 + i; });
+    this.kraken.update(dt, t);
+    if (this.stormy && (this.nextBolt -= dt) < 0) {
+      this.nextBolt = 2.5 + Math.random() * 5;
+      this.seas.own.flash(); this.seas.enemy.flash();
+      this.sound('thunder');
+    }
     this.seas.own.update(dt, t); this.seas.enemy.update(dt, t);
     this.fx.update(dt);
     this.shakeAmt *= Math.exp(-dt * 7);
@@ -488,6 +499,25 @@ export class SeaScene {
     this.marks.clear(); this.puffs = []; this.glints = []; this.embers0 = [];
     this.drawSide(v.pub.sides[v.me], 'own', v.pub.round);
     this.drawSide(v.pub.sides[foe], 'enemy', v.pub.round);
+    // The Kraken, the storm and the maelstrom.
+    const k = v.pub.kraken, kSide: Side | null = k ? (k.side === v.me ? 'own' : 'enemy') : null;
+    this.kraken.setZone(k && kSide ? cellCenter({ side: kSide, x: k.x, y: k.y }) : null);
+    this.seas.own.night = kSide === 'own' ? 1 : 0; this.seas.enemy.night = kSide === 'enemy' ? 1 : 0;
+    if (k && kSide) this.strip(kSide, k.x - 1, k.y - 1, 3, 3, C.wax, 0.3);
+    const st = v.pub.storm;
+    this.stormy = !!st && v.pub.phase === 'battle';
+    for (const side of ['own', 'enemy'] as Side[]) {
+      this.seas[side].setStorm(st ? st.row : null);
+      this.seas[side].setRing(v.pub.ring);
+      if (st) for (let i = 0; i < 9; i++) {
+        const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: puffTex, color: 0x241d14, transparent: true, opacity: 0.85, depthWrite: false }));
+        s.scale.set(5, 3.2, 1);
+        const base = new THREE.Vector3(origin[side].x + 0.8 + i * (N - 1.6) / 8, 1.5 + (i % 3) * 0.25, origin[side].z + st.row + 1.5 + ((i % 2) - 0.5) * 0.9);
+        s.position.copy(base);
+        this.marks.add(s);
+        this.puffs.push({ s, base, ph: i * 2.3 + (side === 'own' ? 0 : 4) });
+      }
+    }
     if (v.convoy) {
       const side = v.convoy.side, adm = v.pub.sides[side === 'own' ? v.me : foe], mineToHide = side === 'own';
       this.strip(side, 0, 0, 1, N, 0xffffff, 0.5, BANNERS.colony);
@@ -500,6 +530,18 @@ export class SeaScene {
     }
     for (const t of v.pub.treasures) {
       const at = cellCenter({ side: t.side === v.me ? 'own' : 'enemy', x: t.x, y: t.y });
+      if (t.kind === 'seal') {
+        // A covenant seal: a disc of sealing wax standing in the water.
+        const g = new THREE.Group(), disc = new THREE.Mesh(G.seal, M.seal), rim = new THREE.Mesh(G.sealRim, M.gold);
+        disc.rotation.x = rim.rotation.x = Math.PI / 2;
+        disc.position.y = rim.position.y = 0.42;
+        disc.castShadow = true;
+        g.add(disc, rim);
+        g.position.set(at.x, 0.08, at.z);
+        this.marks.add(g);
+        this.glints.push(g);
+        continue;
+      }
       const g = new THREE.Group(), chest = new THREE.Mesh(G.chest, M.chest), lid = new THREE.Mesh(G.lid, M.gold);
       chest.position.y = 0.15; lid.position.y = 0.35; chest.castShadow = true;
       const edge = new THREE.LineSegments(new THREE.EdgesGeometry(G.chest), M.line);
@@ -549,16 +591,31 @@ export class SeaScene {
         this.fx.trail(ball.position);
         if (u < 1) { requestAnimationFrame(step); return; }
         this.misc.remove(ball);
-        const sea = this.seas[target.side], at = to.clone().setY(0.25);
-        sea.bump(target.x, target.y, 1);
-        if (outcome === 'miss' || outcome === 'wreck') { this.fx.water(at); this.sound('splash'); }
-        else if (outcome === 'clang') { this.fx.clang(at.setY(0.5)); this.shake(0.12); this.sound('clang'); }
-        else { this.fx.explosion(at.setY(0.45)); this.shake(outcome === 'sunk' ? 0.5 : 0.28); this.sound('hit'); }
+        this.impact(target, outcome);
         res();
       };
       step();
     });
   }
+
+  /** What a blow does where it lands: water, sparks or fire. */
+  private impact(target: Cell, outcome: ShotOutcome) {
+    const at = cellCenter(target).setY(0.25);
+    this.seas[target.side].bump(target.x, target.y, 1);
+    if (outcome === 'miss' || outcome === 'wreck') { this.fx.water(at); this.sound('splash'); }
+    else if (outcome === 'clang') { this.fx.clang(at.setY(0.5)); this.shake(0.12); this.sound('clang'); }
+    else { this.fx.explosion(at.setY(0.45)); this.shake(outcome === 'sunk' ? 0.5 : 0.28); this.sound('hit'); }
+  }
+
+  /** The Kraken brings a tentacle down on a cell. Resolves on impact. */
+  async lash(target: Cell, outcome: ShotOutcome): Promise<void> {
+    if (this.kraken.active) await this.kraken.slam(cellCenter(target));
+    this.shake(0.2);
+    this.impact(target, outcome);
+  }
+
+  /** The maelstrom takes a section of a ship. */
+  drown(target: Cell, outcome: ShotOutcome) { this.impact(target, outcome === 'hit' || outcome === 'sunk' ? outcome : 'miss'); }
 
   /** A spyglass sweeping its 5×5 patch. */
   sweep(c: Cell): Promise<void> {

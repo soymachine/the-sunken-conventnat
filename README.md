@@ -49,6 +49,19 @@ Choose **Convoy** in the lobby for an asymmetric battle. The roles are drawn by 
 - Each captain has one power per battle (1 action point): **Close Escort** turns aside the next hit
   on the merchantman until the Admiral's next turn; **Dead Reckoning** tells the Corsair her column.
 
+## The covenant, the Kraken and the weather
+
+- **Seals.** Relics of the covenant surface on the charts every few rounds; sail over one to take it.
+  Losing a ship also pays you a seal.
+- **The Kraken.** Three seals and three action points summon it under a 3×3 patch of enemy water. It
+  strikes three squares at once, strikes again as your next turn begins, and meanwhile the ships it
+  holds can neither sail nor turn.
+- **Storm.** Every fourth round a front covers three rows of both charts for two rounds: no guns or
+  spyglasses can be laid there.
+- **Tide.** Every fifth round treasure and seals drift one square.
+- **Maelstrom** (Classic only). From round 20 the outer ring of the chart goes under every two rounds,
+  taking the ship sections caught in it.
+
 ## Look
 
 The sea is a parchment chart drawn by a shader: ink strokes drift with the wind, hulls raise foam and

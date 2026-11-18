@@ -65,7 +65,8 @@ void main() {
 
 const FRAG = /* glsl */ `
 uniform sampler2D uMap, uEnergy;
-uniform float uTime, uEnemy, uN;
+uniform float uTime, uEnemy, uN, uNight, uRing, uFlash;
+uniform vec2 uStorm;
 varying vec2 vUv;
 varying float vShade;
 const vec3 INK = vec3(0.004, 0.003, 0.002);
@@ -104,6 +105,21 @@ void main() {
     col = mix(col, INK, smoothstep(0.86, 0.99, sin(e * 15.0 - uTime * 2.6 - 0.9)) * smoothstep(0.1, 0.4, e) * 0.5);
     col *= 1.0 - 0.3 * smoothstep(1.4, 0.0, min(edge.x, edge.y));
     col *= 0.97 + 2.2 * vShade;
+    // Storm front: rows darken under slanting rain and flare with lightning.
+    float st = uStorm.y * step(uStorm.x, p.y) * step(p.y, uStorm.x + 3.0);
+    float rain = step(0.78, fract(p.x * 3.0 + p.y * 9.0 + uTime * 3.5));
+    col = mix(col, INK, st * (0.5 + 0.22 * rain));
+    col += st * uFlash * vec3(0.9, 0.8, 0.55);
+    // Maelstrom: the drowned rim churns in ink.
+    float rim = step(0.5, uRing) * step(min(edge.x, edge.y), uRing);
+    vec2 c = p - uN * 0.5;
+    float swirl = 0.5 + 0.5 * sin(atan(c.y, c.x) * 9.0 + length(c) * 2.4 - uTime * 2.2);
+    col = mix(col, INK * 3.0, rim * (0.74 + 0.2 * swirl));
+    col = mix(col, vec3(0.6, 0.42, 0.14), rim * smoothstep(0.9, 1.0, swirl) * 0.35);
+    // The Kraken turns the chart to night: paper goes dark, ink glows amber.
+    float lum = dot(col, vec3(0.3, 0.59, 0.11));
+    vec3 night = mix(vec3(0.4, 0.24, 0.05), vec3(0.012, 0.01, 0.008), smoothstep(0.0, 0.07, lum));
+    col = mix(col, night, uNight);
   }
   gl_FragColor = vec4(col, 1.0);
   #include <colorspace_fragment>
@@ -121,7 +137,7 @@ export class Sea {
     this.tex.magFilter = this.tex.minFilter = THREE.LinearFilter;
     this.mat = new THREE.ShaderMaterial({
       vertexShader: VERT, fragmentShader: FRAG,
-      uniforms: { uMap: { value: chartTexture(enemy) }, uEnergy: { value: this.tex }, uTime: { value: 0 }, uEnemy: { value: enemy ? 1 : 0 }, uN: { value: N } },
+      uniforms: { uMap: { value: chartTexture(enemy) }, uEnergy: { value: this.tex }, uTime: { value: 0 }, uEnemy: { value: enemy ? 1 : 0 }, uN: { value: N }, uNight: { value: 0 }, uRing: { value: 0 }, uFlash: { value: 0 }, uStorm: { value: new THREE.Vector2(0, 0) } },
     });
     const geo = new THREE.PlaneGeometry(N + 1, N + 1, 80, 80);
     geo.rotateX(-Math.PI / 2);
@@ -143,12 +159,21 @@ export class Sea {
     const i = y * N + x;
     if (this.energy[i] < v) this.energy[i] = Math.min(v, this.energy[i] + 0.04);
   }
-  clear() { this.energy.fill(0); }
+  clear() { this.energy.fill(0); this.night = 0; }
+
+  /** Target darkness of this chart (1 while the Kraken holds it). */
+  night = 0;
+  setStorm(row: number | null) { (this.mat.uniforms.uStorm.value as THREE.Vector2).set(row ?? 0, row === null ? 0 : 1); }
+  setRing(ring: number) { this.mat.uniforms.uRing.value = ring; }
+  flash() { this.mat.uniforms.uFlash.value = 1; }
 
   update(dt: number, t: number) {
     const k = Math.exp(-dt * 0.8);
     for (let i = 0; i < this.energy.length; i++) { this.energy[i] *= k; this.bytes[i] = this.energy[i] * 255; }
     this.tex.needsUpdate = true;
     this.mat.uniforms.uTime.value = t;
+    const u = this.mat.uniforms;
+    u.uNight.value += (this.night - u.uNight.value) * Math.min(1, dt * 1.6);
+    u.uFlash.value *= Math.exp(-dt * 9);
   }
 }

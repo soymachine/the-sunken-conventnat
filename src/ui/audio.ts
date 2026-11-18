@@ -1,5 +1,5 @@
 // Every sound is synthesised with Web Audio: no audio files to load.
-export type SfxName = 'cannon' | 'splash' | 'hit' | 'clang' | 'sink' | 'coin' | 'glass' | 'click' | 'bell' | 'creak';
+export type SfxName = 'roar' | 'thunder' | 'cannon' | 'splash' | 'hit' | 'clang' | 'sink' | 'coin' | 'glass' | 'click' | 'bell' | 'creak';
 
 export class Sfx {
   private ctx: AudioContext | null = null;
@@ -73,6 +73,8 @@ export class Sfx {
       case 'glass': this.tone(t, 520, 1040, 0.5, 0.12); break;
       case 'click': this.noise(t, 0.04, 0.3, 'bandpass', 1800, 900, 3); this.tone(t, 320, 180, 0.06, 0.2, 'square'); break;
       case 'bell': for (const [f, a] of [[660, 0.3], [1320, 0.14], [1985, 0.08]]) this.tone(t, f, f, 1.6, a); break;
+      case 'roar': this.tone(t, 70, 38, 2.2, 0.55, 'sawtooth'); this.tone(t, 104, 55, 2.0, 0.3, 'square'); this.noise(t, 2.4, 0.4, 'lowpass', 500, 90); break;
+      case 'thunder': this.noise(t, 1.8, 0.5, 'lowpass', 900, 70); this.tone(t, 60, 32, 1.2, 0.35); break;
       case 'creak': this.tone(t, 180, 240, 0.35, 0.07, 'sawtooth'); this.noise(t, 0.5, 0.12, 'bandpass', 700, 1500, 2); break;
     }
   }

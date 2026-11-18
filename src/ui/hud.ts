@@ -1,10 +1,10 @@
 // Oak-and-brass HUD drawn with DOM + SVG over the 3D canvas.
 import { Client, SEASON, roleOf } from '../game/engine';
 import { ITEMS, ITEM_IDS, Item } from '../game/powerups';
-import { FLEETS, N, Role, shipCells } from '../game/rules';
+import { FLEETS, KRAKEN_SEALS, N, Role, shipCells } from '../game/rules';
 
 export type Tool = 'broadside' | 'chain' | 'spy' | Item;
-export type Mode = 'fire' | 'sail' | 'turn' | 'power' | Tool;
+export type Mode = 'fire' | 'sail' | 'turn' | 'power' | 'kraken' | Tool;
 
 /** The two invented captains of the Convoy mode. */
 export const CAPTAINS: Record<Exclude<Role, 'classic'>, { name: string; title: string; mission: string; power: string; powerText: string }> = {
@@ -58,6 +58,7 @@ export class Hud {
       </header>
       <div class="objective" id="objective" hidden></div>
       <aside class="card left">
+        <h2>The covenant <span id="foeSeals"></span></h2><div class="seals" id="seals"></div>
         <h2>Admiralty orders</h2><p id="orderText"></p><p id="orderMeta" class="meta"></p>
         <h2>Quartermaster <span id="gold" title="Doubloons"></span></h2><ul id="shop"></ul>
         <h2>Your fleet</h2><ul id="fleet"></ul>
@@ -176,6 +177,8 @@ export class Hud {
 
     this.q('#turnTitle').textContent = p.phase === 'placement' ? 'Deploy your fleet' : p.phase === 'over' ? 'Battle over' : mine ? 'Your turn' : 'Enemy turn';
     this.q('#turnSub').textContent = p.phase === 'battle' ? `Round ${p.round}` : '';
+    this.q('#seals').innerHTML = Array.from({ length: KRAKEN_SEALS }, (_, i) => `<i class="${i < me.seals ? 'lit' : ''}"></i>`).join('') + `<span>${me.seals >= KRAKEN_SEALS ? 'The Kraken will answer.' : `${Math.min(me.seals, KRAKEN_SEALS)} of ${KRAKEN_SEALS} seals`}</span>`;
+    this.q('#foeSeals').textContent = `enemy ${foe.seals}`;
     this.q<SVGElement>('#needle').style.transform = `rotate(${mine ? 20 : 200}deg)`;
     const shown = Math.max(3, mine ? p.ap : 0);
     const tray = this.q('#tray');
@@ -216,20 +219,25 @@ export class Hud {
         const n = me.items.filter((q) => q === id).length;
         tool(id, ITEMS[id].name + (n > 1 ? ` ×${n}` : ''), ITEMS[id].ap, c.can(ITEMS[id].ap) && !(id === 'winds' && p.windsUsed));
       }
+      if (me.seals >= KRAKEN_SEALS || mode === 'kraken') tool('kraken', 'Summon the Kraken', 3, c.canKraken());
       if (role !== 'classic' && !p.power[c.me]) tool('power', CAPTAINS[role].power, 1, c.canPower());
     }
     this.q('#belt').innerHTML = belt.join('');
 
-    const obj = this.q<HTMLElement>('#objective');
-    obj.hidden = role === 'classic' || p.phase === 'over';
-    if (!obj.hidden) {
+    const obj = this.q<HTMLElement>('#objective'), parts: string[] = [];
+    if (role !== 'classic') {
       const crates = '<i></i>'.repeat(p.cargo) + '<i class="gone"></i>'.repeat(3 - p.cargo);
       const left = Math.max(0, SEASON - p.round + 1), mer = c.merchant;
       const way = mer ? N - 1 - Math.max(...shipCells(mer).map(([x]) => x)) : 0;
-      obj.innerHTML = `<span><b>Cargo</b><span class="crates">${crates}</span></span>` +
-        (role === 'admiral' ? `<span><b>Home port</b>${way} column${way === 1 ? '' : 's'} east</span>` : '') +
-        `<span><b>Season closes</b>${p.phase === 'battle' ? `in ${left} round${left === 1 ? '' : 's'}` : `after round ${SEASON}`}</span>`;
+      parts.push(`<span><b>Cargo</b><span class="crates">${crates}</span></span>`);
+      if (role === 'admiral') parts.push(`<span><b>Home port</b>${way} column${way === 1 ? '' : 's'} east</span>`);
+      parts.push(`<span><b>Season closes</b>${p.phase === 'battle' ? `in ${left} round${left === 1 ? '' : 's'}` : `after round ${SEASON}`}</span>`);
     }
+    if (p.storm) parts.push(`<span><b>Storm</b>rows ${p.storm.row + 1}–${p.storm.row + 3}, no guns or glasses</span>`);
+    if (p.kraken) parts.push(`<span><b>The Kraken</b>holds ${p.kraken.side === c.me ? 'your' : 'enemy'} ships</span>`);
+    if (p.ring) parts.push(`<span><b>Maelstrom</b>${p.ring} ring${p.ring === 1 ? '' : 's'} drowned</span>`);
+    obj.hidden = !parts.length || p.phase === 'over';
+    obj.innerHTML = parts.join('');
     this.q<HTMLElement>('.over').hidden = p.phase !== 'over';
     if (p.phase === 'over') {
       const won = p.winner === c.me;
