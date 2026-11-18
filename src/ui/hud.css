@@ -162,3 +162,17 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); out
 .seals i.lit { background: radial-gradient(circle at 35% 30%, #c0563c, var(--wax) 60%, #4a160c); border: 1.5px solid var(--ink); box-shadow: 0 1px 3px rgba(0, 0, 0, .5); }
 .seals span { margin-left: 4px; }
 .belt button[data-tool="kraken"] { background: radial-gradient(circle at 35% 20%, #c0563c, var(--wax) 60%, #4a160c); color: var(--parch); border-color: var(--amber); }
+
+/* ---------- layout: controls centred, no log panel ---------- */
+.battle { display: grid; grid-template-columns: 1fr auto 1fr; gap: 28px; }
+.battle #hint { font-size: 15.5px; line-height: 1.25; }
+.battle .capstan { justify-self: end; }
+.helm { display: flex; align-items: flex-end; gap: 30px; align-self: end; }
+.helm .ap { padding-bottom: 26px; }
+.toast { position: absolute; left: 50%; bottom: 200px; transform: translateX(-50%); margin: 0; max-width: min(640px, 90vw); padding: 7px 18px; background: var(--ink); border: 1px solid var(--brass); border-radius: 3px; font-style: italic; font-size: 16px; text-align: center; opacity: 0; pointer-events: none; }
+.toast.show { animation: toast 4.5s ease-out forwards; }
+.toast.good { color: var(--amber); } .toast.bad { color: #e0795c; }
+@keyframes toast { 0% { opacity: 0; transform: translate(-50%, 8px); } 8%, 75% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; transform: translate(-50%, 0); } }
+@media (max-width: 1000px) { .toast { bottom: 158px; font-size: 13px; } .battle { gap: 10px; } .helm { gap: 12px; } .helm .ap { padding-bottom: 8px; } }
+@media (max-width: 600px) { .battle { grid-template-columns: auto 1fr; } }
+@media (prefers-reduced-motion: reduce) { .toast.show { animation-duration: 4.5s; } }

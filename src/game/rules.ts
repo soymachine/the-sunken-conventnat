@@ -36,6 +36,8 @@ export interface Ship {
   x: number;
   y: number;
   dir: Dir;
+  /** The bow is at the low end: the ship heads west (h) or north (v) instead of east or south. */
+  rev?: boolean;
   hits: boolean[];
   sunk: boolean;
   /** Ironclad only: true until the first hit is absorbed. */
@@ -45,7 +47,7 @@ export interface Ship {
 }
 
 /** What the opponent learns about a ship once it is sunk. */
-export type Revealed = Pick<Ship, 'kind' | 'cls' | 'len' | 'x' | 'y' | 'dir'>;
+export type Revealed = Pick<Ship, 'kind' | 'cls' | 'len' | 'x' | 'y' | 'dir' | 'rev'>;
 type Placed = Pick<Ship, 'x' | 'y' | 'dir' | 'len'>;
 
 export type ShotOutcome = 'miss' | 'hit' | 'sunk' | 'wreck' | 'clang';
@@ -107,7 +109,7 @@ export function randomFleet(rnd: Rnd, role: Role = 'classic'): Ship[] {
       const dir: Dir = f.kind === 'merchant' ? 'h' : rnd() < 0.5 ? 'h' : 'v';
       const cand = { x: f.kind === 'merchant' ? 0 : Math.floor(rnd() * N), y: Math.floor(rnd() * N), dir, len: f.len };
       if (fits(ships, cand)) {
-        const s: Ship = { id, kind: f.kind, cls: f.cls, ...cand, hits: new Array(f.len).fill(false), sunk: false };
+        const s: Ship = { id, kind: f.kind, cls: f.cls, ...cand, rev: f.kind !== 'merchant' && rnd() < 0.5, hits: new Array(f.len).fill(false), sunk: false };
         if (f.kind === 'ironclad') s.armour = true;
         ships.push(s);
         break;
@@ -137,7 +139,7 @@ export function resolveAttack(ships: Ship[], cells: XY[], chain: boolean, shield
       ship.sunk = true;
       ship.chained = false;
       const { kind, cls, len, dir } = ship;
-      results.push({ x, y, r: 'sunk', ship: { kind, cls, len, x: ship.x, y: ship.y, dir }, ...cargo });
+      results.push({ x, y, r: 'sunk', ship: { kind, cls, len, x: ship.x, y: ship.y, dir, rev: !!ship.rev }, ...cargo });
     } else results.push({ x, y, r: 'hit', ...cargo });
   }
   return { results, chained, lost: ships.every((s) => s.sunk), shielded };
@@ -151,51 +153,65 @@ export function countScan(ships: Ship[], x: number, y: number): number {
 }
 
 /** How many cells a ship may sail in one action in that direction (0 when blocked). */
-export function sailReach(ships: Ship[], id: number, delta: 1 | -1): number {
+/** Unit steps for the four headings, clockwise on the chart: east, south, west, north. */
+const HEAD: XY[] = [[1, 0], [0, 1], [-1, 0], [0, -1]];
+export type Way = 'left' | 'right';
+/** 0 east, 1 south, 2 west, 3 north. */
+export const headingOf = (s: Pick<Ship, 'dir' | 'rev'>) => (s.dir === 'h' ? (s.rev ? 2 : 0) : s.rev ? 3 : 1);
+/** The cell under the ship's bow. */
+export const bowCell = (s: Placed & Pick<Ship, 'rev'>): XY => { const cs = shipCells(s); return s.rev ? cs[0] : cs[cs.length - 1]; };
+
+/** Where a ship would lie after sailing `k` cells ahead. */
+export const ahead = <T extends Placed & Pick<Ship, 'rev'>>(s: T, k: number): T => { const [fx, fy] = HEAD[headingOf(s)]; return { ...s, x: s.x + fx * k, y: s.y + fy * k }; };
+
+/** How many cells a ship may sail ahead in one action (0 when blocked). Ships cannot back up. */
+export function sailReach(ships: Ship[], id: number, delta: 1 | -1 = 1): number {
   const s = ships.find((q) => q.id === id);
-  if (!s || s.sunk || s.chained) return 0;
-  const max = s.kind === 'schooner' ? 2 : 1;
+  if (!s || s.sunk || s.chained || delta !== 1) return 0;
+  const max = s.kind === 'schooner' ? 2 : 1, [fx, fy] = HEAD[headingOf(s)];
   let n = 0;
   for (let k = 1; k <= max; k++) {
-    const moved = s.dir === 'h' ? { ...s, x: s.x + delta * k } : { ...s, y: s.y + delta * k };
-    if (!fits(ships, moved, s.id)) break;
+    if (!fits(ships, { ...s, x: s.x + fx * k, y: s.y + fy * k }, s.id)) break;
     n = k;
   }
   return n;
 }
 
-/** Sail a ship along its axis. Returns the debris a damaged ship leaves behind, or null if illegal. */
+/** Sail a ship ahead. Returns the debris a damaged ship leaves behind, or null if illegal. */
 export function sailShip(ships: Ship[], id: number, delta: 1 | -1, steps: number): XY[] | null {
   if (steps < 1 || steps > sailReach(ships, id, delta)) return null;
-  const s = ships.find((q) => q.id === id)!;
+  const s = ships.find((q) => q.id === id)!, [fx, fy] = HEAD[headingOf(s)];
   const debris: XY[] = [];
   for (let k = 0; k < steps; k++) {
     const cs = shipCells(s);
-    if (damage(s) > 0) debris.push(delta === 1 ? cs[0] : cs[cs.length - 1]);
-    if (s.dir === 'h') s.x += delta;
-    else s.y += delta;
+    if (damage(s) > 0) debris.push(s.rev ? cs[cs.length - 1] : cs[0]); // the cell the stern leaves
+    s.x += fx; s.y += fy;
   }
   return debris;
 }
 
-/** Where a ship would lie after a quarter turn about its middle. */
-export function turned(s: Ship): Placed {
-  const k = Math.floor(s.len / 2);
-  const [px, py] = shipCells(s)[k];
-  return s.dir === 'h' ? { x: px, y: py - k, dir: 'v', len: s.len } : { x: px - k, y: py, dir: 'h', len: s.len };
+/** Where a ship would lie after a quarter turn to port (left) or starboard (right) about its middle. */
+export function turned(s: Ship, way: Way = 'right'): Placed & { rev: boolean } {
+  const h = (headingOf(s) + (way === 'right' ? 1 : 3)) % 4, mid = Math.floor(s.len / 2);
+  const [px, py] = shipCells(s)[s.rev ? s.len - 1 - mid : mid], [fx, fy] = HEAD[h];
+  // Sections are counted from the stern; the middle one stays where it is.
+  const stern: XY = [px - mid * fx, py - mid * fy], bow: XY = [px + (s.len - 1 - mid) * fx, py + (s.len - 1 - mid) * fy];
+  return { x: Math.min(stern[0], bow[0]), y: Math.min(stern[1], bow[1]), dir: h % 2 === 0 ? 'h' : 'v', len: s.len, rev: h >= 2 };
 }
 
-export function canTurnShip(ships: Ship[], id: number): boolean {
+export function canTurnShip(ships: Ship[], id: number, way: Way = 'right'): boolean {
   const s = ships.find((q) => q.id === id);
   if (!s || s.sunk || s.chained || damage(s) >= 2) return false;
-  return fits(ships, turned(s), s.id);
+  return fits(ships, turned(s, way), s.id);
 }
 
-/** Rotate a ship 90° around its middle segment. Ships with two or more hits cannot turn. */
-export function turnShip(ships: Ship[], id: number): boolean {
-  if (!canTurnShip(ships, id)) return false;
-  const s = ships.find((q) => q.id === id)!;
-  Object.assign(s, turned(s));
+/** Rotate a ship 90° around its middle section. Ships with two or more hits cannot turn. */
+export function turnShip(ships: Ship[], id: number, way: Way = 'right'): boolean {
+  if (!canTurnShip(ships, id, way)) return false;
+  const s = ships.find((q) => q.id === id)!, t = turned(s, way);
+  // Damage stays on the same timbers: flip the record when bow and stern swap ends.
+  if (!!s.rev !== t.rev) s.hits.reverse();
+  Object.assign(s, t);
   return true;
 }
 

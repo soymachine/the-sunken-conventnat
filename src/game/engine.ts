@@ -5,7 +5,7 @@ import { Order, pickOrder } from './orders';
 import { ITEMS, Item, MAX_ITEMS, START_DOUBLOONS } from './powerups';
 import {
   AP_PER_TURN, CellResult, Dir, KRAKEN_SEALS, Kind, MAELSTROM_ROUND, N, Revealed, Rnd, Role, Ship, XY, attackCells, countScan, inBoard, inKraken, inZone, legalPlacement, randomFleet,
-  repairShip, rimCells, resolveAttack, sailReach, sailShip, shipAt, shipCells, turnShip, canTurnShip,
+  repairShip, rimCells, resolveAttack, sailReach, sailShip, shipAt, shipCells, turnShip, canTurnShip, Way,
 } from './rules';
 
 export type Mode = 'classic' | 'convoy';
@@ -13,9 +13,9 @@ export type Mode = 'classic' | 'convoy';
 export const SEASON = 12;
 export const CRATES = 3;
 export type AttackSrc = 'shot' | 'broadside' | 'chain' | 'fireship';
-export type Placement = Pick<Ship, 'id' | 'x' | 'y' | 'dir'>;
+export type Placement = Pick<Ship, 'id' | 'x' | 'y' | 'dir' | 'rev'>;
 /** Private record of a captain's hidden moves, revealed after the battle for verification. */
-export type Act = { k: 'sail'; id: number; delta: 1 | -1; steps: number } | { k: 'turn'; id: number } | { k: 'repair'; id: number; idx: number };
+export type Act = { k: 'sail'; id: number; delta: 1 | -1; steps: number } | { k: 'turn'; id: number; way: Way } | { k: 'repair'; id: number; idx: number };
 
 export type Body =
   | { t: 'ready'; hash: string; name: string }
@@ -282,7 +282,7 @@ export function reduce(p: Pub, m: Msg): boolean {
 }
 
 export async function commitHash(initial: Placement[], salt: string): Promise<string> {
-  const data = new TextEncoder().encode(JSON.stringify(initial.map((s) => [s.id, s.x, s.y, s.dir])) + salt);
+  const data = new TextEncoder().encode(JSON.stringify(initial.map((s) => [s.id, s.x, s.y, s.dir, s.rev ? 1 : 0])) + salt);
   const buf = await crypto.subtle.digest('SHA-256', data);
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
@@ -410,7 +410,7 @@ export class Client {
   /* ---------- actions ---------- */
   async ready(): Promise<boolean> {
     if (this.pub.phase !== 'placement' || this.side.ready || this.inFlight || !legalPlacement(this.ships)) return false;
-    this.initial = this.ships.map(({ id, x, y, dir }) => ({ id, x, y, dir }));
+    this.initial = this.ships.map(({ id, x, y, dir, rev }) => ({ id, x, y, dir, rev: !!rev }));
     this.salt = Array.from({ length: 16 }, () => Math.floor(this.rnd() * 36).toString(36)).join('');
     this.inFlight++;
     const hash = await commitHash(this.initial, this.salt);
@@ -459,7 +459,7 @@ export class Client {
     const k = this.pub.kraken, s = this.ships.find((q) => q.id === id);
     return !!k && k.side === this.me && !!s && !s.sunk && shipCells(s).some(([x, y]) => inKraken(k.x, k.y, x, y));
   }
-  reach(id: number, delta: 1 | -1) { return this.can(1) && !this.held(id) ? sailReach(this.ships, id, delta) : 0; }
+  reach(id: number, delta: 1 | -1 = 1) { return this.can(1) && !this.held(id) ? sailReach(this.ships, id, delta) : 0; }
   sail(id: number, delta: 1 | -1, steps = this.reach(id, delta)): boolean {
     if (!this.can(1) || this.held(id)) return false;
     const from = this.middle(id), debris = sailShip(this.ships, id, delta, steps);
@@ -469,11 +469,11 @@ export class Client {
     return true;
   }
 
-  canTurn(id: number) { return this.can(1) && !this.held(id) && canTurnShip(this.ships, id); }
-  turn(id: number): boolean {
+  canTurn(id: number, way: Way = 'right') { return this.can(1) && !this.held(id) && canTurnShip(this.ships, id, way); }
+  turn(id: number, way: Way = 'right'): boolean {
     const from = this.middle(id);
-    if (!this.can(1) || this.held(id) || !turnShip(this.ships, id)) return false;
-    this.acts.push({ k: 'turn', id });
+    if (!this.can(1) || this.held(id) || !turnShip(this.ships, id, way)) return false;
+    this.acts.push({ k: 'turn', id, way });
     this.moved(id, 'turn', [], from);
     return true;
   }

@@ -3,7 +3,9 @@
 import { Client } from './engine';
 import { ITEMS, Item } from './powerups';
 import { SEASON, inStorm } from './engine';
-import { MAELSTROM_ROUND, N, Rnd, Ship, ZONE, inBoard, inZone, safe, shipCells, turned } from './rules';
+import { MAELSTROM_ROUND, N, Rnd, Ship, Way, ZONE, ahead, headingOf, inBoard, inZone, safe, shipCells, turned } from './rules';
+
+const WAYS: Way[] = ['right', 'left'];
 
 const NEIGH = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
@@ -68,14 +70,16 @@ export function botAct(c: Client, rnd: Rnd = Math.random): boolean {
     const hunted = mer.hits.some(Boolean) || me.shots.some((s) => p.round - s.round <= 1 && cells.some(([x, y]) => Math.abs(x - s.x) <= 2 && Math.abs(y - s.y) <= 2));
     if (hunted && c.canPower() && rnd() < 0.7) return c.power();
     const want = hunted ? 3 : Math.max(1, Math.ceil(left / turns));
-    if (mer.dir === 'v') {
-      // Mid side-step: shift a row, then point east again.
-      const d = c.reach(mer.id, 1) ? 1 : c.reach(mer.id, -1) ? -1 : 0;
-      if (c.laden === 1 && d) return c.sail(mer.id, d, 1);
-      if (c.canTurn(mer.id)) return c.turn(mer.id);
-    } else if (c.reach(mer.id, 1) > 0) {
+    const h = headingOf(mer);
+    if (h !== 0) {
+      // Not heading east: mid side-step, shift a row and then point her home again.
+      if (c.laden === 1 && c.reach(mer.id)) return c.sail(mer.id, 1, 1);
+      for (const w of (h === 1 ? ['left', 'right'] : ['right', 'left']) as Way[]) if (c.canTurn(mer.id, w)) return c.turn(mer.id, w);
+    } else if (c.reach(mer.id) > 0) {
       if (c.laden < want) return c.sail(mer.id, 1, 1);
-    } else if (left > 0 && c.laden === 0 && p.ap >= 3 && c.canTurn(mer.id)) return c.turn(mer.id); // the way east is blocked
+    } else if (left > 0 && c.laden === 0 && p.ap >= 3) {
+      for (const w of WAYS) if (c.canTurn(mer.id, w)) return c.turn(mer.id, w); // the way east is blocked
+    }
   }
   if (c.role === 'corsair' && p.round >= 3 && c.canPower() && !foe.wakes.length && p.cargo === 3 && rnd() < 0.5) return c.power();
   const wounded = c.ships.filter((s) => !s.sunk && s.hits.some(Boolean));
@@ -93,11 +97,9 @@ export function botAct(c: Client, rnd: Rnd = Math.random): boolean {
     const risk = (s: Pick<Ship, 'x' | 'y' | 'dir' | 'len'>) => shipCells(s).filter(([x, y]) => !safe(p.ring + 1, x, y)).length;
     for (const s of c.ships) {
       if (s.sunk || !risk(s)) continue;
-      for (const d of [1, -1] as const) {
-        const n = c.reach(s.id, d);
-        if (n && risk(s.dir === 'h' ? { ...s, x: s.x + d * n } : { ...s, y: s.y + d * n }) < risk(s)) return c.sail(s.id, d, n);
-      }
-      if (c.canTurn(s.id) && risk(turned(s)) < risk(s)) return c.turn(s.id);
+      const n = c.reach(s.id);
+      if (n && risk(ahead(s, n)) < risk(s)) return c.sail(s.id, 1, n);
+      for (const w of WAYS) if (c.canTurn(s.id, w) && risk(turned(s, w)) < risk(s)) return c.turn(s.id, w);
     }
   }
 
@@ -108,18 +110,14 @@ export function botAct(c: Client, rnd: Rnd = Math.random): boolean {
   if (p.ap >= 3) {
     for (const s of c.ships) {
       if (s.sunk || s.hits.some(Boolean)) continue;
-      for (const d of [1, -1] as const) {
-        const n = c.reach(s.id, d);
-        for (let k = 1; k <= n; k++) {
-          const moved = s.dir === 'h' ? { ...s, x: s.x + d * k } : { ...s, y: s.y + d * k };
-          if (p.treasures.some((t) => t.side === c.me && shipCells(moved).some(([a, b]) => a === t.x && b === t.y))) return c.sail(s.id, d, k);
-        }
+      for (let k = 1; k <= c.reach(s.id); k++) {
+        if (p.treasures.some((t) => t.side === c.me && shipCells(ahead(s, k)).some(([a, b]) => a === t.x && b === t.y))) return c.sail(s.id, 1, k);
       }
     }
     if (wounded.length && rnd() < 0.45) {
       const s = wounded[Math.floor(rnd() * wounded.length)];
-      for (const d of (rnd() < 0.5 ? [1, -1] : [-1, 1]) as (1 | -1)[]) if (c.reach(s.id, d) && c.sail(s.id, d)) return true;
-      if (c.canTurn(s.id) && c.turn(s.id)) return true;
+      if (c.reach(s.id) && c.sail(s.id, 1)) return true;
+      for (const w of rnd() < 0.5 ? WAYS : [...WAYS].reverse()) if (c.canTurn(s.id, w) && c.turn(s.id, w)) return true;
     }
   }
 

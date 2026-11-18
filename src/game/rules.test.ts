@@ -93,6 +93,39 @@ describe('resolution', () => {
   });
 });
 
+describe('headings', () => {
+  it('ships sail only ahead, whichever way they face', () => {
+    const east = [mk(0, 'frigate', 4, 3, 3, 'h')], west = [{ ...mk(0, 'frigate', 4, 3, 3, 'h'), rev: true }];
+    expect(sailReach(east, 0, -1)).toBe(0);
+    expect(sailShip(east, 0, -1, 1)).toBeNull();
+    expect(sailShip(east, 0, 1, 1)).toEqual([]);
+    expect(east[0].x).toBe(4);
+    expect(sailShip(west, 0, 1, 1)).toEqual([]);
+    expect(west[0].x).toBe(2);
+    west[0].hits[3] = true; // her stern section, at the high end because she faces west
+    expect(sailShip(west, 0, 1, 1)).toEqual([[5, 3]]);
+  });
+  it('turns to port and starboard about the middle, and four the same way come full circle', () => {
+    const s = [mk(0, 'line', 5, 5, 8, 'h')];
+    expect(turnShip(s, 0, 'right')).toBe(true); // east -> south
+    expect(s[0]).toMatchObject({ x: 7, y: 6, dir: 'v', rev: false });
+    expect(turnShip(s, 0, 'left')).toBe(true); // back to east
+    expect(s[0]).toMatchObject({ x: 5, y: 8, dir: 'h', rev: false });
+    expect(turnShip(s, 0, 'left')).toBe(true); // east -> north
+    expect(s[0]).toMatchObject({ x: 7, y: 6, dir: 'v', rev: true });
+    for (let i = 0; i < 4; i++) expect(turnShip(s, 0, 'right')).toBe(true);
+    expect(s[0]).toMatchObject({ x: 7, y: 6, dir: 'v', rev: true });
+  });
+  it('damage stays on the same timbers through a turn', () => {
+    const s = [mk(0, 'frigate', 4, 5, 8, 'h')];
+    s[0].hits[3] = true; // the bow, at (8,8)
+    turnShip(s, 0, 'right'); turnShip(s, 0, 'right'); // now heading west, bow at the low end
+    expect(s[0]).toMatchObject({ dir: 'h', rev: true });
+    expect(s[0].hits).toEqual([true, false, false, false]);
+    expect(resolveAttack(s, [shipCells(s[0])[0]], false).results[0].r).toBe('wreck');
+  });
+});
+
 describe('protocol', () => {
   it('starts with treasure, doubloons and orders once both are ready', async () => {
     const { a, b } = await duel();

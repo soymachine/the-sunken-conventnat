@@ -3,7 +3,8 @@ import * as THREE from 'three';
 import { N, cellName } from '../game/rules';
 
 /** Swell height at a world position. The ships ride the same function the shader draws. */
-export const waveH = (x: number, z: number, t: number) => 0.045 * Math.sin(x * 0.9 + t * 1.1) + 0.03 * Math.sin(z * 1.3 - t * 0.8 + x * 0.4);
+export const waveH = (x: number, z: number, t: number) =>
+  0.17 * Math.sin(x * 0.42 + t * 0.75) + 0.1 * Math.sin(z * 0.55 - t * 0.6 + x * 0.22) + 0.03 * Math.sin((x + z) * 1.3 + t * 1.4);
 
 function chartTexture(enemy: boolean): THREE.CanvasTexture {
   const u = 64, m = 32, S = N * u + 2 * m;
@@ -57,9 +58,10 @@ varying float vShade;
 void main() {
   vUv = uv;
   vec4 w = modelMatrix * vec4(position, 1.0);
-  float a = w.x * 0.9 + uTime * 1.1, b = w.z * 1.3 - uTime * 0.8 + w.x * 0.4;
-  w.y += 0.045 * sin(a) + 0.03 * sin(b);
-  vShade = 0.045 * 0.9 * cos(a) + 0.03 * 0.4 * cos(b) - 0.03 * 1.3 * cos(b);
+  // The whole sheet bends in long swells, like parchment lifted by the sea beneath it.
+  float a = w.x * 0.42 + uTime * 0.75, b = w.z * 0.55 - uTime * 0.6 + w.x * 0.22, c = (w.x + w.z) * 1.3 + uTime * 1.4;
+  w.y += 0.17 * sin(a) + 0.1 * sin(b) + 0.03 * sin(c);
+  vShade = 0.17 * 0.42 * cos(a) + 0.1 * (0.22 - 0.55) * cos(b) + 0.03 * 1.3 * cos(c) * 0.5;
   gl_Position = projectionMatrix * viewMatrix * w;
 }`;
 
@@ -104,7 +106,7 @@ void main() {
     col = mix(col, vec3(1.0, 0.95, 0.8), ring * 0.6);
     col = mix(col, INK, smoothstep(0.86, 0.99, sin(e * 15.0 - uTime * 2.6 - 0.9)) * smoothstep(0.1, 0.4, e) * 0.5);
     col *= 1.0 - 0.3 * smoothstep(1.4, 0.0, min(edge.x, edge.y));
-    col *= 0.97 + 2.2 * vShade;
+    col *= 0.97 + 2.6 * vShade;
     // Storm front: rows darken under slanting rain and flare with lightning.
     float st = uStorm.y * step(uStorm.x, p.y) * step(p.y, uStorm.x + 3.0);
     float rain = step(0.78, fract(p.x * 3.0 + p.y * 9.0 + uTime * 3.5));
@@ -139,7 +141,7 @@ export class Sea {
       vertexShader: VERT, fragmentShader: FRAG,
       uniforms: { uMap: { value: chartTexture(enemy) }, uEnergy: { value: this.tex }, uTime: { value: 0 }, uEnemy: { value: enemy ? 1 : 0 }, uN: { value: N }, uNight: { value: 0 }, uRing: { value: 0 }, uFlash: { value: 0 }, uStorm: { value: new THREE.Vector2(0, 0) } },
     });
-    const geo = new THREE.PlaneGeometry(N + 1, N + 1, 80, 80);
+    const geo = new THREE.PlaneGeometry(N + 1, N + 1, 96, 96);
     geo.rotateX(-Math.PI / 2);
     this.mesh = new THREE.Mesh(geo, this.mat);
   }

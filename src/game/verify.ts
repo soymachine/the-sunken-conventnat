@@ -21,7 +21,7 @@ export async function verify(log: Msg[], who: 0 | 1, role: Role = 'classic', see
   for (const [id, f] of FLEETS[role].entries()) {
     const pl = initial.find((q) => q.id === id);
     if (!pl) return 'a ship is missing from the placement';
-    const s: Ship = { id, kind: f.kind, cls: f.cls, len: f.len, x: pl.x, y: pl.y, dir: pl.dir, hits: new Array(f.len).fill(false), sunk: false };
+    const s: Ship = { id, kind: f.kind, cls: f.cls, len: f.len, x: pl.x, y: pl.y, dir: pl.dir, rev: !!pl.rev, hits: new Array(f.len).fill(false), sunk: false };
     if (f.kind === 'ironclad') s.armour = true;
     if (!fits(ships, s)) return 'the placement was not legal';
     ships.push(s);
@@ -41,7 +41,7 @@ export async function verify(log: Msg[], who: 0 | 1, role: Role = 'classic', see
         if (a.k === 'sail') {
           const debris = sailShip(ships, a.id, a.delta, a.steps);
           if (!debris || cells(debris) !== cells(m.debris || [])) return 'a ship sailed where it could not, or hid its wreckage';
-        } else if (a.k !== 'turn' || !turnShip(ships, a.id)) return 'an impossible turn';
+        } else if (a.k !== 'turn' || !turnShip(ships, a.id, a.way)) return 'an impossible turn';
         if (moving?.kind === 'merchant') {
           if (++laden >= 2 && m.wake === undefined) return 'the merchantman ran under full sail and hid its wake';
           if (!!m.home !== shipCells(moving).some(([x]) => x === N - 1)) return 'the merchantman did not truly reach home';

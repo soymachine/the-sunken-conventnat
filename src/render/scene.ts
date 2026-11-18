@@ -2,7 +2,7 @@
 // ride the swell and sink; everything else is rebuilt from the public state.
 import * as THREE from 'three';
 import { Pub, SidePub } from '../game/engine';
-import { Kind, N, START_COLS, Ship, ShotOutcome, ZONE, shipCells } from '../game/rules';
+import { Kind, N, START_COLS, Ship, ShotOutcome, ZONE, headingOf, shipCells } from '../game/rules';
 import { Fx } from './fx';
 import { Kraken } from './kraken';
 import { Post } from './post';
@@ -23,7 +23,7 @@ const C = { ink: 0x0d0b08, amber: 0xd9a441, parch: 0xe8d5a3, brass: 0xb08d3c, wa
 const HALF = N / 2;
 /** World position of each chart's (0,0) corner. Stacked on tall screens, side by side on wide ones. */
 const STACKED: Record<Side, { x: number; z: number }> = { enemy: { x: -HALF, z: -(N + 0.5) }, own: { x: -HALF, z: 0.5 } };
-const ABREAST: Record<Side, { x: number; z: number }> = { enemy: { x: -(N + 0.75), z: -HALF }, own: { x: 0.75, z: -HALF } };
+const ABREAST: Record<Side, { x: number; z: number }> = { own: { x: -(N + 0.75), z: -HALF }, enemy: { x: 0.75, z: -HALF } };
 let origin = STACKED;
 const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -149,14 +149,16 @@ export class SeaScene {
     this.sun.shadow.bias = -0.002;
     this.scene.add(this.sun);
     const table = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), new THREE.MeshLambertMaterial({ color: 0x120e09 }));
-    table.rotation.x = -Math.PI / 2; table.position.y = -0.08;
+    table.rotation.x = -Math.PI / 2; table.position.y = -1.2;
     this.scene.add(table);
     this.seas = { enemy: new Sea(true), own: new Sea(false) };
     for (const side of ['enemy', 'own'] as Side[]) {
       this.scene.add(this.seas[side].mesh);
       // The chart is drawn by its own shader, so a separate plane catches the ships' shadows.
-      const sh = new THREE.Mesh(new THREE.PlaneGeometry(N, N), new THREE.ShadowMaterial({ opacity: 0.32 }));
-      sh.rotation.x = -Math.PI / 2; sh.receiveShadow = true;
+      const shGeo = new THREE.PlaneGeometry(N, N, 32, 32);
+      shGeo.rotateX(-Math.PI / 2);
+      const sh = new THREE.Mesh(shGeo, new THREE.ShadowMaterial({ opacity: 0.32 }));
+      sh.receiveShadow = true; sh.userData.lift = 0.03;
       this.shadowPlanes.push(sh);
       this.scene.add(sh);
     }
@@ -219,18 +221,18 @@ export class SeaScene {
     this.fx.setScale(h * this.renderer.getPixelRatio() * 1.4);
     this.camera.aspect = w / h;
     const wide = w > 1000;
-    const safe = { side: wide ? 266 : 6, top: 74, bottom: wide ? 196 : 150 };
+    const safe = { left: wide ? 268 : 6, right: wide ? 18 : 6, top: 74, bottom: wide ? 196 : 150 };
     const layout = wide && w / h > 1.25 ? ABREAST : STACKED;
     const changed = layout !== origin || !this.laid;
     this.laid = true;
     origin = layout;
     (['enemy', 'own'] as Side[]).forEach((side, i) => {
       this.seas[side].mesh.position.set(origin[side].x + HALF, 0, origin[side].z + HALF);
-      this.shadowPlanes[i].position.set(origin[side].x + HALF, 0.085, origin[side].z + HALF);
+      this.shadowPlanes[i].position.set(origin[side].x + HALF, 0, origin[side].z + HALF);
     });
     this.dir.set(0, 1, layout === ABREAST ? 0.7 : 0.95).normalize();
     this.extent = layout === ABREAST ? { x: N + 0.75, z: HALF } : { x: HALF, z: N + 0.5 };
-    this.camera.setViewOffset(w, h, 0, (safe.bottom - safe.top) / 2, w, h);
+    this.camera.setViewOffset(w, h, (safe.right - safe.left) / 2, (safe.bottom - safe.top) / 2, w, h);
     this.camera.updateProjectionMatrix();
     const zoom = this.zoom, target = this.target.clone();
     this.zoom = 1; this.target.set(0, 0, 0);
@@ -240,7 +242,7 @@ export class SeaScene {
       const ok = [[-ex, -ez], [ex, -ez], [-ex, ez], [ex, ez]].every(([x, z]) => {
         const v = new THREE.Vector3(x, 0, z).project(this.camera);
         const px = ((v.x + 1) / 2) * w, py = ((1 - v.y) / 2) * h;
-        return px >= safe.side && px <= w - safe.side && py >= safe.top && py <= h - safe.bottom;
+        return px >= safe.left && px <= w - safe.right && py >= safe.top && py <= h - safe.bottom;
       });
       if (ok) break;
     }
@@ -305,16 +307,21 @@ export class SeaScene {
       if (o.fresh) { o.root.position.copy(o.pos); o.root.rotation.y = o.yaw; o.fresh = false; }
       const before = o.root.position.clone();
       o.root.position.lerp(o.pos, k);
-      o.root.rotation.y += (o.yaw - o.root.rotation.y) * k;
+      const swing = Math.atan2(Math.sin(o.yaw - o.root.rotation.y), Math.cos(o.yaw - o.root.rotation.y));
+      o.root.rotation.y += swing * k;
       const sea = this.seas[o.side], p = o.root.position;
       if (o.state === 'afloat') {
         // A moving hull leaves a wake and heels into its turn.
-        const speed = before.distanceTo(p) / Math.max(dt, 1e-3), turning = Math.abs(o.yaw - o.root.rotation.y);
+        const speed = before.distanceTo(p) / Math.max(dt, 1e-3), turning = Math.abs(swing);
         if (speed > 0.3) sea.bump(Math.floor(before.x - origin[o.side].x), Math.floor(before.z - origin[o.side].z), 0.06);
         const bob = calm ? 0 : 1;
-        o.tilt.position.y += (waveH(p.x, p.z, t) * 1.2 * bob + o.lift - o.tilt.position.y) * Math.min(1, k * 2);
-        o.tilt.rotation.x = bob * 0.055 * Math.sin(t * 1.25 + o.phase) + turning * 0.5;
-        o.tilt.rotation.z = bob * 0.022 * Math.sin(t * 0.9 + o.phase * 2.3) - Math.min(0.06, speed * 0.02);
+        // Ride the bending chart: rise with it and lean with its slope along and across the hull.
+        const cy = Math.cos(o.root.rotation.y), sy = Math.sin(o.root.rotation.y), half = o.len * 0.35;
+        const fore = waveH(p.x + cy * half, p.z - sy * half, t) - waveH(p.x - cy * half, p.z + sy * half, t);
+        const beam = waveH(p.x + sy * 0.3, p.z + cy * 0.3, t) - waveH(p.x - sy * 0.3, p.z - cy * 0.3, t);
+        o.tilt.position.y += (waveH(p.x, p.z, t) * bob + o.lift - o.tilt.position.y) * Math.min(1, k * 2);
+        o.tilt.rotation.x = bob * (0.04 * Math.sin(t * 1.25 + o.phase) - Math.atan2(beam, 0.6)) + turning * 0.5;
+        o.tilt.rotation.z = bob * (0.015 * Math.sin(t * 0.9 + o.phase * 2.3) + Math.atan2(fore, half * 2)) - Math.min(0.06, speed * 0.02);
         for (const [x, y] of o.cells) sea.hold(x, y, 0.55);
         if (o.model.funnel) this.fx.funnel(o.root.localToWorld(o.model.funnel.clone().setY(o.model.funnel.y + o.tilt.position.y)), dt);
       } else {
@@ -326,7 +333,7 @@ export class SeaScene {
           if (o.sink >= 1) o.state = 'wreck';
         } else for (const [x, y] of o.cells) sea.hold(x, y, 0.28);
         const e = o.sink * o.sink * (3 - 2 * o.sink);
-        o.tilt.position.y = -0.34 * e;
+        o.tilt.position.y = waveH(p.x, p.z, t) * (calm ? 0 : 1) - 0.34 * e;
         o.tilt.rotation.x = 0.55 * e;
         o.tilt.rotation.z = -0.16 * e;
         for (const m of o.model.mats) { m.uniforms.uTint.value.setHex(0x17120b); m.uniforms.uTintAmt.value = 0.55 * e; }
@@ -339,6 +346,14 @@ export class SeaScene {
     for (const p of this.puffs) { p.s.position.set(p.base.x + 0.5 * Math.sin(t * 0.3 + p.ph), p.base.y + 0.12 * Math.sin(t * 0.5 + p.ph * 2), p.base.z + 0.4 * Math.cos(t * 0.24 + p.ph)); }
     this.glints.forEach((g, i) => { g.scale.setScalar(1 + 0.12 * Math.sin(t * 3 + i)); g.rotation.y = t * 0.6 + i; });
     this.kraken.update(dt, t);
+    // Everything lying on the chart follows its swell.
+    const swell = calm ? () => 0 : (x: number, z: number) => waveH(x, z, t);
+    for (const grp of [this.marks, this.hl]) for (const c of grp.children) {
+      if (c.userData.drape) { this.drape(c as THREE.Mesh, swell); continue; }
+      c.userData.y0 ??= c.position.y;
+      c.position.y = c.userData.y0 + swell(c.position.x, c.position.z);
+    }
+    for (const sh of this.shadowPlanes) this.drape(sh, swell);
     if (this.stormy && (this.nextBolt -= dt) < 0) {
       this.nextBolt = 2.5 + Math.random() * 5;
       this.seas.own.flash(); this.seas.enemy.flash();
@@ -365,10 +380,17 @@ export class SeaScene {
     return o;
   }
 
-  private aim(o: ShipObj, s: Pick<Ship, 'x' | 'y' | 'dir' | 'len'>) {
+  /** Lay a flat, subdivided sheet over the swell. */
+  private drape(m: THREE.Mesh, swell: (x: number, z: number) => number) {
+    const pos = m.geometry.attributes.position, lift = m.userData.lift ?? 0.1;
+    for (let i = 0; i < pos.count; i++) pos.setY(i, swell(m.position.x + pos.getX(i), m.position.z + pos.getZ(i)) + lift);
+    pos.needsUpdate = true;
+  }
+
+  private aim(o: ShipObj, s: Pick<Ship, 'x' | 'y' | 'dir' | 'len' | 'rev'>) {
     const cs = shipCells(s), a = cellCenter({ side: o.side, x: cs[0][0], y: cs[0][1] }), b = cellCenter({ side: o.side, x: cs[cs.length - 1][0], y: cs[cs.length - 1][1] });
     o.pos.copy(a).add(b).multiplyScalar(0.5);
-    o.yaw = s.dir === 'h' ? 0 : -Math.PI / 2;
+    o.yaw = [0, -Math.PI / 2, Math.PI, Math.PI / 2][headingOf(s)];
     o.cells = cs;
   }
 
@@ -455,9 +477,12 @@ export class SeaScene {
 
   /** A flat tinted band over a block of cells. */
   private strip(side: Side, x: number, y: number, w: number, h: number, color: number, opacity: number, map?: THREE.Texture) {
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color, map, transparent: true, opacity, depthWrite: false }));
-    m.rotation.x = -Math.PI / 2;
-    m.position.set(origin[side].x + x + w / 2, 0.095, origin[side].z + y + h / 2);
+    const geo = new THREE.PlaneGeometry(w, h, Math.max(1, Math.round(w * 2)), Math.max(1, Math.round(h * 2)));
+    geo.rotateX(-Math.PI / 2);
+    const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color, map, transparent: true, opacity, depthWrite: false }));
+    m.userData.drape = true; m.userData.lift = 0.095;
+    m.frustumCulled = false;
+    m.position.set(origin[side].x + x + w / 2, 0, origin[side].z + y + h / 2);
     this.marks.add(m);
   }
 

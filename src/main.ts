@@ -1,8 +1,8 @@
 // Controller: lobby → session → one Client driving the scene and the HUD.
 import './ui/hud.css';
 import { Client, Msg, Snapshot, roleOf } from './game/engine';
-import { ITEMS, ITEM_IDS, Item } from './game/powerups';
-import { Dir, Ship, ZONE, attackCells, cellName, fits, inBoard, legalPlacement, randomFleet, shipAt, shipCells } from './game/rules';
+import { ITEMS, Item } from './game/powerups';
+import { Dir, Ship, Way, ZONE, ahead, attackCells, bowCell, cellName, fits, headingOf, inBoard, legalPlacement, randomFleet, shipAt, shipCells, turned } from './game/rules';
 import { verify } from './game/verify';
 import { createRoom, firebaseConfigured, joinRoom } from './net/firebase';
 import { LocalSession, Session } from './net/session';
@@ -32,8 +32,8 @@ const queue: Msg[] = [];
 
 const HINTS: Record<string, string> = {
   fire: 'Fire — pick a square in enemy waters. One point a shot.',
-  sail: 'Sail — pick one of your ships, then a square ahead or astern.',
-  turn: 'Turn — pick one of your ships to swing it a quarter turn.',
+  sail: 'Sail — pick one of your ships, then a square ahead of her bow. Ships cannot back up.',
+  turn: 'Turn — pick one of your ships, then the side her bow should swing to (or press Q for port, E for starboard).',
   broadside: 'Broadside — three squares in a line. Press R to swing the line.',
   chain: 'Chain shot — a hit pins that ship for its next turn.',
   spy: 'Cutter’s glass — count hull sections in a 5×5 patch of enemy water.',
@@ -106,6 +106,7 @@ function start(s: Session, name: string) {
 }
 
 function leave() {
+  stopCountdown();
   try { localStorage.removeItem(storeKey()); } catch { /* ignore */ }
   session?.close();
   session = null;
@@ -140,11 +141,26 @@ async function drain() {
   }
   busy = false;
   refresh();
-  if (c.pub.phase === 'battle' && c.can() && c.pub.ap === 0) {
-    const options = (c.has('winds') && !c.pub.windsUsed) || ITEM_IDS.some((i) => c.canBuy(i));
-    if (options) hud.setHint('No points left — visit the Quartermaster or turn the capstan to end your turn.');
-    else { await wait(400); if (c.can() && c.pub.ap === 0 && !busy) c.endTurn(); }
-  }
+  autoEnd();
+}
+
+/** Out of action points: the turn ends by itself after a short count, leaving time to buy or to use Trade Winds. */
+const AUTO_END_SECONDS = 4;
+let countdown: ReturnType<typeof setInterval> | undefined;
+function stopCountdown() { if (countdown) { clearInterval(countdown); countdown = undefined; if (session) hud.setHint(HINTS[mode] || ''); } }
+function autoEnd() {
+  stopCountdown();
+  const spent = () => !!session && c.pub.phase === 'battle' && c.can() && c.pub.ap === 0 && !busy;
+  if (!spent()) return;
+  let left = AUTO_END_SECONDS;
+  const tick = () => {
+    if (!spent()) { stopCountdown(); return; }
+    if (left <= 0) { stopCountdown(); c.endTurn(); return; }
+    hud.setHint(`No action points left — your turn ends in ${left}…`);
+    left--;
+  };
+  tick();
+  countdown = setInterval(tick, 1000);
 }
 
 function describe(m: Msg, mine: boolean) {
@@ -231,12 +247,25 @@ function setMode(m: Mode) {
 }
 
 function sailTargets(s: Ship): { cell: Cell; delta: 1 | -1; steps: number }[] {
-  const cs = shipCells(s), out: { cell: Cell; delta: 1 | -1; steps: number }[] = [];
-  const [dx, dy] = s.dir === 'h' ? [1, 0] : [0, 1];
-  const bow = cs[cs.length - 1], stern = cs[0];
-  for (let k = 1; k <= c.reach(s.id, 1); k++) out.push({ cell: { side: 'own', x: bow[0] + dx * k, y: bow[1] + dy * k }, delta: 1, steps: k });
-  for (let k = 1; k <= c.reach(s.id, -1); k++) out.push({ cell: { side: 'own', x: stern[0] - dx * k, y: stern[1] - dy * k }, delta: -1, steps: k });
+  const out: { cell: Cell; delta: 1 | -1; steps: number }[] = [];
+  // Only ahead: the square the bow would reach after each step.
+  for (let k = 1; k <= c.reach(s.id); k++) { const [x, y] = bowCell(ahead(s, k)); out.push({ cell: { side: 'own', x, y }, delta: 1, steps: k }); }
   return out;
+}
+
+const WAYS: Way[] = ['left', 'right'];
+/** Turn the selected ship; with a square given, towards whichever side's bow lands nearest to it. */
+function turnSelected(way?: Way, at?: { x: number; y: number }) {
+  if (!selected || !myTurn()) return;
+  const s = selected;
+  let pick = way;
+  if (!pick && at) {
+    const open = WAYS.filter((w) => c.canTurn(s.id, w)).map((w) => { const [bx, by] = bowCell(turned(s, w)); return { w, d: Math.abs(bx - at.x) + Math.abs(by - at.y), on: shipCells(turned(s, w)).some(([x, y]) => x === at.x && y === at.y) }; });
+    pick = open.filter((o) => o.on).sort((a, b) => a.d - b.d)[0]?.w;
+  }
+  if (!pick) return;
+  if (c.turn(s.id, pick)) { selected = null; return; }
+  hud.log(`The ${s.cls} cannot turn that way — ${c.held(s.id) ? 'the Kraken holds her' : s.chained ? 'she is pinned by chain shot' : s.hits.filter(Boolean).length >= 2 ? 'too badly damaged' : 'no sea room'}.`);
 }
 
 function zone(side: Cell['side'], x: number, y: number, color: number, opacity: number): Highlight[] {
@@ -270,16 +299,22 @@ function refresh() {
       if (mode === 'kraken') for (let b = y - 1; b <= y + 1; b++) for (let a = x - 1; a <= x + 1; a++) if (inBoard(a, b)) hl.push({ side, x: a, y: b, color: WAX, opacity: 0.5 });
     } else {
       if (mode === 'fog') hl.push(...zone(side, x, y, FOG, 0.45));
-      if ((mode === 'sail' && !selected) || mode === 'turn' || mode === 'shipwright') {
+      if ((mode === 'sail' && !selected) || (mode === 'turn' && !selected) || mode === 'shipwright') {
         const at = shipAt(c.ships, x, y);
         if (at && !at.ship.sunk) {
-          const ok = mode === 'sail' ? c.reach(at.ship.id, 1) + c.reach(at.ship.id, -1) > 0 : mode === 'turn' ? c.canTurn(at.ship.id) : at.ship.hits.some(Boolean);
+          const ok = mode === 'sail' ? c.reach(at.ship.id) > 0 : mode === 'turn' ? c.canTurn(at.ship.id, 'left') || c.canTurn(at.ship.id, 'right') : at.ship.hits.some(Boolean);
           for (const [a, b] of shipCells(at.ship)) hl.push({ side, x: a, y: b, color: ok ? AMBER : INK, opacity: 0.4 });
         }
       }
     }
   }
   if (myTurn() && mode === 'sail' && selected) for (const t of sailTargets(selected)) hl.push({ ...t.cell, color: AMBER, opacity: 0.7 });
+  if (myTurn() && mode === 'turn' && selected) for (const w of WAYS) {
+    if (!c.canTurn(selected.id, w)) continue;
+    // Show where she would lie, with the square her bow swings to marked strongly.
+    const t = turned(selected, w), [bx, by] = bowCell(t);
+    for (const [x, y] of shipCells(t)) hl.push({ side: 'own', x, y, color: AMBER, opacity: x === bx && y === by ? 0.8 : 0.28 });
+  }
   scene.setHighlights(hl);
 }
 
@@ -292,7 +327,10 @@ function moveLifted(cell: Cell) {
 }
 function rotateLifted() {
   if (!lifted || !selected) return;
-  selected.dir = selected.dir === 'h' ? 'v' : 'h';
+  // Step round the compass: east, south, west, north.
+  const h = (headingOf(selected) + 1) % 4;
+  selected.dir = h % 2 === 0 ? 'h' : 'v';
+  selected.rev = h >= 2;
   if (hover) moveLifted(hover);
   refresh();
 }
@@ -323,8 +361,15 @@ function battleClick(cell: Cell) {
   if (mode === 'shipwright') { if (!c.repair(x, y)) hud.log('Nothing to repair there.'); return; }
   const at = shipAt(c.ships, x, y);
   if (mode === 'turn') {
-    if (!at || at.ship.sunk) return;
-    if (!c.turn(at.ship.id)) hud.log(`The ${at.ship.cls} cannot turn — ${at.ship.chained ? 'she is pinned by chain shot' : at.ship.hits.filter(Boolean).length >= 2 ? 'too badly damaged' : 'no sea room'}.`);
+    // First click picks the ship, second picks the side her bow swings to.
+    if (selected && !(at && at.ship === selected && WAYS.every((w) => !shipCells(turned(selected!, w)).some(([a, b]) => a === x && b === y)))) {
+      const before = c.pub.ap;
+      turnSelected(undefined, { x, y });
+      if (c.pub.ap !== before || !selected) return;
+    }
+    selected = at && !at.ship.sunk ? at.ship : null;
+    if (selected && WAYS.every((w) => !c.canTurn(selected!.id, w))) { hud.log(`The ${selected.cls} cannot turn — ${c.held(selected.id) ? 'the Kraken holds her' : selected.chained ? 'she is pinned by chain shot' : selected.hits.filter(Boolean).length >= 2 ? 'too badly damaged' : 'no sea room'}.`); selected = null; }
+    refresh();
     return;
   }
   if (mode !== 'sail') return;
@@ -365,6 +410,7 @@ addEventListener('keydown', (e) => {
   if (k === 'f' || k === '1') setMode('fire');
   if (k === 's' || k === '2') setMode('sail');
   if (k === 't' || k === '3') setMode('turn');
+  if (mode === 'turn' && (k === 'q' || k === 'e')) turnSelected(k === 'q' ? 'left' : 'right');
   if (k === 'a' || k === '4') setMode('broadside');
   if (k === 'r') { aimDir = aimDir === 'h' ? 'v' : 'h'; refresh(); }
   if (k === ' ' && myTurn()) { e.preventDefault(); c.endTurn(); }

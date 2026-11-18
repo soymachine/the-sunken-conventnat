@@ -63,13 +63,15 @@ export class Hud {
         <h2>Quartermaster <span id="gold" title="Doubloons"></span></h2><ul id="shop"></ul>
         <h2>Your fleet</h2><ul id="fleet"></ul>
       </aside>
-      <aside class="card right"><h2>Captain's log</h2><ol id="log"></ol></aside>
+      <p class="toast" id="toast" role="status"></p>
       <div class="belt" id="belt"></div>
       <footer class="rail bottom">
         <div class="battle">
-          <svg class="telegraph" viewBox="0 0 260 150"></svg>
-          <div class="ap"><span class="lbl">Action points</span><div class="tray" id="tray"></div></div>
           <p id="hint"></p>
+          <div class="helm">
+            <svg class="telegraph" viewBox="0 0 260 150"></svg>
+            <div class="ap"><span class="lbl">Action points</span><div class="tray" id="tray"></div></div>
+          </div>
           <button class="capstan" id="endTurn" aria-label="End turn"><svg viewBox="0 0 100 100"></svg><span>End turn</span></button>
         </div>
         <div class="placing">
@@ -255,12 +257,14 @@ export class Hud {
   setVerdict(text: string) { this.q('#overVerify').textContent = text; }
 
   log(text: string, kind: '' | 'head' | 'bad' | 'good' = '') {
-    const li = document.createElement('li');
-    li.textContent = text;
-    if (kind) li.className = kind;
-    const ol = this.q('#log');
-    ol.prepend(li);
-    while (ol.children.length > 60) ol.lastChild!.remove();
+    // There is no log panel for now: the latest event shows briefly above the controls.
+    if (kind === 'head') return;
+    const t = this.q<HTMLElement>('#toast');
+    t.textContent = text;
+    t.className = 'toast show ' + kind;
+    t.style.animation = 'none';
+    void t.offsetWidth; // restart the fade
+    t.style.animation = '';
   }
-  clearLog() { this.q('#log').innerHTML = ''; this.setVerdict(''); }
+  clearLog() { this.q('#toast').className = 'toast'; this.setVerdict(''); }
 }
