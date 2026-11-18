@@ -1,0 +1,370 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Sunken Covenant Blueprints</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=IM+Fell+English:ital@0;1&family=IM+Fell+English+SC&display=swap">
+<style>
+/* Layout: a shipwright's portfolio — one draught per ship on parchment, then its four clean views. */
+:root{
+  color-scheme: dark;
+  --ink:#0d0b08; --sepia:#2a2116; --amber:#d9a441; --parch:#e8d5a3; --brass:#b08d3c; --muted:#a8946a;
+  --display:"IM Fell English SC","Iowan Old Style",Georgia,serif;
+  --body:"IM Fell English","Iowan Old Style",Georgia,serif;
+  --label:"Cinzel","Trajan Pro",Georgia,serif;
+}
+*{box-sizing:border-box}
+body{background:var(--ink);color:var(--parch);font-family:var(--body);font-size:18px;line-height:1.5;
+  padding-block:40px 80px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1280px;margin:0 auto;display:flex;flex-direction:column;gap:56px}
+header{display:flex;flex-direction:column;gap:12px;border-bottom:1px solid var(--brass);padding-bottom:26px}
+.eyebrow{font-family:var(--label);font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--muted)}
+h1{font-family:var(--display);font-weight:400;font-size:clamp(32px,5.5vw,58px);line-height:1.05;margin:0;color:var(--amber);letter-spacing:.03em;text-wrap:balance}
+h2{font-family:var(--display);font-weight:400;font-size:clamp(24px,3.2vw,32px);margin:0;color:var(--parch)}
+.lead{max-width:68ch;margin:0}
+.ship{display:flex;flex-direction:column;gap:16px}
+.frame{border:1px solid var(--brass);overflow-x:auto;background:#000}
+.frame svg{display:block;width:100%;min-width:880px;height:auto}
+.views{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
+.views figure{margin:0;min-width:0;display:flex;flex-direction:column;gap:6px}
+.views svg{display:block;width:100%;height:auto;border:1px solid var(--sepia)}
+.views figcaption{font-family:var(--label);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">The Sunken Covenant · Láminas técnicas</span>
+    <h1>Ship Draughts</h1>
+    <p class="lead">Seis barcos, cada uno con su lámina (perfil, planta, proa y popa) y las cuatro vistas sueltas sin rótulos. Todas las vistas de un barco salen de las mismas medidas, así que casan entre sí. La unidad es la casilla del tablero.</p>
+  </header>
+  <section class="ship"><h2>Fleet at one scale</h2><div class="frame" id="fleet"></div></section>
+  <div id="ships" class="wrap"></div>
+</div>
+
+<script>
+(function(){
+const NS='http://www.w3.org/2000/svg';
+const INK='#0d0b08', PARCH='#e8d5a3', WAX='#8c2f1b', SAIL='#f3e6c2';
+const F={d:'"IM Fell English SC",Georgia,serif',b:'"IM Fell English",Georgia,serif',l:'Cinzel,Georgia,serif'};
+
+/* One descriptor per ship feeds every view. Proportions follow the game's models (src/render/ships.ts). */
+const SHIPS=[
+ {id:'line',name:'Ship of the Line',trait:'Broadside',L:5,b:.37,depth:.40,draft:.30,stern:.55,bow:.25,rig:'square',masts:[.2,.47,.72],H:1.75,ports:7,decks:2,hull:'#241a10',strake:'#b08d3c',deck:'#80603a',
+  prompt:'A British 74-gun ship of the line of the early 1800s, three masts with square sails set, two gun decks with ochre strakes and black gun ports, high stern with gallery windows, bowsprit, low-poly stylised model, clean silhouette, no base.'},
+ {id:'frigate',name:'Frigate',trait:'Chain shot',L:4,b:.32,depth:.34,draft:.26,stern:.4,bow:.22,rig:'square',masts:[.2,.47,.73],H:1.5,ports:5,decks:1,hull:'#241a10',strake:'#8a6f2c',deck:'#80603a',
+  prompt:'A fast naval frigate of the early 1800s, three masts with square sails set, a single gun deck with one dark ochre strake and gun ports, sleek hull, bowsprit, low-poly stylised model, clean silhouette, no base.'},
+ {id:'ironclad',name:'Ironclad',trait:'Armour',L:3,b:.36,depth:.20,draft:.22,stern:.05,bow:.1,rig:'none',masts:[.82],H:.8,ports:0,decks:0,hull:'#2b2926',strake:'#57524b',deck:'#6a655d',
+  prompt:'An 1860s casemate ironclad warship, very low iron hull, sloped armoured casemate amidships with gun ports, one tall funnel, a ram bow, a short signal mast, riveted plates, no sails, low-poly stylised model, clean silhouette, no base.'},
+ {id:'schooner',name:'Schooner',trait:'Swift',L:3,b:.26,depth:.27,draft:.22,stern:.2,bow:.3,rig:'gaff',masts:[.36,.66],H:1.45,ports:2,decks:1,hull:'#2e2114',strake:'#5a4026',deck:'#8a6a40',
+  prompt:'A two-masted topsail schooner of the 1800s, slender hull, fore-and-aft gaff sails and a jib, raked masts, long bowsprit, low-poly stylised model, clean silhouette, no base.'},
+ {id:'cutter',name:'Cutter',trait:'Spyglass',L:2,b:.25,depth:.25,draft:.20,stern:.2,bow:.3,rig:'gaff',masts:[.52],H:1.25,ports:1,decks:1,hull:'#2e2114',strake:'#6b4e2c',deck:'#8a6a40',
+  prompt:'A small single-masted naval cutter of the 1800s, gaff mainsail and jib, short deep hull, long bowsprit, low-poly stylised model, clean silhouette, no base.'},
+ {id:'merchant',name:'Merchantman',trait:'Cargo',L:3,b:.40,depth:.34,draft:.28,stern:.4,bow:.15,rig:'square',masts:[.3,.68],H:1.3,ports:0,decks:0,cargo:true,hull:'#3a2a18',strake:'#cbb27a',deck:'#8a6a40',
+  prompt:'A broad-beamed merchant brig of the 1800s, two masts with square sails set, bluff bow, pale upper strake, three wooden cargo crates lashed on deck, no guns, low-poly stylised model, clean silhouette, no base.'},
+];
+window.SHIPS=SHIPS;
+
+function el(p,tag,a,t){const e=document.createElementNS(NS,tag);for(const k in a)e.setAttribute(k,a[k]);if(t!=null)e.textContent=t;p.appendChild(e);return e;}
+function txt(p,x,y,s,o){o=o||{};return el(p,'text',{x:x,y:y,'font-family':o.font||F.b,'font-size':o.size||22,fill:o.fill||INK,'text-anchor':o.anchor||'start','letter-spacing':o.ls||0,'font-style':o.italic?'italic':'normal','font-weight':o.weight||400},s);}
+const smooth=x=>{const t=Math.min(1,Math.max(0,x));return t*t*(3-2*t);};
+
+/* ---- shared geometry ---- */
+const hx=(D,t)=>D.L*(0.03+0.94*t);
+const sheer=(D,t)=>D.depth*(1+D.stern*smooth(1-t/0.28)+D.bow*smooth((t-0.72)/0.28));
+const half=(D,t)=>D.b*Math.max(0.02,t<0.1?0.72+0.28*(t/0.1):t<0.6?1:Math.pow(Math.cos(((t-0.6)/0.4)*Math.PI*0.5),0.75));
+const mastH=(D,i)=>D.H*(D.masts.length===3&&i===1?1.12:i===2?0.9:1);
+const TIERS=[[0.16,0.5,1],[0.69,0.25,0.74]];
+const sailW=(D,f)=>Math.min(1.0,half(D,f)*2.5);
+function boom(D,i){return Math.min(D.L*0.36,i===0&&D.masts.length>1?D.L*0.27:D.L*0.42);}
+function sprit(D){const a=16*Math.PI/180,len=D.L*0.26,x0=hx(D,1),y0=sheer(D,1)+0.04;return {x0,y0,x1:x0+Math.cos(a)*len,y1:y0+Math.sin(a)*len};}
+
+/** Extent of each view in squares: [minX, maxX, minY, maxY]. */
+function extent(D,view){
+  const top=Math.max(...D.masts.map((f,i)=>sheer(D,f)+mastH(D,i)))+0.2, sp=sprit(D);
+  if(view==='side')return [-0.12,D.rig==='none'?D.L*1.06:Math.max(sp.x1,D.L)+0.05,-D.draft-0.05,D.id==='ironclad'?Math.max(top,D.depth+0.95):top];
+  const yard=D.rig==='square'?Math.max(D.b,0.55):D.b;
+  if(view==='top')return [-0.08,D.rig==='none'?D.L*1.06:sp.x1+0.05,-yard-0.06,yard+0.06];
+  const w=Math.max(D.b*1.1,D.rig==='square'?0.58:D.b*1.1)+0.06;
+  return [-w,w,-D.draft-0.05,D.id==='ironclad'?Math.max(top,D.depth+0.95):top];
+}
+
+/**
+ * Draw one view. (ox, oy) is the pixel position of the origin (stern at the waterline for side and plan,
+ * centreline at the waterline for bow and stern); s is pixels per square. Returns the hull element.
+ */
+function draw(g,D,view,ox,oy,s,o){
+  o=o||{};
+  const lw=o.lw||Math.max(1.4,s*0.007), X=x=>ox+x*s, Y=y=>oy-y*s;
+  const P=pts=>pts.map(p=>X(p[0]).toFixed(1)+','+Y(p[1]).toFixed(1)).join(' ');
+  const poly=(pts,fill,extra)=>el(g,'polygon',Object.assign({points:P(pts),fill:fill||'none',stroke:INK,'stroke-width':lw,'stroke-linejoin':'round'},extra||{}));
+  const line=(a,b,w,extra)=>el(g,'line',Object.assign({x1:X(a[0]),y1:Y(a[1]),x2:X(b[0]),y2:Y(b[1]),stroke:INK,'stroke-width':(w||1)*lw,'stroke-linecap':'round'},extra||{}));
+  const thin={'stroke-width':lw*0.55}, N=24, ts=Array.from({length:N+1},(_,i)=>i/N);
+  let hull;
+
+  if(view==='side'){
+    const deck=ts.map(t=>[hx(D,t),sheer(D,t)]), x0=hx(D,0), x1=hx(D,1), ram=D.id==='ironclad';
+    const sternWL=[x0+0.015*D.L,0], bowWL=[x1+(ram?0.0:0.02*D.L),0];
+    // underwater body, drawn lighter
+    const under=[sternWL,bowWL].concat(ram?[[x1+0.09*D.L,-D.draft*0.55],[x1-0.1*D.L,-D.draft]]:[[x1-0.03*D.L,-D.draft*0.55],[x1-0.14*D.L,-D.draft]],[[x0+0.07*D.L,-D.draft],[x0+0.03*D.L,-D.draft*0.5]]);
+    poly(under,o.flat?'#6b5a44':'url(#hatch)',o.flat?{}:{});
+    // rudder
+    poly([[x0+0.02*D.L,0.03],[x0-0.012*D.L-0.03,-0.01],[x0-0.008*D.L-0.03,-D.draft*0.9],[x0+0.035*D.L,-D.draft*0.95]],o.flat?'#4a3a28':PARCH);
+    // topsides
+    hull=poly(deck.concat([bowWL,sternWL]),D.hull,{'class':'hull'});
+    poly(deck.concat(ts.slice().reverse().map(t=>[hx(D,t),sheer(D,t)*0.7])),D.strake);
+    el(g,'polyline',{points:P(ts.map(t=>[hx(D,t),sheer(D,t)*0.42])),fill:'none',stroke:D.strake,'stroke-width':lw*0.8,opacity:.8});
+    // gun ports
+    for(let k=0;k<D.ports;k++){const t=0.16+0.5*(k+0.5)/D.ports+0.04,x=hx(D,t),h=sheer(D,t),q=0.035;
+      poly([[x-q,h*0.86-q],[x+q,h*0.86-q],[x+q,h*0.86+q],[x-q,h*0.86+q]],INK,thin);
+      if(D.decks>1)poly([[x+0.06-q,h*0.55-q],[x+0.06+q,h*0.55-q],[x+0.06+q,h*0.55+q],[x+0.06-q,h*0.55+q]],INK,thin);}
+    // stern lantern and gallery
+    if(D.rig!=='none'){line([x0+0.01,sheer(D,0)],[x0-0.02,sheer(D,0)+0.13],0.7);el(g,'circle',{cx:X(x0-0.02),cy:Y(sheer(D,0)+0.16),r:s*0.03,fill:'#d9a441',stroke:INK,'stroke-width':lw*0.6});}
+    if(D.decks>0&&D.L>=4)for(let k=0;k<3;k++)poly([[x0+0.05+k*0.09,sheer(D,0.02)*0.78],[x0+0.11+k*0.09,sheer(D,0.02)*0.78],[x0+0.11+k*0.09,sheer(D,0.02)*0.9],[x0+0.05+k*0.09,sheer(D,0.02)*0.9]],SAIL,thin);
+    // anchor
+    if(D.rig!=='none'){const ax=hx(D,0.9),ay=sheer(D,0.9)*0.45;line([ax,ay+0.07],[ax,ay-0.05],0.8);el(g,'path',{d:`M${X(ax-0.05)},${Y(ay-0.01)} Q${X(ax)},${Y(ay-0.1)} ${X(ax+0.05)},${Y(ay-0.01)}`,fill:'none',stroke:INK,'stroke-width':lw*0.8});}
+    if(ram){
+      // casemate, funnel, pilot house
+      const c=D.L*0.47,wb=D.L*0.26,wt=D.L*0.175,y0=D.depth,y1=D.depth+0.24;
+      poly([[c-wb,y0],[c+wb,y0],[c+wt,y1],[c-wt,y1]],'#3d3a36');
+      for(const fx of [0.3,0.47,0.64]){const x=D.L*fx;poly([[x-0.05,y0+0.07],[x+0.05,y0+0.07],[x+0.05,y0+0.15],[x-0.05,y0+0.15]],INK,thin);line([x,y0+0.11],[x+0.0,y0+0.11],1);}
+      for(let k=0;k<7;k++)el(g,'circle',{cx:X(c-wb+0.06+k*(2*wb-0.12)/6),cy:Y(y0+0.03),r:Math.max(1,s*0.008),fill:INK});
+      poly([[c-0.08,y1],[c+0.08,y1],[c+0.075,y1+0.5],[c-0.075,y1+0.5]],'#1d1a17');
+      line([c-0.08,y1+0.16],[c+0.08,y1+0.16],0.7,{stroke:'#b08d3c'});line([c-0.078,y1+0.34],[c+0.078,y1+0.34],0.7,{stroke:'#b08d3c'});
+      poly([[c+wt-0.2,y1],[c+wt-0.04,y1],[c+wt-0.05,y1+0.11],[c+wt-0.19,y1+0.11]],'#57524b');
+    }
+    if(D.cargo){for(let i=0;i<3;i++){const x=i+0.5+(i===1?0.12:0),y=sheer(D,(x/D.L-0.03)/0.94);poly([[x-0.15,y-0.02],[x+0.15,y-0.02],[x+0.15,y+0.24],[x-0.15,y+0.24]],'#b08d3c');line([x-0.15,y+0.11],[x+0.15,y+0.11],0.5);line([x,y-0.02],[x,y+0.24],0.5);}}
+    // spars and sails
+    const sp=sprit(D);
+    if(D.rig!=='none')line([sp.x0,sp.y0],[sp.x1,sp.y1],2.2);
+    D.masts.forEach((f,i)=>{
+      const x=hx(D,f),base=sheer(D,f)-0.04,H=mastH(D,i),top=base+H;
+      if(D.rig==='square'){
+        const sw=sailW(D,f)*0.86;
+        for(const [at,hh,ww] of TIERS){const y0=base+H*at,y1=y0+H*hh,w=sw*ww/2;
+          poly([[x-w,y0],[x+w,y0],[x+w*0.9,y1],[x-w*0.9,y1]],SAIL);
+          for(let q=1;q<4;q++)line([x-w+q*w/2,y0],[x-w*0.9+q*w*0.45,y1],0.35,{opacity:.5});
+          line([x-w*0.98,y1],[x+w*0.98,y1],1.6);}
+        poly([[x-0.09,base+H*0.67],[x+0.09,base+H*0.67],[x+0.09,base+H*0.685],[x-0.09,base+H*0.685]],D.hull,thin);
+      } else if(D.rig==='gaff'){
+        const bm=boom(D,i),y0=base+0.16,y1=base+H*0.86;
+        poly([[x-0.02,y0],[x-bm,y0+0.03],[x-bm*0.82,y1-0.08],[x-0.02,y1]],SAIL);
+        for(let q=1;q<4;q++)line([x-0.02-q*(bm-0.02)/4,y0+q*0.0075],[x-0.02-q*(bm*0.82-0.02)/4,y1-q*0.02],0.35,{opacity:.5});
+        line([x,y0],[x-bm,y0+0.03],1.6);line([x,y1],[x-bm*0.82,y1-0.08],1.6);
+        if(i===D.masts.length-1){poly([[x+0.05,base+0.12],[sp.x1-0.05,sp.y1+0.02],[x+0.03,y1]],SAIL);}
+      }
+      // mast, stays, shrouds, flag
+      line([x,base],[x,top+(D.rig==='none'?0:0.12)],2.4);
+      if(D.rig!=='none'){
+        line([x,top*0.94],[x-0.12,base+0.02],0.5);line([x,top*0.7],[x-0.2,base+0.02],0.5);
+        if(i===D.masts.length-1)line([x,top*0.96],[sp.x1,sp.y1],0.5);
+        if(i>0)line([x,top*0.96],[hx(D,D.masts[i-1]),sheer(D,D.masts[i-1])-0.04+D.H*0.9],0.5);
+      }
+      poly([[x,top+(D.rig==='none'?-0.02:0.1)],[x-0.3,top+(D.rig==='none'?0.01:0.13)],[x-0.3,top+(D.rig==='none'?-0.08:0.03)],[x,top+(D.rig==='none'?-0.12:0)]],WAX,thin);
+    });
+    line([-0.1,0],[extent(D,'side')[1],0],0.5,{'stroke-dasharray':(lw*5)+' '+(lw*4),opacity:.7});
+    return hull;
+  }
+
+  if(view==='top'){
+    const port=ts.map(t=>[hx(D,t),-half(D,t)]), star=ts.slice().reverse().map(t=>[hx(D,t),half(D,t)]);
+    hull=poly(port.concat([[hx(D,1)+(D.id==='ironclad'?0:0.02*D.L),0]],star),D.strake,{'class':'hull'});
+    poly(ts.map(t=>[hx(D,t)+0.01,-half(D,t)*0.86]).concat(ts.slice().reverse().map(t=>[hx(D,t)+0.01,half(D,t)*0.86])),D.deck);
+    for(let k=1;k<5;k++){const z=half(D,0.4)*0.86*(k/5);for(const sg of [-1,1])el(g,'polyline',{points:P(ts.filter(t=>half(D,t)*0.86>z).map(t=>[hx(D,t),sg*z])),fill:'none',stroke:INK,'stroke-width':lw*0.3,opacity:.35});}
+    line([-0.06,0],[extent(D,'top')[1],0],0.45,{'stroke-dasharray':(lw*8)+' '+(lw*3)+' '+(lw*2)+' '+(lw*3),opacity:.7});
+    const sp=sprit(D);
+    if(D.rig!=='none')line([sp.x0-0.05,0],[sp.x1,0],2.2);
+    line([hx(D,0)+0.02,0],[hx(D,0)-0.05,0],2);
+    for(let k=0;k<D.ports;k++){const t=0.16+0.5*(k+0.5)/D.ports+0.04,x=hx(D,t),w=half(D,t);for(const sg of [-1,1])poly([[x-0.03,sg*w*0.5],[x+0.03,sg*w*0.5],[x+0.03,sg*w*0.84],[x-0.03,sg*w*0.84]],INK,thin);}
+    if(D.id==='ironclad'){
+      const c=D.L*0.47,wb=D.L*0.26,wt=D.L*0.175,zb=D.b*0.78,zt=D.b*0.5;
+      poly([[c-wb,-zb],[c+wb,-zb],[c+wb,zb],[c-wb,zb]],'#3d3a36');poly([[c-wt,-zt],[c+wt,-zt],[c+wt,zt],[c-wt,zt]],'#57524b');
+      for(const pr of [[c-wb,-zb,c-wt,-zt],[c+wb,-zb,c+wt,-zt],[c+wb,zb,c+wt,zt],[c-wb,zb,c-wt,zt]])line([pr[0],pr[1]],[pr[2],pr[3]],0.6);
+      for(const fx of [0.3,0.47,0.64])for(const sg of [-1,1])line([D.L*fx,sg*zb],[D.L*fx,sg*(zb+0.09)],2.2);
+      el(g,'circle',{cx:X(c),cy:Y(0),r:s*0.08,fill:'#1d1a17',stroke:INK,'stroke-width':lw});el(g,'circle',{cx:X(c),cy:Y(0),r:s*0.05,fill:INK});
+      poly([[c+wt-0.2,-0.08],[c+wt-0.04,-0.08],[c+wt-0.04,0.08],[c+wt-0.2,0.08]],'#6a655d');
+    } else {
+      // hatches between the masts
+      const fs=[0.08].concat(D.masts,[0.9]);
+      for(let i=1;i<fs.length-1;i++){const x=hx(D,(fs[i]+fs[i+1])/2),w=D.cargo?0.2:0.11,z=half(D,(fs[i]+fs[i+1])/2)*0.38;if(i<fs.length-2||D.masts.length===1)poly([[x-w,-z],[x+w,-z],[x+w,z],[x-w,z]],'#3b2a18',thin);}
+    }
+    if(D.cargo)for(let i=0;i<3;i++){const x=i+0.5+(i===1?0.12:0),z=i%2?0.1:-0.1;poly([[x-0.15,z-0.15],[x+0.15,z-0.15],[x+0.15,z+0.15],[x-0.15,z+0.15]],'#b08d3c');line([x-0.15,z],[x+0.15,z],0.5);}
+    D.masts.forEach((f,i)=>{
+      const x=hx(D,f);
+      if(D.rig==='square'){const w=sailW(D,f)/2;line([x+0.03,-w*1.03],[x+0.03,w*1.03],1.6);line([x+0.03,-w*0.76],[x+0.03,w*0.76],1.1,{opacity:.7});}
+      if(D.rig==='gaff')line([x,0],[x-boom(D,i),0],1.6);
+      el(g,'circle',{cx:X(x),cy:Y(0),r:s*0.04,fill:D.hull,stroke:INK,'stroke-width':lw});
+    });
+    return hull;
+  }
+
+  // bow and stern elevations
+  const bowView=view==='bow', hm=D.depth, b=D.b, sg=bowView?1:-1;
+  const sect=[[-b,hm],[-b,hm*0.45],[-b*0.96,0]], sectU=[[-b*0.96,0],[-b*0.62,-D.draft*0.72],[0,-D.draft],[b*0.62,-D.draft*0.72],[b*0.96,0]];
+  poly(sectU,o.flat?'#6b5a44':'url(#hatch)');
+  hull=poly(sect.concat([[b*0.96,0],[b,hm*0.45],[b,hm]]),D.hull,{'class':'hull'});
+  poly([[-b,hm],[-b,hm*0.7],[b,hm*0.7],[b,hm]],D.strake);
+  if(D.id==='ironclad'){
+    const zb=b*0.78,zt=b*0.5,y1=hm+0.24;
+    poly([[-zb,hm],[zb,hm],[zt,y1],[-zt,y1]],'#3d3a36');
+    poly([[-0.05,hm+0.07],[0.05,hm+0.07],[0.05,hm+0.15],[-0.05,hm+0.15]],INK,thin);
+    poly([[-0.08,y1],[0.08,y1],[0.075,y1+0.5],[-0.075,y1+0.5]],'#1d1a17');
+    line([-0.08,y1+0.16],[0.08,y1+0.16],0.7,{stroke:'#b08d3c'});line([-0.078,y1+0.34],[0.078,y1+0.34],0.7,{stroke:'#b08d3c'});
+    if(bowView)poly([[-0.05,-D.draft*0.3],[0.05,-D.draft*0.3],[0,-D.draft*0.75]],'#57524b');
+    const f=D.masts[0],base=sheer(D,f)-0.04;line([0,y1],[0,base+D.H],1.6,{opacity:.8});
+  } else {
+    if(bowView){
+      // the bows rising to the stem, and the bowsprit seen end-on
+      const hb=sheer(D,1), w8=half(D,0.82);
+      poly([[-w8,sheer(D,0.82)],[0,hb+0.02],[w8,sheer(D,0.82)],[w8*0.9,hm*0.7],[-w8*0.9,hm*0.7]],D.strake);
+      line([0,hb+0.02],[0,-D.draft],1.2);
+      const sp=sprit(D);el(g,'circle',{cx:X(0),cy:Y((sp.y0+sp.y1)/2),r:s*0.03,fill:D.hull,stroke:INK,'stroke-width':lw});
+    } else {
+      // transom with gallery windows, rudder and lantern
+      const hs=sheer(D,0), wt=b*0.74;
+      poly([[-wt,hs],[wt,hs],[b*0.66,hm*0.3],[-b*0.66,hm*0.3]],D.strake);
+      const n=D.L>=4?5:3;for(let k=0;k<n;k++){const z=(k-(n-1)/2)*(wt*1.5/n);poly([[z-0.035,hs*0.62],[z+0.035,hs*0.62],[z+0.035,hs*0.84],[z-0.035,hs*0.84]],SAIL,thin);}
+      poly([[-0.03,hm*0.3],[0.03,hm*0.3],[0.03,-D.draft*0.95],[-0.03,-D.draft*0.95]],o.flat?'#4a3a28':PARCH);
+      line([0,hs],[0,hs+0.13],0.7);el(g,'circle',{cx:X(0),cy:Y(hs+0.16),r:s*0.03,fill:'#d9a441',stroke:INK,'stroke-width':lw*0.6});
+    }
+    if(D.cargo&&!bowView){const y=hm;poly([[-0.25,y+0.42],[0.05,y+0.42],[0.05,y+0.68],[-0.25,y+0.68]],'#b08d3c',{opacity:0});}
+    // masts stand in line: draw the tallest, with the sails of the widest
+    const order=D.masts.map((f,i)=>i).sort((a,c)=>mastH(D,a)-mastH(D,c));
+    for(const i of order){
+      const f=D.masts[i],base=sheer(D,f)-0.04,H=mastH(D,i),top=base+H;
+      if(D.rig==='square'){
+        const sw=sailW(D,f);
+        for(const [at,hh,ww] of TIERS){const y0=base+H*at,y1=y0+H*hh,w=sw*ww/2;
+          poly([[-w,y0],[w,y0],[w*0.94,y1],[-w*0.94,y1]],SAIL);
+          for(let q=1;q<4;q++)line([-w+q*w/2,y0],[-w*0.94+q*w*0.47,y1],0.35,{opacity:.5});
+          line([-w*1.04,y1],[w*1.04,y1],1.6);}
+      } else if(D.rig==='gaff'){
+        const y0=base+0.16,y1=base+H*0.86;
+        poly([[-0.02,y0],[0.02+0.05*sg,y0+0.02],[0.03*sg,y1-0.04],[-0.015,y1]],SAIL);
+      }
+      line([0,base],[0,top+0.12],2.4);
+      line([0,top*0.94],[-half(D,f),sheer(D,f)],0.5);line([0,top*0.94],[half(D,f),sheer(D,f)],0.5);
+      line([0,top*0.7],[-half(D,f)*0.96,sheer(D,f)],0.5);line([0,top*0.7],[half(D,f)*0.96,sheer(D,f)],0.5);
+    }
+    const tall=order[order.length-1],tb=sheer(D,D.masts[tall])-0.04+mastH(D,tall);
+    poly([[0,tb+0.1],[0.14*sg,tb+0.12],[0.14*sg,tb+0.03],[0,tb]],WAX,thin);
+  }
+  line([-extent(D,view)[1],0],[extent(D,view)[1],0],0.5,{'stroke-dasharray':(lw*5)+' '+(lw*4),opacity:.7});
+  return hull;
+}
+
+function defs(svg){
+  const d=el(svg,'defs',{});
+  const p=el(d,'pattern',{id:'hatch',width:9,height:9,patternUnits:'userSpaceOnUse',patternTransform:'rotate(40)'});
+  el(p,'rect',{width:9,height:9,fill:'#d9c48f'});el(p,'line',{x1:0,y1:0,x2:0,y2:9,stroke:INK,'stroke-width':1.3,opacity:.55});
+  const f=el(d,'filter',{id:'paper',x:0,y:0,width:'100%',height:'100%'});
+  el(f,'feTurbulence',{type:'fractalNoise',baseFrequency:'0.012',numOctaves:4,seed:7,result:'n'});
+  el(f,'feColorMatrix',{in:'n',type:'matrix',values:'0 0 0 0 0.05  0 0 0 0 0.04  0 0 0 0 0.02  0 0 0 0.22 0'});
+  el(f,'feComposite',{operator:'over',in2:'SourceGraphic'});
+}
+
+/** A dimension line with ticks and a label. */
+function dim(g,x1,y1,x2,y2,label,side){
+  const a={stroke:INK,'stroke-width':1.6};
+  el(g,'line',Object.assign({x1,y1,x2,y2},a));
+  const vert=Math.abs(x2-x1)<1;
+  for(const [x,y] of [[x1,y1],[x2,y2]])el(g,'line',Object.assign(vert?{x1:x-9,y1:y,x2:x+9,y2:y}:{x1:x,y1:y-9,x2:x,y2:y+9},a));
+  if(vert){const t=txt(g,x1+(side||1)*16,(y1+y2)/2,label,{font:F.l,size:17,anchor:'middle',ls:1.5,weight:500});t.setAttribute('transform',`rotate(-90 ${x1+(side||1)*16} ${(y1+y2)/2})`);}
+  else txt(g,(x1+x2)/2,y1+(side||1)*26+(side<0?8:0),label,{font:F.l,size:17,anchor:'middle',ls:1.5,weight:500});
+}
+
+/* ---- the full draught ---- */
+function sheet(D){
+  const W=2400,H=1500,svg=document.createElementNS(NS,'svg');
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`);svg.dataset.out=D.id+'-sheet';svg.dataset.w=W;svg.dataset.h=H;
+  svg.setAttribute('role','img');svg.setAttribute('aria-label','Draught of the '+D.name);
+  defs(svg);
+  el(svg,'rect',{width:W,height:H,fill:PARCH});el(svg,'rect',{width:W,height:H,fill:PARCH,filter:'url(#paper)'});
+  el(svg,'rect',{x:26,y:26,width:W-52,height:H-52,fill:'none',stroke:INK,'stroke-width':4});el(svg,'rect',{x:38,y:38,width:W-76,height:H-76,fill:'none',stroke:INK,'stroke-width':1.2});
+  const es=extent(D,'side'),et=extent(D,'top'),ef=extent(D,'bow');
+  // one scale for all four views
+  const s=Math.min(1380/(es[1]-es[0]),690/(es[3]-es[2]),330/(et[3]-et[2]),330/(ef[1]-ef[0]));
+  const ox=110-es[0]*s, wl=250+es[3]*s, g=el(svg,'g',{});
+  txt(svg,110,205,'SHEER DRAUGHT · STARBOARD SIDE',{font:F.l,size:17,ls:4,weight:700,fill:WAX});
+  const hSide=draw(g,D,'side',ox,wl,s);
+  const py=wl+D.draft*s+150+et[3]*s;
+  txt(svg,110,py-et[3]*s-34,'DECK PLAN',{font:F.l,size:17,ls:4,weight:700,fill:WAX});
+  const hTop=draw(g,D,'top',ox,py,s);
+  const cx1=1740,cx2=2110;
+  txt(svg,cx1,205,'BOW',{font:F.l,size:17,ls:4,weight:700,fill:WAX,anchor:'middle'});txt(svg,cx2,205,'STERN',{font:F.l,size:17,ls:4,weight:700,fill:WAX,anchor:'middle'});
+  const hBow=draw(g,D,'bow',cx1,wl,s);draw(g,D,'stern',cx2,wl,s);
+  // dimensions
+  const x0=ox+hx(D,0)*s,x1=ox+hx(D,1)*s,top=Math.max(...D.masts.map((f,i)=>sheer(D,f)-0.04+mastH(D,i)));
+  dim(svg,x0,wl+D.draft*s+44,x1,wl+D.draft*s+44,`LENGTH OF HULL · ${(D.L*0.94).toFixed(2)} SQ. (${D.L} SQUARES ON THE CHART)`,1);
+  dim(svg,ox+es[1]*s+34,wl-top*s,ox+es[1]*s+34,wl,`${D.id==='ironclad'?'MAST':'MAINMAST'} ABOVE WATER · ${top.toFixed(2)} SQ.`,1);
+  dim(svg,ox+es[1]*s+34,py-D.b*s,ox+es[1]*s+34,py+D.b*s,`BEAM · ${(2*D.b).toFixed(2)} SQ.`,1);
+  // freeboard and draught: one bracket, labels set level beside it so they cannot collide
+  const dx=cx2+ef[1]*s+30, ys=[wl-D.depth*s,wl,wl+D.draft*s];
+  el(svg,'line',{x1:dx,y1:ys[0],x2:dx,y2:ys[2],stroke:INK,'stroke-width':1.6});
+  for(const y of ys)el(svg,'line',{x1:dx-9,y1:y,x2:dx+9,y2:y,stroke:INK,'stroke-width':1.6});
+  txt(svg,dx+9,ys[2]+26,`FREEBOARD ${D.depth.toFixed(2)} (ABOVE W.L.)`,{font:F.l,size:14,ls:1,weight:500,anchor:'end'});
+  txt(svg,dx+9,ys[2]+46,`DRAUGHT ${D.draft.toFixed(2)} (BELOW)`,{font:F.l,size:14,ls:1,weight:500,anchor:'end'});
+  txt(svg,ox+es[1]*s-4,wl-8,'W.L.',{font:F.l,size:14,anchor:'end',ls:2});
+  // title block
+  txt(svg,110,118,D.name.toUpperCase(),{font:F.d,size:68,ls:5});
+  txt(svg,112,158,`${D.L} squares · ${D.rig==='square'?'square-rigged':D.rig==='gaff'?'fore-and-aft rigged':'steam, armoured'} · trait in the game: ${D.trait}`,{size:26,italic:true});
+  txt(svg,W-110,104,'THE SUNKEN COVENANT',{font:F.l,size:20,ls:6,anchor:'end',weight:700});
+  txt(svg,W-110,134,'Draught for modelling · all views to one scale',{size:21,italic:true,anchor:'end'});
+  // data and scale bar, lower right
+  const bx=1560,by=py-et[3]*s-34;
+  txt(svg,bx,by,'PARTICULARS',{font:F.l,size:17,ls:4,weight:700,fill:WAX});
+  const rows=[['Length of hull',(D.L*0.94).toFixed(2)+' sq.'],['Beam',(2*D.b).toFixed(2)+' sq.'],['Freeboard amidships',D.depth.toFixed(2)+' sq.'],['Draught',D.draft.toFixed(2)+' sq.'],
+    ['Masts',D.masts.length+(D.rig==='none'?' (signal)':'')],['Gun ports a side',D.ports?String(D.ports)+(D.decks>1?' on two decks':''):D.id==='ironclad'?'3 in the casemate':'none']];
+  rows.forEach((r,i)=>{txt(svg,bx,by+44+i*36,r[0],{size:24,italic:true});txt(svg,bx+700,by+44+i*36,r[1],{size:24,anchor:'end'});el(svg,'line',{x1:bx,y1:by+54+i*36,x2:bx+700,y2:by+54+i*36,stroke:INK,'stroke-width':.6,opacity:.5});});
+  const sy=H-96;
+  for(let k=0;k<4;k++)el(svg,'rect',{x:110+k*s/4,y:sy,width:s/4,height:12,fill:k%2?PARCH:INK,stroke:INK,'stroke-width':1.5});
+  txt(svg,110,sy-10,'SCALE · ONE SQUARE OF THE CHART',{font:F.l,size:15,ls:3,weight:500});
+  txt(svg,110+s+16,sy+12,'= '+Math.round(s)+' px',{size:20,italic:true});
+  for (const [k, e] of [['side', hSide], ['top', hTop], ['bow', hBow]]) e.dataset.view = k;
+  svg.dataset.scale = s;
+  return svg;
+}
+
+/* ---- a clean single view ---- */
+function single(D,view){
+  const S=1024,svg=document.createElementNS(NS,'svg');
+  svg.setAttribute('viewBox',`0 0 ${S} ${S}`);svg.dataset.out=D.id+'-'+view;svg.dataset.w=S;svg.dataset.h=S;
+  svg.setAttribute('role','img');svg.setAttribute('aria-label',D.name+', '+view+' view');
+  el(svg,'rect',{width:S,height:S,fill:'#f2efe6'});
+  const e=extent(D,view),s=Math.min(880/(e[1]-e[0]),880/(e[3]-e[2]));
+  const ox=S/2-((e[0]+e[1])/2)*s, oy=S/2+((e[2]+e[3])/2)*s;
+  draw(el(svg,'g',{}),D,view,ox,oy,s,{flat:true,lw:Math.max(2,s*0.006)});
+  return svg;
+}
+
+/* ---- the fleet at one scale ---- */
+(function(){
+  const W=2400,H=1500,svg=document.createElementNS(NS,'svg');
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`);svg.dataset.out='fleet';svg.dataset.w=W;svg.dataset.h=H;
+  svg.setAttribute('role','img');svg.setAttribute('aria-label','The six ships at one scale');
+  defs(svg);
+  el(svg,'rect',{width:W,height:H,fill:PARCH});el(svg,'rect',{width:W,height:H,fill:PARCH,filter:'url(#paper)'});
+  el(svg,'rect',{x:26,y:26,width:W-52,height:H-52,fill:'none',stroke:INK,'stroke-width':4});
+  txt(svg,110,112,'THE FLEET AT ONE SCALE',{font:F.d,size:58,ls:5});
+  txt(svg,112,150,'Starboard profiles. Each division of the rule is one square of the chart.',{size:25,italic:true});
+  const s=150,g=el(svg,'g',{});
+  const place=[[0,130,690],[1,1250,690],[2,130,1150],[3,700,1150],[4,1330,1150],[5,1770,1150]];
+  for(const [i,x,y] of place){const D=SHIPS[i];draw(g,D,'side',x,y-D.draft*s-70,s);
+    txt(svg,x,y,D.name.toUpperCase(),{font:F.l,size:19,ls:3,weight:700});txt(svg,x,y+28,`${D.L} squares · ${D.trait}`,{size:21,italic:true});}
+  for(let k=0;k<5;k++)el(svg,'rect',{x:130+k*s,y:1360,width:s,height:12,fill:k%2?PARCH:INK,stroke:INK,'stroke-width':1.5});
+  txt(svg,130,1346,'FIVE SQUARES',{font:F.l,size:15,ls:3,weight:500});
+  document.getElementById('fleet').appendChild(svg);
+})();
+
+const host=document.getElementById('ships');
+for(const D of SHIPS){
+  const sec=document.createElement('section');sec.className='ship';
+  sec.innerHTML=`<h2>${D.name}</h2><div class="frame"></div><div class="views"></div>`;
+  sec.querySelector('.frame').appendChild(sheet(D));
+  for(const v of ['side','top','bow','stern']){
+    const fig=document.createElement('figure');fig.appendChild(single(D,v));
+    const cap=document.createElement('figcaption');cap.textContent={side:'Profile',top:'Plan',bow:'Bow',stern:'Stern'}[v];fig.appendChild(cap);
+    sec.querySelector('.views').appendChild(fig);
+  }
+  host.appendChild(sec);
+}
+})();
+</script>
