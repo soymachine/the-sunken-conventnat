@@ -116,6 +116,27 @@ describe('headings', () => {
     for (let i = 0; i < 4; i++) expect(turnShip(s, 0, 'right')).toBe(true);
     expect(s[0]).toMatchObject({ x: 7, y: 6, dir: 'v', rev: true });
   });
+  it('a two-square cutter turns about her stern, so her bow always moves', () => {
+    const s = [mk(0, 'cutter', 2, 5, 5, 'h')]; // stern (5,5), bow (6,5), heading east
+    expect(turnShip(s, 0, 'right')).toBe(true); // bow swings south
+    expect(shipCells(s[0])).toEqual([[5, 5], [5, 6]]);
+    expect(s[0]).toMatchObject({ dir: 'v', rev: false });
+    expect(turnShip(s, 0, 'left')).toBe(true); // and back east
+    expect(shipCells(s[0])).toEqual([[5, 5], [6, 5]]);
+    expect(turnShip(s, 0, 'left')).toBe(true); // bow swings north
+    expect(shipCells(s[0])).toEqual([[5, 4], [5, 5]]);
+    expect(s[0]).toMatchObject({ dir: 'v', rev: true });
+    for (let i = 0; i < 4; i++) expect(turnShip(s, 0, 'left')).toBe(true);
+    expect(shipCells(s[0])).toEqual([[5, 4], [5, 5]]);
+  });
+  it('a four-square frigate turns about her second section and comes full circle', () => {
+    const s = [mk(0, 'frigate', 4, 5, 8, 'h')]; // sections at x 5..8, pivot (6,8)
+    expect(turnShip(s, 0, 'right')).toBe(true);
+    expect(shipCells(s[0])).toEqual([[6, 7], [6, 8], [6, 9], [6, 10]]);
+    expect(s[0].rev).toBe(false);
+    for (let i = 0; i < 3; i++) expect(turnShip(s, 0, 'right')).toBe(true);
+    expect(s[0]).toMatchObject({ x: 5, y: 8, dir: 'h', rev: false });
+  });
   it('damage stays on the same timbers through a turn', () => {
     const s = [mk(0, 'frigate', 4, 5, 8, 'h')];
     s[0].hits[3] = true; // the bow, at (8,8)

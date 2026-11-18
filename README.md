@@ -21,7 +21,7 @@ Sink the whole enemy fleet. Each turn you have 3 action points.
 |---|---|---|
 | Fire one shot | 1 | `F` |
 | Sail a ship one square ahead (the Schooner sails two); ships cannot back up | 1 | `S` |
-| Turn a ship a quarter turn about her middle: pick her, then click the end where the bow should point (or `Q` port / `E` starboard) | 1 | `T` |
+| Turn a ship a quarter turn: pick her, then click on the side her bow should swing to (or `Q` port / `E` starboard). She pivots at or just aft of her middle | 1 | `T` |
 | Broadside (Ship of the Line): three squares in a line, `R` swings it | 2 | `A` |
 | Chain shot (Frigate): a hit pins that ship for its next turn | 2 | |
 | Cutter's glass: count hull sections in a 5×5 patch (the whole patch must lie on the chart) | 1 | |

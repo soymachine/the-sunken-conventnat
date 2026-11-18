@@ -21,7 +21,7 @@ export interface View { pub: Pub; me: 0 | 1; ships: Ship[]; selectedId?: number 
   hide?: Set<string>;
   /** Translucent previews of where a ship would lie after a turn. */
   ghosts?: Ghost[] }
-export interface Ghost { kind: Kind; len: number; x: number; y: number; dir: 'h' | 'v'; rev: boolean; from: [number, number]; state: 'hot' | 'idle' | 'bad';
+export interface Ghost { kind: Kind; len: number; x: number; y: number; dir: 'h' | 'v'; rev: boolean; from: [number, number]; pivot: [number, number]; state: 'hot' | 'idle' | 'bad';
   /** Draw the translucent ship itself (only for the turn being pointed at), not just its arrow. */
   ship: boolean }
 export type Sound = 'cannon' | 'splash' | 'hit' | 'clang' | 'sink' | 'coin' | 'glass' | 'roar' | 'thunder';
@@ -46,11 +46,14 @@ function sprite(draw: (g: CanvasRenderingContext2D) => void): THREE.Texture {
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
 }
-const labels = new Map<string, THREE.SpriteMaterial>();
-function label(text: string, color: string): THREE.Sprite {
+const labels = new Map<string, THREE.MeshBasicMaterial>();
+const labelGeo = new THREE.PlaneGeometry(0.92, 0.92);
+labelGeo.rotateX(-Math.PI / 2);
+/** A numbered disc lying flat on the chart, drawn beneath every other mark. */
+function label(text: string, color: string): THREE.Mesh {
   let m = labels.get(text + color);
   if (!m) {
-    m = new THREE.SpriteMaterial({ depthTest: false, map: sprite((g) => {
+    m = new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, map: sprite((g) => {
       g.fillStyle = '#0d0b08'; g.beginPath(); g.arc(64, 64, 50, 0, 7); g.fill();
       g.strokeStyle = color; g.lineWidth = 6; g.stroke();
       g.fillStyle = color; g.font = '700 56px Cinzel, Georgia, serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
@@ -58,8 +61,8 @@ function label(text: string, color: string): THREE.Sprite {
     }) });
     labels.set(text + color, m);
   }
-  const s = new THREE.Sprite(m);
-  s.scale.setScalar(0.85);
+  const s = new THREE.Mesh(labelGeo, m);
+  s.renderOrder = -1;
   return s;
 }
 /** Text laid flat along a chart edge, reading upwards. */
@@ -494,7 +497,7 @@ export class SeaScene {
       const box = new THREE.LineSegments(G.zone, side === 'enemy' ? M.lineAmber : M.lineWax);
       box.position.set(at.x, 0.12, at.z);
       const l = label(sc.count < 0 ? '?' : String(sc.count), side === 'enemy' ? '#d9a441' : '#c0563c');
-      l.position.set(at.x, 0.55, at.z);
+      l.position.set(at.x, 0.085, at.z);
       this.marks.add(box, l);
     }
     p.fogs.forEach((f, fi) => {
@@ -650,17 +653,22 @@ export class SeaScene {
       this.ghosts.add(root);
       // The sweep of the bow, as an arc with an arrowhead.
       const bow = gh.rev ? cs[0] : cs[cs.length - 1];
-      const p0 = cellCenter({ side: 'own', x: gh.from[0], y: gh.from[1] }), p2 = cellCenter({ side: 'own', x: bow[0], y: bow[1] });
-      const mid = p0.clone().add(p2).multiplyScalar(0.5), out = mid.clone().sub(root.position).setY(0);
-      const p1 = mid.clone().add(out.multiplyScalar(0.9));
+      // The arrowhead stands at least a square and a half out from the pivot, so a small ship's choices are as easy to see and hit as a big one's.
+      const pv = cellCenter({ side: 'own', x: gh.pivot[0], y: gh.pivot[1] }), bowAt = cellCenter({ side: 'own', x: bow[0], y: bow[1] });
+      const way = bowAt.clone().sub(pv).setY(0).normalize(), far = Math.max(1.5, bowAt.distanceTo(pv));
+      const p0 = cellCenter({ side: 'own', x: gh.from[0], y: gh.from[1] }), p2 = pv.clone().addScaledVector(way, far);
+      const ahead = p0.clone().sub(pv).setY(0), span = Math.max(far, ahead.length(), 1.5);
+      if (ahead.length() < 1.5) p0.copy(pv).addScaledVector(ahead.lengthSq() ? ahead.normalize() : way.clone().negate(), 1.5);
+      // Bulge the arc outward, away from the pivot, like the sweep of the bow.
+      const p1 = pv.clone().addScaledVector(p0.clone().sub(pv).setY(0).normalize().add(way), span * 0.95);
       const curve = new THREE.QuadraticBezierCurve3(p0.setY(1.0), p1.setY(1.0), p2.setY(1.0));
       // Bright enough to glow: these are the things to click.
       const glow = gh.state === 'bad' ? new THREE.Color(0.75, 0.16, 0.08) : gh.state === 'hot' ? new THREE.Color(2.6, 1.7, 0.4) : new THREE.Color(1.25, 0.85, 0.22);
       const mat = new THREE.MeshBasicMaterial({ color: glow, transparent: true, opacity: gh.state === 'idle' ? 0.85 : 1, depthWrite: false });
       const arc = new THREE.Mesh(new THREE.TubeGeometry(curve, 20, gh.state === 'hot' ? 0.07 : 0.045, 6), mat);
       // A bold arrowhead on the square the bow would point from, aimed the way she would head.
-      const head = new THREE.Mesh(new THREE.ConeGeometry(gh.state === 'hot' ? 0.42 : 0.32, gh.state === 'hot' ? 0.95 : 0.75, 12), mat), way = p2.clone().sub(root.position).setY(0).normalize();
-      head.position.copy(p2).addScaledVector(way, 0.25);
+      const head = new THREE.Mesh(new THREE.ConeGeometry(gh.state === 'hot' ? 0.5 : 0.4, gh.state === 'hot' ? 1.05 : 0.85, 12), mat);
+      head.position.copy(p2).addScaledVector(way, 0.3);
       head.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), way);
       const arrow = new THREE.Group();
       arrow.add(arc, head);

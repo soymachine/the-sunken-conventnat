@@ -2,7 +2,7 @@
 import './ui/hud.css';
 import { Client, Msg, Snapshot, roleOf } from './game/engine';
 import { ITEMS, Item } from './game/powerups';
-import { Dir, Ship, Way, ZONE, ahead, attackCells, bowCell, cellName, clampZone, fits, headingOf, inBoard, legalPlacement, randomFleet, shipAt, shipCells, turned } from './game/rules';
+import { Dir, Ship, Way, ZONE, ahead, attackCells, bowCell, cellName, clampZone, fits, headingOf, inBoard, legalPlacement, pivotCell, randomFleet, shipAt, shipCells, turned } from './game/rules';
 import { verify } from './game/verify';
 import { createRoom, firebaseConfigured, joinRoom } from './net/firebase';
 import { LocalSession, Session } from './net/session';
@@ -35,7 +35,7 @@ const queue: Msg[] = [];
 const HINTS: Record<string, string> = {
   fire: 'Fire — pick a square in enemy waters. One point a shot.',
   sail: 'Sail — pick one of your ships, then a square ahead of her bow. Ships cannot back up.',
-  turn: 'Turn — pick one of your ships, then click the end where her bow should point: an arrow marks each choice (or press Q for port, E for starboard).',
+  turn: 'Turn — pick one of your ships, then click on the side her bow should swing to: an arrow marks each choice (or press Q for port, E for starboard).',
   broadside: 'Broadside — three squares in a line. Press R to swing the line.',
   chain: 'Chain shot — a hit pins that ship for its next turn.',
   spy: 'Cutter’s glass — count hull sections in a 5×5 patch of enemy water.',
@@ -259,25 +259,26 @@ function sailTargets(s: Ship): { cell: Cell; delta: 1 | -1; steps: number }[] {
 
 const WAYS: Way[] = ['left', 'right'];
 const whyNot = (s: Ship) => (c.held(s.id) ? 'the Kraken holds her' : s.chained ? 'she is pinned by chain shot' : s.hits.filter(Boolean).length >= 2 ? 'she is too badly damaged' : 'there is no sea room');
-/** The squares on the bow side of the pivot after a turn: the end of the new line she would point from. */
-function bowHalf(s: Ship, w: Way): [number, number][] {
-  const mid = Math.floor(s.len / 2), [px, py] = shipCells(s)[s.rev ? s.len - 1 - mid : mid], t = turned(s, w), [bx, by] = bowCell(t);
-  return shipCells(t).filter(([x, y]) => (x - px) * Math.sign(bx - px) + (y - py) * Math.sign(by - py) > 0);
-}
 /**
  * Which turn the pointer is asking for. Port and starboard put her on the same line of squares and differ
- * only in which end the bow is at, so the choice is made by pointing at that end.
+ * only in which end the bow takes, so the choice is the side of her present line the pointer is on: anywhere
+ * within a few squares on the side the bow should swing to. Squares on her own line choose nothing.
  */
 function hoverWay(): Way | null {
   if (!selected || !hover || hover.side !== 'own') return null;
-  const on = WAYS.filter((w) => bowHalf(selected!, w).some(([x, y]) => x === hover!.x && y === hover!.y));
-  return on.length === 1 ? on[0] : null;
+  const s = selected, [px, py] = pivotCell(s), dx = hover.x - px, dy = hover.y - py, reach = Math.max(3, s.len);
+  if (Math.max(Math.abs(dx), Math.abs(dy)) > reach) return null;
+  for (const w of WAYS) {
+    const [bx, by] = bowCell(turned(s, w));
+    if (dx * Math.sign(bx - px) + dy * Math.sign(by - py) > 0) return w;
+  }
+  return null;
 }
 /** Arrows for both turns, and a translucent ship for the one being pointed at. */
 function turnGhosts(): Ghost[] {
   if (!session || mode !== 'turn' || !selected || !myTurn()) return [];
   const s = selected, hot = hoverWay(), from = bowCell(s);
-  return WAYS.map((w) => ({ kind: s.kind, ...turned(s, w), from, ship: hot === w, state: !c.canTurn(s.id, w) ? 'bad' as const : hot === w ? 'hot' as const : 'idle' as const }));
+  return WAYS.map((w) => ({ kind: s.kind, ...turned(s, w), from, pivot: pivotCell(s), ship: hot === w, state: !c.canTurn(s.id, w) ? 'bad' as const : hot === w ? 'hot' as const : 'idle' as const }));
 }
 function turnSelected(way: Way) {
   if (!selected || !myTurn()) return;
@@ -331,12 +332,9 @@ function refresh() {
   }
   if (myTurn() && mode === 'sail' && selected) for (const t of sailTargets(selected)) hl.push({ ...t.cell, color: AMBER, opacity: 0.7 });
   if (myTurn() && mode === 'turn' && selected) for (const w of WAYS) {
-    // The line she would lie on, with the end the bow would take marked more strongly.
-    const ok = c.canTurn(selected.id, w), hot = hoverWay() === w, half = bowHalf(selected, w);
-    for (const [x, y] of shipCells(turned(selected, w))) if (inBoard(x, y)) {
-      const bowEnd = half.some(([a, b]) => a === x && b === y);
-      hl.push({ side: 'own', x, y, color: ok ? AMBER : WAX, opacity: bowEnd ? (hot ? 0.7 : 0.38) : 0.12 });
-    }
+    // The line she would lie on, with the square the bow would take marked more strongly.
+    const ok = c.canTurn(selected.id, w), hot = hoverWay() === w, t = turned(selected, w), [bx, by] = bowCell(t);
+    for (const [x, y] of shipCells(t)) if (inBoard(x, y)) hl.push({ side: 'own', x, y, color: ok ? AMBER : WAX, opacity: x === bx && y === by ? (hot ? 0.75 : 0.42) : hot ? 0.3 : 0.12 });
   }
   scene.setHighlights(hl);
 }

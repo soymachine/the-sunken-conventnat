@@ -193,10 +193,18 @@ export function sailShip(ships: Ship[], id: number, delta: 1 | -1, steps: number
   return debris;
 }
 
-/** Where a ship would lie after a quarter turn to port (left) or starboard (right) about its middle. */
+/**
+ * The section a ship turns about, counted from the stern. It sits at or just aft of the middle, so the bow
+ * always swings to a new square — even on a two-square cutter, which turns about her stern.
+ */
+const pivotOf = (len: number) => Math.floor((len - 1) / 2);
+/** The square that stays put when the ship turns. */
+export const pivotCell = (s: Placed & Pick<Ship, 'rev'>): XY => { const mid = pivotOf(s.len); return shipCells(s)[s.rev ? s.len - 1 - mid : mid]; };
+
+/** Where a ship would lie after a quarter turn to port (left) or starboard (right) about its pivot. */
 export function turned(s: Ship, way: Way = 'right'): Placed & { rev: boolean } {
-  const h = (headingOf(s) + (way === 'right' ? 1 : 3)) % 4, mid = Math.floor(s.len / 2);
-  const [px, py] = shipCells(s)[s.rev ? s.len - 1 - mid : mid], [fx, fy] = HEAD[h];
+  const h = (headingOf(s) + (way === 'right' ? 1 : 3)) % 4, mid = pivotOf(s.len);
+  const [px, py] = pivotCell(s), [fx, fy] = HEAD[h];
   // Sections are counted from the stern; the middle one stays where it is.
   const stern: XY = [px - mid * fx, py - mid * fy], bow: XY = [px + (s.len - 1 - mid) * fx, py + (s.len - 1 - mid) * fy];
   return { x: Math.min(stern[0], bow[0]), y: Math.min(stern[1], bow[1]), dir: h % 2 === 0 ? 'h' : 'v', len: s.len, rev: h >= 2 };
