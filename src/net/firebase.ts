@@ -2,7 +2,7 @@
 // A room is an append-only log of messages; both captains replay it in key order.
 import { FirebaseApp, initializeApp } from 'firebase/app';
 import { connectAuthEmulator, getAuth, signInAnonymously } from 'firebase/auth';
-import { Database, connectDatabaseEmulator, get, getDatabase, off, onChildAdded, onDisconnect, onValue, push, ref, remove, set } from 'firebase/database';
+import { Database, connectDatabaseEmulator, get, getDatabase, off, onChildAdded, onDisconnect, onValue, orderByChild, push, query, ref, remove, serverTimestamp, set } from 'firebase/database';
 import { Mode, Msg } from '../game/engine';
 import { Session } from './session';
 
@@ -37,12 +37,14 @@ class FirebaseSession implements Session {
   constructor(public code: string, public me: 0 | 1, public seed: number, public mode: Mode) {}
   private at(path: string) { return ref(db, `rooms/${this.code}/${path}`); }
 
-  send(m: Msg) { void push(this.at('log'), { ...JSON.parse(JSON.stringify(m)), uid }); }
+  // Each message is stamped by the server. Push keys follow each sender's own clock, so two
+  // computers with different clocks would otherwise replay the log in the wrong order.
+  send(m: Msg) { void push(this.at('log'), { ...JSON.parse(JSON.stringify(m)), uid, ts: serverTimestamp() }); }
 
   listen(cb: (m: Msg) => void, onPresence?: (online: boolean) => void) {
-    const log = this.at('log');
+    const log = query(this.at('log'), orderByChild('ts'));
     onChildAdded(log, (snap) => {
-      const { uid: _u, ...m } = snap.val();
+      const { uid: _u, ts: _t, ...m } = snap.val();
       // The database drops empty arrays; put them back.
       if (m.t === 'move') m.debris ||= [];
       if (m.t === 'result' || m.t === 'drowned') m.results ||= [];
