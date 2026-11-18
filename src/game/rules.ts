@@ -7,7 +7,9 @@ export const ZONE = 2;
 
 export type Dir = 'h' | 'v';
 export type Rnd = () => number;
-export type Kind = 'line' | 'frigate' | 'ironclad' | 'schooner' | 'cutter';
+export type Kind = 'line' | 'frigate' | 'ironclad' | 'schooner' | 'cutter' | 'merchant';
+/** Which fleet a captain commands. Classic battles are symmetric; Convoy has two roles. */
+export type Role = 'classic' | 'admiral' | 'corsair';
 export type XY = [number, number];
 
 export const FLEET: { kind: Kind; cls: string; len: number; trait: string }[] = [
@@ -17,6 +19,14 @@ export const FLEET: { kind: Kind; cls: string; len: number; trait: string }[] = 
   { kind: 'schooner', cls: 'Schooner', len: 3, trait: 'Swift' },
   { kind: 'cutter', cls: 'Cutter', len: 2, trait: 'Spyglass' },
 ];
+const pick = (k: Kind) => FLEET.find((f) => f.kind === k)!;
+export const FLEETS: Record<Role, typeof FLEET> = {
+  classic: FLEET,
+  admiral: [pick('line'), pick('frigate'), pick('ironclad'), pick('cutter'), { kind: 'merchant', cls: 'Merchantman', len: 3, trait: 'Cargo' }],
+  corsair: [pick('frigate'), pick('schooner'), pick('schooner'), pick('cutter'), pick('cutter')],
+};
+/** The merchantman must start within this many columns of the western edge (the Colony). */
+export const START_COLS = 3;
 
 export interface Ship {
   id: number;
@@ -39,7 +49,9 @@ export type Revealed = Pick<Ship, 'kind' | 'cls' | 'len' | 'x' | 'y' | 'dir'>;
 type Placed = Pick<Ship, 'x' | 'y' | 'dir' | 'len'>;
 
 export type ShotOutcome = 'miss' | 'hit' | 'sunk' | 'wreck' | 'clang';
-export interface CellResult { x: number; y: number; r: ShotOutcome; ship?: Revealed }
+export interface CellResult { x: number; y: number; r: ShotOutcome; ship?: Revealed;
+  /** The shot struck the merchantman: a crate of cargo is plundered. */
+  cargo?: true }
 
 export const inBoard = (x: number, y: number) => x >= 0 && y >= 0 && x < N && y < N;
 export const inZone = (cx: number, cy: number, x: number, y: number) => Math.abs(x - cx) <= ZONE && Math.abs(y - cy) <= ZONE;
@@ -70,12 +82,17 @@ export function shipAt(ships: Ship[], x: number, y: number): { ship: Ship; idx: 
   return null;
 }
 
-export function randomFleet(rnd: Rnd): Ship[] {
+/** True when the merchantman (if the fleet has one) lies wholly inside the Colony's waters. */
+export function legalPlacement(ships: Ship[]): boolean {
+  return ships.every((s) => s.kind !== 'merchant' || shipCells(s).every(([x]) => x < START_COLS));
+}
+
+export function randomFleet(rnd: Rnd, role: Role = 'classic'): Ship[] {
   const ships: Ship[] = [];
-  FLEET.forEach((f, id) => {
+  FLEETS[role].forEach((f, id) => {
     for (;;) {
-      const dir: Dir = rnd() < 0.5 ? 'h' : 'v';
-      const cand = { x: Math.floor(rnd() * N), y: Math.floor(rnd() * N), dir, len: f.len };
+      const dir: Dir = f.kind === 'merchant' ? 'h' : rnd() < 0.5 ? 'h' : 'v';
+      const cand = { x: f.kind === 'merchant' ? 0 : Math.floor(rnd() * N), y: Math.floor(rnd() * N), dir, len: f.len };
       if (fits(ships, cand)) {
         const s: Ship = { id, kind: f.kind, cls: f.cls, ...cand, hits: new Array(f.len).fill(false), sunk: false };
         if (f.kind === 'ironclad') s.armour = true;
@@ -89,26 +106,28 @@ export function randomFleet(rnd: Rnd): Ship[] {
 
 const damage = (s: Ship) => s.hits.filter(Boolean).length;
 
-/** Resolve shots landing on a fleet. Mutates the ships. */
-export function resolveAttack(ships: Ship[], cells: XY[], chain: boolean): { results: CellResult[]; chained: boolean; lost: boolean } {
+/** Resolve shots landing on a fleet. Mutates the ships. `shield` blocks the first hit on the merchantman. */
+export function resolveAttack(ships: Ship[], cells: XY[], chain: boolean, shield = false): { results: CellResult[]; chained: boolean; lost: boolean; shielded: boolean } {
   const results: CellResult[] = [];
-  let chained = false;
+  let chained = false, shielded = false;
   for (const [x, y] of cells) {
     const at = shipAt(ships, x, y);
     if (!at) { results.push({ x, y, r: 'miss' }); continue; }
     const { ship, idx } = at;
     if (ship.sunk || ship.hits[idx]) { results.push({ x, y, r: 'wreck' }); continue; }
+    if (ship.kind === 'merchant' && shield && !shielded) { shielded = true; results.push({ x, y, r: 'clang' }); continue; }
     if (chain) { ship.chained = true; chained = true; }
     if (ship.armour) { ship.armour = false; results.push({ x, y, r: 'clang' }); continue; }
     ship.hits[idx] = true;
+    const cargo = ship.kind === 'merchant' ? { cargo: true as const } : {};
     if (ship.hits.every(Boolean)) {
       ship.sunk = true;
       ship.chained = false;
       const { kind, cls, len, dir } = ship;
-      results.push({ x, y, r: 'sunk', ship: { kind, cls, len, x: ship.x, y: ship.y, dir } });
-    } else results.push({ x, y, r: 'hit' });
+      results.push({ x, y, r: 'sunk', ship: { kind, cls, len, x: ship.x, y: ship.y, dir }, ...cargo });
+    } else results.push({ x, y, r: 'hit', ...cargo });
   }
-  return { results, chained, lost: ships.every((s) => s.sunk) };
+  return { results, chained, lost: ships.every((s) => s.sunk), shielded };
 }
 
 /** Number of cells holding a ship still afloat inside the zone centred on (x, y). */
@@ -168,7 +187,7 @@ export function turnShip(ships: Ship[], id: number): boolean {
 
 export function repairShip(ships: Ship[], id: number, idx: number): boolean {
   const s = ships.find((q) => q.id === id);
-  if (!s || s.sunk || !s.hits[idx]) return false;
+  if (!s || s.sunk || !s.hits[idx] || s.kind === 'merchant') return false; // plundered cargo is gone for good
   s.hits[idx] = false;
   return true;
 }

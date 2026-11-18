@@ -35,6 +35,20 @@ Sink the whole enemy fleet. Each turn you have 3 action points.
 - Spend doubloons at the Quartermaster: Spyglass, Fire Ship, Fog Bank, Shipwright, Trade Winds.
 - Admiralty Orders are a secret side-mission that pays doubloons.
 
+## Convoy mode
+
+Choose **Convoy** in the lobby for an asymmetric battle. The roles are drawn by lot.
+
+- **The Admiral** (Vice-Admiral Edmund Harrowgate) must sail the merchantman from the Colony (columns
+  A–C of their own chart) to the Home Port (column P) with at least one of its three crates aboard,
+  or sink every corsair. Fleet: Ship of the Line, Frigate, Ironclad, Cutter and the Merchantman.
+- **The Corsair** (Captain Mara Vane, "the Black Tide") must plunder all three crates, or keep the
+  cargo at sea until the season closes after round 12. Fleet: Frigate, two Schooners, two Cutters.
+- Each hit on the merchantman plunders a crate. The merchantman's first move in a turn is silent;
+  every further move that turn gives away the **row** she is in.
+- Each captain has one power per battle (1 action point): **Close Escort** turns aside the next hit
+  on the merchantman until the Admiral's next turn; **Dead Reckoning** tells the Corsair her column.
+
 ## Look
 
 The sea is a parchment chart drawn by a shader: ink strokes drift with the wind, hulls raise foam and

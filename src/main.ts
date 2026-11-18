@@ -1,8 +1,8 @@
 // Controller: lobby → session → one Client driving the scene and the HUD.
 import './ui/hud.css';
-import { Client, Msg, Snapshot } from './game/engine';
+import { Client, Msg, Snapshot, roleOf } from './game/engine';
 import { ITEMS, ITEM_IDS, Item } from './game/powerups';
-import { Dir, Ship, ZONE, attackCells, cellName, fits, inBoard, randomFleet, shipAt, shipCells } from './game/rules';
+import { Dir, Ship, ZONE, attackCells, cellName, fits, inBoard, legalPlacement, randomFleet, shipAt, shipCells } from './game/rules';
 import { verify } from './game/verify';
 import { createRoom, firebaseConfigured, joinRoom } from './net/firebase';
 import { LocalSession, Session } from './net/session';
@@ -48,17 +48,17 @@ const hud = new Hud({
   mute: () => sfx.toggle(),
   buy: (item) => { if (c.buy(item)) setMode(item === 'winds' ? mode : item); },
   endTurn: () => { if (!busy) c.endTurn(); },
-  shuffle: () => { if (canPlace()) { c.ships = randomFleet(Math.random); selected = lifted = null; refresh(); } },
+  shuffle: () => { if (canPlace()) { c.ships = randomFleet(Math.random, c.role); selected = lifted = null; refresh(); } },
   rotate: rotateLifted,
-  ready: () => { if (canPlace() && !lifted) void c.ready(); },
+  ready: () => { if (!canPlace() || lifted) return; if (!legalPlacement(c.ships)) hud.log('The merchantman must start in the Colony: columns A to C.', 'bad'); else void c.ready(); },
   leave,
 });
 const lobby = new Lobby({
-  bot: (name) => start(new LocalSession(), name),
-  create: async (name) => {
+  bot: (name, mode) => start(new LocalSession(mode), name),
+  create: async (name, mode) => {
     lobby.busy(true);
     try {
-      const s = await createRoom();
+      const s = await createRoom(mode);
       lobby.showCode(s.code);
       location.hash = s.code;
       await s.guest();
@@ -78,7 +78,7 @@ function save() { const k = storeKey(); if (k) try { localStorage.setItem(k, JSO
 
 function start(s: Session, name: string) {
   session = s;
-  c = new Client(s.me, s.seed, (m) => s.send(m), Math.random, name);
+  c = new Client(s.me, s.seed, (m) => s.send(m), Math.random, name, s.mode);
   let snap: Snapshot | null = null;
   try { snap = JSON.parse(localStorage.getItem(storeKey()) || 'null'); } catch { /* ignore */ }
   if (snap) c.restore(snap);
@@ -97,6 +97,7 @@ function start(s: Session, name: string) {
   lobby.show(false);
   hud.show(true);
   hud.setHint(HINTS.fire);
+  if (c.role !== 'classic' && !snap) hud.showRole(c.role);
   refresh();
   s.listen((m) => c.receive(m), (on) => { foeOnline = on; refresh(); });
   Object.assign(window, { __client: c, __screen: (cell: Cell) => scene.screen(cell), __bot: (s as LocalSession).bot });
@@ -123,6 +124,7 @@ async function drain() {
       const side = mine ? 'own' : 'enemy';
       await Promise.all(m.results.map((r, i) => wait(i * 130).then(() => scene.shot({ side, x: r.x, y: r.y }, r.r))));
     }
+    if (m.t === 'powerResult') sfx.play('glass');
     if (m.t === 'scanResult') await scene.sweep({ side: mine ? 'own' : 'enemy', x: m.x, y: m.y });
     if (m.t === 'move' && m.treasure) scene.coins({ side: mine ? 'own' : 'enemy', x: m.treasure[0], y: m.treasure[1] });
     if (m.t === 'move' && mine) sfx.play('creak');
@@ -150,13 +152,15 @@ function describe(m: Msg, mine: boolean) {
         if (!mine) { // my shot, answered by the enemy
           if (r.r === 'miss') hud.log(`Your shot at ${at} — only water.`);
           else if (r.r === 'wreck') hud.log(`Your shot at ${at} — wreckage, no new damage.`);
-          else if (r.r === 'clang') hud.log(`Your shot at ${at} rings off iron plate — an Ironclad!`, 'good');
+          else if (r.r === 'clang') hud.log(c.role === 'corsair' ? `Your shot at ${at} is turned aside — iron plate, or an escort.` : `Your shot at ${at} rings off iron plate — an Ironclad!`, 'good');
+          else if (r.cargo && r.r !== 'sunk') hud.log(`Your shot at ${at} strikes the merchantman — a crate is yours!`, 'good');
           else if (r.r === 'hit') hud.log(`Your shot at ${at} — a hit!`, 'good');
           else hud.log(`Your shot at ${at} — the enemy ${r.ship!.cls} goes down!`, 'good');
         } else {
           if (r.r === 'miss') hud.log(`Enemy shot at ${at} — only water.`);
           else if (r.r === 'wreck') hud.log(`Enemy shot at ${at} — wreckage.`);
           else if (r.r === 'clang') hud.log(`Enemy shot at ${at} glances off your Ironclad.`, 'bad');
+          else if (r.cargo && r.r !== 'sunk') hud.log(`Enemy shot at ${at} — the merchantman is hit and a crate is lost.`, 'bad');
           else if (r.r === 'hit') hud.log(`Enemy shot at ${at} — a hit on your fleet.`, 'bad');
           else hud.log(`Enemy shot at ${at} — your ${r.ship!.cls} is lost.`, 'bad');
         }
@@ -166,6 +170,7 @@ function describe(m: Msg, mine: boolean) {
     case 'move':
       hud.log(mine ? (m.kind === 'turn' ? 'You bring a ship about.' : 'You shift a ship.') : `${foe} shifts a ship, unseen.`);
       for (const [x, y] of m.debris) if (!mine) hud.log(`Wreckage drifts at ${cellName(x, y)}.`, 'good');
+      if (m.wake !== undefined) hud.log(mine ? `Under full sail your merchantman is sighted in row ${m.wake + 1}.` : `A laden ship is sighted under full sail in row ${m.wake + 1}.`, mine ? 'bad' : 'good');
       if (m.treasure) hud.log(mine ? 'Treasure hauled aboard — but your ship was sighted.' : `${foe} lifts a treasure at ${cellName(...m.treasure)} — a ship is there.`, 'good');
       break;
     case 'scan': if (!mine) hud.log(`${foe} trains a spyglass on ${cellName(m.x, m.y)}.`, 'bad'); break;
@@ -174,10 +179,15 @@ function describe(m: Msg, mine: boolean) {
     case 'fog': hud.log(mine ? 'Fog rolls over your waters.' : `Fog rolls over enemy waters near ${cellName(m.x, m.y)}.`); break;
     case 'repair': hud.log(mine ? 'Your shipwrights patch a section.' : 'Enemy shipwrights are at work.'); break;
     case 'winds': hud.log(mine ? 'The trade winds fill your sails: one more point.' : `${foe} catches the trade winds.`); break;
-    case 'order': if (!mine) hud.log(`The Admiralty rewards ${foe} with ${m.reward} doubloons.`); break;
+    case 'power':
+      if (roleOf(c.pub, m.by) === 'admiral') hud.log(mine ? 'Close Escort: your frigates close around the merchantman.' : 'The Admiral orders a close escort: the next hit on the merchantman will be turned aside.', mine ? 'good' : 'bad');
+      else if (!mine) hud.log('The Corsair works her dead reckoning…', 'bad');
+      break;
+    case 'powerResult': hud.log(mine ? `The Corsair has your merchantman's column: ${cellName(m.col, 0)[0]}.` : `Dead Reckoning: the merchantman is in column ${cellName(m.col, 0)[0]}.`, mine ? 'bad' : 'good'); break;
+    case 'order': if (!mine) hud.log(`${foe} fulfils secret orders: ${m.reward} doubloons.`); break;
     case 'endTurn': if (c.pub.current === 0 && c.pub.phase === 'battle') hud.log(`Round ${c.pub.round}`, 'head'); break;
     case 'reveal':
-      if (!mine && session?.code) void verify(c.log, c.foe).then((bad) => hud.setVerdict(bad ? `The enemy's log does not add up: ${bad}.` : "The enemy's log checks out: every shot was answered truthfully."));
+      if (!mine && session?.code) void verify(c.log, c.foe, roleOf(c.pub, c.foe)).then((bad) => hud.setVerdict(bad ? `The enemy's log does not add up: ${bad}.` : "The enemy's log checks out: every shot was answered truthfully."));
       break;
   }
 }
@@ -187,6 +197,7 @@ const canPlace = () => !!session && c.pub.phase === 'placement' && !c.side.ready
 const myTurn = () => !!session && c.can() && !busy;
 
 function setMode(m: Mode) {
+  if (m === 'power') { c.power(); return; }
   if (m === 'winds') { c.winds(); return; }
   mode = m;
   selected = null;
@@ -220,8 +231,9 @@ function refreshHud() {
 function refresh() {
   if (!session) return;
   refreshHud();
-  const invalid = !!lifted && !fits(c.ships, selected!, selected!.id);
-  scene.sync({ pub: c.pub, me: c.me, ships: c.ships, selectedId: selected?.id ?? null, invalid, lifted: !!lifted, quiet });
+  const invalid = !!lifted && (!fits(c.ships, selected!, selected!.id) || !legalPlacement(c.ships));
+  const convoy = c.role === 'classic' ? undefined : { side: c.role === 'admiral' ? 'own' as const : 'enemy' as const, zone: c.role === 'admiral' && c.pub.phase === 'placement' };
+  scene.sync({ pub: c.pub, me: c.me, ships: c.ships, selectedId: selected?.id ?? null, invalid, lifted: !!lifted, quiet, convoy });
   scene.setTurn(c.pub.phase !== 'battle' || c.myTurn);
   const hl: Highlight[] = [];
   if (myTurn() && hover) {
@@ -261,7 +273,7 @@ function rotateLifted() {
 function placementClick(cell: Cell) {
   if (cell.side !== 'own' || !canPlace()) return;
   if (lifted && selected) {
-    if (fits(c.ships, selected, selected.id)) selected = lifted = null;
+    if (fits(c.ships, selected, selected.id) && legalPlacement(c.ships)) selected = lifted = null;
   } else {
     const at = shipAt(c.ships, cell.x, cell.y);
     if (at) { selected = at.ship; lifted = { x: at.ship.x, y: at.ship.y, dir: at.ship.dir }; moveLifted(cell); }

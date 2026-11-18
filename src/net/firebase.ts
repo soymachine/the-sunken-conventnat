@@ -3,7 +3,7 @@
 import { FirebaseApp, initializeApp } from 'firebase/app';
 import { connectAuthEmulator, getAuth, signInAnonymously } from 'firebase/auth';
 import { Database, connectDatabaseEmulator, get, getDatabase, off, onChildAdded, onDisconnect, onValue, push, ref, remove, set } from 'firebase/database';
-import { Msg } from '../game/engine';
+import { Mode, Msg } from '../game/engine';
 import { Session } from './session';
 
 const env = import.meta.env;
@@ -34,7 +34,7 @@ const newCode = () => Array.from({ length: 4 }, () => ALPHABET[Math.floor(Math.r
 
 class FirebaseSession implements Session {
   private unsub: (() => void)[] = [];
-  constructor(public code: string, public me: 0 | 1, public seed: number) {}
+  constructor(public code: string, public me: 0 | 1, public seed: number, public mode: Mode) {}
   private at(path: string) { return ref(db, `rooms/${this.code}/${path}`); }
 
   send(m: Msg) { void push(this.at('log'), { ...JSON.parse(JSON.stringify(m)), uid }); }
@@ -69,13 +69,13 @@ class FirebaseSession implements Session {
 }
 export type { FirebaseSession };
 
-export async function createRoom(): Promise<FirebaseSession> {
+export async function createRoom(mode: Mode): Promise<FirebaseSession> {
   await connect();
   for (let tries = 0; tries < 6; tries++) {
     const code = newCode(), seed = Math.floor(Math.random() * 2 ** 31);
     try {
-      await set(ref(db, `rooms/${code}/meta`), { host: uid, seed, created: Date.now() });
-      return new FirebaseSession(code, 0, seed);
+      await set(ref(db, `rooms/${code}/meta`), { host: uid, seed, mode, created: Date.now() });
+      return new FirebaseSession(code, 0, seed, mode);
     } catch { /* code taken: try another */ }
   }
   throw new Error('Could not open a room. Try again.');
@@ -86,8 +86,9 @@ export async function joinRoom(code: string): Promise<FirebaseSession> {
   await connect();
   const meta = (await get(ref(db, `rooms/${code}/meta`))).val();
   if (!meta) throw new Error('No room with that code.');
-  if (meta.host === uid) return new FirebaseSession(code, 0, meta.seed);
+  const mode: Mode = meta.mode === 'convoy' ? 'convoy' : 'classic';
+  if (meta.host === uid) return new FirebaseSession(code, 0, meta.seed, mode);
   if (!meta.guest) await set(ref(db, `rooms/${code}/meta/guest`), uid).catch(() => { throw new Error('That room is already full.'); });
   else if (meta.guest !== uid) throw new Error('That room is already full.');
-  return new FirebaseSession(code, 1, meta.seed);
+  return new FirebaseSession(code, 1, meta.seed, mode);
 }

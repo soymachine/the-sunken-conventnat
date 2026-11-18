@@ -4,10 +4,14 @@
 import { Order, pickOrder } from './orders';
 import { ITEMS, Item, MAX_ITEMS, START_DOUBLOONS } from './powerups';
 import {
-  AP_PER_TURN, CellResult, Dir, Kind, N, Revealed, Rnd, Ship, XY, attackCells, countScan, inBoard, inZone, randomFleet,
+  AP_PER_TURN, CellResult, Dir, Kind, N, Revealed, Rnd, Role, Ship, XY, attackCells, countScan, inBoard, inZone, legalPlacement, randomFleet,
   repairShip, resolveAttack, sailReach, sailShip, shipAt, shipCells, turnShip, canTurnShip,
 } from './rules';
 
+export type Mode = 'classic' | 'convoy';
+/** Rounds the Admiral has to bring the cargo home. */
+export const SEASON = 12;
+export const CRATES = 3;
 export type AttackSrc = 'shot' | 'broadside' | 'chain' | 'fireship';
 export type Placement = Pick<Ship, 'id' | 'x' | 'y' | 'dir'>;
 /** Private record of a captain's hidden moves, revealed after the battle for verification. */
@@ -17,7 +21,9 @@ export type Body =
   | { t: 'ready'; hash: string; name: string }
   | { t: 'attack'; src: AttackSrc; cells: XY[] }
   | { t: 'result'; results: CellResult[]; chained: boolean; lost: boolean }
-  | { t: 'move'; kind: 'sail' | 'turn'; debris: XY[]; treasure?: XY }
+  | { t: 'move'; kind: 'sail' | 'turn'; debris: XY[]; treasure?: XY; wake?: number; home?: true }
+  | { t: 'power' }
+  | { t: 'powerResult'; col: number }
   | { t: 'scan'; x: number; y: number; src: 'cutter' | 'spyglass' }
   | { t: 'scanResult'; x: number; y: number; count: number }
   | { t: 'buy'; item: Item }
@@ -40,6 +46,8 @@ export interface SidePub {
   spotted: { x: number; y: number; round: number }[];
   scans: { x: number; y: number; count: number; round: number }[];
   fogs: { x: number; y: number; until: number }[];
+  /** Rows in which the laden merchantman was seen running under full sail. */
+  wakes: { y: number; round: number }[];
   doubloons: number;
   items: Item[];
   revealed?: Ship[];
@@ -57,14 +65,27 @@ export interface Pub {
   rng: number;
   sides: [SidePub, SidePub];
   treasures: Treasure[];
+  mode: Mode;
+  /** Convoy only: which captain drew the Admiral; the other is the Corsair. */
+  admiral: 0 | 1 | null;
+  /** Crates still aboard the merchantman. */
+  cargo: number;
+  /** Each captain's once-a-battle power has been spent. */
+  power: [boolean, boolean];
+  /** Column of the merchantman as revealed by Dead Reckoning. */
+  reckon?: { col: number; round: number };
+  /** How the battle ended. */
+  reason?: 'fleet' | 'plunder' | 'home' | 'season';
 }
+export const roleOf = (p: Pub, who: 0 | 1): Role => (p.admiral === null ? 'classic' : p.admiral === who ? 'admiral' : 'corsair');
 
 const COST: Record<AttackSrc, number> = { shot: 1, broadside: 2, chain: 2, fireship: 2 };
 export const attackCost = (src: AttackSrc) => COST[src];
 
-export function newPub(seed: number): Pub {
-  const side = (): SidePub => ({ name: '', ready: false, hash: '', shots: [], debris: [], sunk: [], spotted: [], scans: [], fogs: [], doubloons: START_DOUBLOONS, items: [], });
-  return { phase: 'placement', current: 0, ap: AP_PER_TURN, round: 1, winner: null, pending: false, windsUsed: false, rng: seed >>> 0 || 1, sides: [side(), side()], treasures: [] };
+export function newPub(seed: number, mode: Mode = 'classic'): Pub {
+  const side = (): SidePub => ({ name: '', ready: false, hash: '', shots: [], debris: [], sunk: [], spotted: [], scans: [], fogs: [], wakes: [], doubloons: START_DOUBLOONS, items: [] });
+  return { phase: 'placement', current: 0, ap: AP_PER_TURN, round: 1, winner: null, pending: false, windsUsed: false, rng: seed >>> 0 || 1, sides: [side(), side()], treasures: [],
+    mode, admiral: mode === 'convoy' ? ((((seed >>> 0) >> 3) & 1) as 0 | 1) : null, cargo: CRATES, power: [false, false] };
 }
 
 function rand(p: Pub): number {
@@ -103,15 +124,18 @@ export function reduce(p: Pub, m: Msg): boolean {
   if (m.t === 'reveal') { if (p.phase !== 'over') return false; mine.revealed = m.final; return true; }
   if (p.phase !== 'battle') return false;
 
-  if (m.t === 'result' || m.t === 'scanResult') {
+  if (m.t === 'result' || m.t === 'scanResult' || m.t === 'powerResult') {
     if (!p.pending || m.by === p.current) return false;
     p.pending = false;
+    if (m.t === 'powerResult') { p.reckon = { col: m.col, round: p.round }; return true; }
     if (m.t === 'scanResult') { mine.scans.push({ x: m.x, y: m.y, count: m.count, round: p.round }); return true; }
     const attacker = p.sides[foe];
     for (const r of m.results || []) {
       mine.shots = mine.shots.filter((s) => s.x !== r.x || s.y !== r.y);
       mine.shots.push({ x: r.x, y: r.y, result: r.r === 'miss' ? 'miss' : r.r === 'clang' ? 'clang' : 'hit', round: p.round });
       if (r.r === 'hit' || r.r === 'sunk') attacker.doubloons += 5;
+      if (r.cargo && p.cargo > 0) { p.cargo--; attacker.doubloons += 30; }
+      if (r.r === 'sunk' && r.ship?.kind === 'merchant') { p.phase = 'over'; p.winner = foe; p.reason = 'plunder'; }
       if (r.r === 'sunk' && r.ship) {
         attacker.doubloons += 20;
         mine.sunk.push(r.ship);
@@ -119,7 +143,7 @@ export function reduce(p: Pub, m: Msg): boolean {
         for (const s of mine.shots) if (cs.some(([a, b]) => a === s.x && b === s.y)) s.sunk = true;
       }
     }
-    if (m.lost) { p.phase = 'over'; p.winner = foe; }
+    if (m.lost && p.phase !== 'over') { p.phase = 'over'; p.winner = foe; p.reason = 'fleet'; }
     return true;
   }
 
@@ -153,6 +177,8 @@ export function reduce(p: Pub, m: Msg): boolean {
           mine.spotted.push({ x, y, round: p.round });
         }
       }
+      if (m.wake !== undefined) mine.wakes.push({ y: m.wake, round: p.round });
+      if (m.home && p.admiral === m.by && p.cargo > 0) { p.phase = 'over'; p.winner = m.by; p.reason = 'home'; }
       return true;
     }
     case 'buy': {
@@ -168,6 +194,11 @@ export function reduce(p: Pub, m: Msg): boolean {
       return true;
     case 'repair':
       return spend(ITEMS.shipwright.ap, 'shipwright');
+    case 'power':
+      if (p.mode !== 'convoy' || p.power[m.by] || !spend(1)) return false;
+      p.power[m.by] = true;
+      if (m.by !== p.admiral) p.pending = true; // Dead Reckoning waits for the Admiral's answer
+      return true;
     case 'winds':
       if (p.windsUsed || !spend(0, 'winds')) return false;
       p.windsUsed = true;
@@ -179,7 +210,8 @@ export function reduce(p: Pub, m: Msg): boolean {
       p.windsUsed = false;
       if (p.current === 0) {
         p.round++;
-        for (const s of p.sides) s.fogs = s.fogs.filter((f) => f.until >= p.round);
+        for (const s of p.sides) { s.fogs = s.fogs.filter((f) => f.until >= p.round); s.wakes = s.wakes.filter((w) => p.round - w.round <= 2); }
+        if (p.mode === 'convoy' && p.round > SEASON) { p.phase = 'over'; p.winner = (1 - p.admiral!) as 0 | 1; p.reason = 'season'; return true; }
         if (p.round % 3 === 1) { spawnTreasure(p, 0); spawnTreasure(p, 1); }
       }
       return true;
@@ -194,7 +226,7 @@ export async function commitHash(initial: Placement[], salt: string): Promise<st
 }
 
 /** Everything a client must keep to survive a page reload. */
-export interface Snapshot { ships: Ship[]; initial: Placement[]; salt: string; acts: Act[]; order: Order | null; streak: number; hurt: boolean; count: number }
+export interface Snapshot { ships: Ship[]; initial: Placement[]; salt: string; acts: Act[]; order: Order | null; streak: number; hurt: boolean; count: number; escort: boolean; laden: number }
 
 export class Client {
   pub: Pub;
@@ -213,11 +245,18 @@ export class Client {
   private streak = 0;
   private hurt = false;
   private revealed = false;
+  /** Close Escort is up: the next hit on the merchantman is turned aside. */
+  private escort = false;
+  /** How many times the merchantman has moved this turn. */
+  laden = 0;
 
-  constructor(public me: 0 | 1, seed: number, private out: (m: Msg) => void, private rnd: Rnd = Math.random, public name = 'Captain') {
-    this.pub = newPub(seed);
-    this.ships = randomFleet(rnd);
+  constructor(public me: 0 | 1, seed: number, private out: (m: Msg) => void, private rnd: Rnd = Math.random, public name = 'Captain', mode: Mode = 'classic') {
+    this.pub = newPub(seed, mode);
+    this.ships = randomFleet(rnd, this.role);
   }
+
+  get role(): Role { return roleOf(this.pub, this.me); }
+  get merchant(): Ship | undefined { return this.ships.find((s) => s.kind === 'merchant'); }
 
   get foe(): 0 | 1 { return (1 - this.me) as 0 | 1; }
   get side() { return this.pub.sides[this.me]; }
@@ -229,12 +268,12 @@ export class Client {
   has(item: Item) { return this.side.items.includes(item); }
 
   snapshot(): Snapshot {
-    return JSON.parse(JSON.stringify({ ships: this.ships, initial: this.initial, salt: this.salt, acts: this.acts, order: this.order, streak: this.streak, hurt: this.hurt, count: this.log.length }));
+    return JSON.parse(JSON.stringify({ ships: this.ships, initial: this.initial, salt: this.salt, acts: this.acts, order: this.order, streak: this.streak, hurt: this.hurt, count: this.log.length, escort: this.escort, laden: this.laden }));
   }
   /** Restore private state; the next `count` messages only rebuild the public view. */
   restore(s: Snapshot) {
     this.ships = s.ships; this.initial = s.initial; this.salt = s.salt; this.acts = s.acts; this.order = s.order;
-    this.streak = s.streak; this.hurt = s.hurt; this.skip = s.count;
+    this.streak = s.streak; this.hurt = s.hurt; this.skip = s.count; this.escort = !!s.escort; this.laden = s.laden || 0;
   }
 
   private send(b: Body) { this.inFlight++; this.out({ ...b, by: this.me } as Msg); }
@@ -263,7 +302,8 @@ export class Client {
     const p = this.pub, theirs = m.by !== this.me;
     if (m.t === 'ready' && p.phase === 'battle') this.newOrder();
     if (m.t === 'attack' && theirs) {
-      const r = resolveAttack(this.ships, m.cells, m.src === 'chain');
+      const { shielded, ...r } = resolveAttack(this.ships, m.cells, m.src === 'chain', this.escort);
+      if (shielded) this.escort = false;
       if (r.results.some((c) => c.r === 'hit' || c.r === 'sunk')) { this.hurt = true; if (this.order?.id === 'unscathed') this.order.n = 0; }
       this.send({ t: 'result', ...r });
     }
@@ -276,7 +316,9 @@ export class Client {
       const sank = (m.results || []).some((c) => c.r === 'sunk');
       if ((this.order.id === 'sink' && sank) || (this.order.id === 'streak' && this.streak >= 3)) { this.streak = 0; this.fulfil(); }
     }
-    if (m.t === 'endTurn' && !theirs) for (const s of this.ships) s.chained = false;
+    if (m.t === 'power' && theirs && this.merchant) this.send({ t: 'powerResult', col: shipCells(this.merchant)[1][0] });
+    if (m.t === 'endTurn' && !theirs) { for (const s of this.ships) s.chained = false; this.laden = 0; }
+    if (m.t === 'endTurn' && theirs) this.escort = false;
     if (m.t === 'endTurn' && theirs && this.order && p.phase === 'battle') {
       if (this.order.id === 'unscathed' && !this.hurt && ++this.order.n >= 2) this.fulfil();
       else if (p.round > this.order.deadline) { this.onNote(`Orders lapsed: ${this.order.text}`); this.newOrder(this.order); }
@@ -290,7 +332,7 @@ export class Client {
 
   /* ---------- actions ---------- */
   async ready(): Promise<boolean> {
-    if (this.pub.phase !== 'placement' || this.side.ready || this.inFlight) return false;
+    if (this.pub.phase !== 'placement' || this.side.ready || this.inFlight || !legalPlacement(this.ships)) return false;
     this.initial = this.ships.map(({ id, x, y, dir }) => ({ id, x, y, dir }));
     this.salt = Array.from({ length: 16 }, () => Math.floor(this.rnd() * 36).toString(36)).join('');
     this.inFlight++;
@@ -320,27 +362,37 @@ export class Client {
     const t = this.pub.treasures.find((q) => q.side === this.me && shipCells(s).some(([a, b]) => a === q.x && b === q.y));
     return t ? [t.x, t.y] : undefined;
   }
-  private moved(id: number, kind: 'sail' | 'turn', debris: XY[]) {
-    const treasure = this.treasureUnder(id);
-    this.send({ t: 'move', kind, debris, ...(treasure ? { treasure } : {}) });
-    if (treasure && this.order?.id === 'cutter' && this.ships.find((q) => q.id === id)!.kind === 'cutter') this.fulfil();
+  /** `from` is where the ship's middle lay before it moved. */
+  private moved(id: number, kind: 'sail' | 'turn', debris: XY[], from: XY) {
+    const treasure = this.treasureUnder(id), s = this.ships.find((q) => q.id === id)!;
+    const extra: { treasure?: XY; wake?: number; home?: true } = {};
+    if (treasure) extra.treasure = treasure;
+    if (s.kind === 'merchant') {
+      // Under full sail the laden merchantman cannot hide: every move after the first gives away her row.
+      if (++this.laden >= 2) extra.wake = from[1];
+      if (shipCells(s).some(([x]) => x === N - 1)) extra.home = true;
+    }
+    this.send({ t: 'move', kind, debris, ...extra });
+    if (treasure && this.order?.id === 'cutter' && s.kind === 'cutter') this.fulfil();
   }
+  private middle(id: number): XY { const s = this.ships.find((q) => q.id === id); return s ? shipCells(s)[Math.floor(s.len / 2)] : [0, 0]; }
 
   reach(id: number, delta: 1 | -1) { return this.can(1) ? sailReach(this.ships, id, delta) : 0; }
   sail(id: number, delta: 1 | -1, steps = this.reach(id, delta)): boolean {
     if (!this.can(1)) return false;
-    const debris = sailShip(this.ships, id, delta, steps);
+    const from = this.middle(id), debris = sailShip(this.ships, id, delta, steps);
     if (!debris) return false;
     this.acts.push({ k: 'sail', id, delta, steps });
-    this.moved(id, 'sail', debris);
+    this.moved(id, 'sail', debris, from);
     return true;
   }
 
   canTurn(id: number) { return this.can(1) && canTurnShip(this.ships, id); }
   turn(id: number): boolean {
+    const from = this.middle(id);
     if (!this.can(1) || !turnShip(this.ships, id)) return false;
     this.acts.push({ k: 'turn', id });
-    this.moved(id, 'turn', []);
+    this.moved(id, 'turn', [], from);
     return true;
   }
 
@@ -367,6 +419,15 @@ export class Client {
   winds(): boolean {
     if (!this.can() || this.pub.windsUsed || !this.has('winds')) return false;
     this.send({ t: 'winds' });
+    return true;
+  }
+
+  /** The captain's once-a-battle power: Close Escort for the Admiral, Dead Reckoning for the Corsair. */
+  canPower() { return this.pub.mode === 'convoy' && !this.pub.power[this.me] && this.can(1); }
+  power(): boolean {
+    if (!this.canPower()) return false;
+    if (this.role === 'admiral') this.escort = true;
+    this.send({ t: 'power' });
     return true;
   }
 

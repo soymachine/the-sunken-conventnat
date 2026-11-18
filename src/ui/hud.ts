@@ -1,10 +1,16 @@
 // Oak-and-brass HUD drawn with DOM + SVG over the 3D canvas.
-import { Client } from '../game/engine';
+import { Client, SEASON, roleOf } from '../game/engine';
 import { ITEMS, ITEM_IDS, Item } from '../game/powerups';
-import { FLEET } from '../game/rules';
+import { FLEETS, N, Role, shipCells } from '../game/rules';
 
 export type Tool = 'broadside' | 'chain' | 'spy' | Item;
-export type Mode = 'fire' | 'sail' | 'turn' | Tool;
+export type Mode = 'fire' | 'sail' | 'turn' | 'power' | Tool;
+
+/** The two invented captains of the Convoy mode. */
+export const CAPTAINS: Record<Exclude<Role, 'classic'>, { name: string; title: string; mission: string; power: string; powerText: string }> = {
+  admiral: { name: 'Vice-Admiral Edmund Harrowgate', title: 'The Admiral', mission: 'Bring the merchantman from the Colony, on the western edge of your chart, to the Home Port on the eastern edge with at least one crate aboard — or sink every corsair.', power: 'Close Escort', powerText: 'Once: until your next turn, the first hit on the merchantman is turned aside.' },
+  corsair: { name: 'Captain Mara Vane, “the Black Tide”', title: 'The Corsair', mission: 'Plunder all three crates from the merchantman before she reaches the Home Port, or keep her at sea until the season closes.', power: 'Dead Reckoning', powerText: 'Once: learn the column the merchantman is in.' },
+};
 const SECTORS = ['fire', 'sail', 'turn', 'ability'] as const;
 const NS = 'http://www.w3.org/2000/svg';
 
@@ -50,6 +56,7 @@ export class Hud {
         <h1>The Sunken Covenant</h1>
         <div class="foe"><span id="foeName"></span><div id="foeFleet"></div></div>
       </header>
+      <div class="objective" id="objective" hidden></div>
       <aside class="card left">
         <h2>Admiralty orders</h2><p id="orderText"></p><p id="orderMeta" class="meta"></p>
         <h2>Quartermaster <span id="gold" title="Doubloons"></span></h2><ul id="shop"></ul>
@@ -71,6 +78,7 @@ export class Hud {
           <button class="capstan" id="ready" aria-label="Ready"><svg viewBox="0 0 100 100"></svg><span>Ready</span></button>
         </div>
       </footer>
+      <div class="role" hidden><div class="card"><svg class="medal" viewBox="0 0 100 100"></svg><p class="meta" id="roleTitle"></p><h2 id="roleName"></h2><p id="roleMission"></p><p class="pw"><b id="rolePower"></b> <span id="rolePowerText"></span></p><button class="plaque" id="roleOk">To your station</button></div></div>
       <div class="over" hidden><div class="card"><h2 id="overTitle"></h2><p id="overText"></p><p id="overVerify" class="meta"></p><button class="plaque" id="leave">Back to port</button></div></div>`;
     this.compass(this.q('.compass'));
     this.telegraph(this.q('.telegraph'));
@@ -80,12 +88,33 @@ export class Hud {
     this.q<HTMLElement>('#shuffle').onclick = () => on.shuffle();
     this.q<HTMLElement>('#rotate').onclick = () => on.rotate();
     this.q<HTMLElement>('#leave').onclick = () => on.leave();
+    this.q<HTMLElement>('#roleOk').onclick = () => { this.q<HTMLElement>('.role').hidden = true; };
     this.q<HTMLElement>('#mute').onclick = (e) => { const off = on.mute(), b = e.currentTarget as HTMLElement; b.textContent = off ? 'Sound off' : 'Sound on'; b.setAttribute('aria-pressed', String(off)); };
     this.q<HTMLElement>('#shop').onclick = (e) => { const b = (e.target as Element).closest('button'); if (b) on.buy(b.dataset.item as Item); };
     this.q<HTMLElement>('#belt').onclick = (e) => { const b = (e.target as Element).closest('button'); if (b) on.mode(b.dataset.tool as Mode); };
   }
 
-  show(v: boolean) { this.root.hidden = !v; }
+  show(v: boolean) { this.root.hidden = !v; if (!v) this.q<HTMLElement>('.role').hidden = true; }
+
+  /** The card that tells a captain which role the lot gave them. */
+  showRole(role: Exclude<Role, 'classic'>) {
+    const cap = CAPTAINS[role], s = this.q<SVGElement>('.medal');
+    s.innerHTML = '';
+    svg(s, 'circle', { cx: 50, cy: 50, r: 48, fill: 'url(#brass)', stroke: '#0d0b08' });
+    svg(s, 'circle', { cx: 50, cy: 50, r: 41, fill: '#0d0b08' });
+    svg(s, 'path', { d: 'M22 92 Q24 68 40 64 L60 64 Q76 68 78 92 Z', fill: role === 'admiral' ? '#e8d5a3' : '#8c2f1b' });
+    svg(s, 'circle', { cx: 50, cy: 48, r: 13, fill: '#e8d5a3' });
+    // A bicorne for the Admiral, a tricorne for the Corsair.
+    svg(s, 'path', { d: role === 'admiral' ? 'M24 40 Q50 8 76 40 Q50 30 24 40 Z' : 'M26 38 L50 18 L74 38 Q62 30 50 36 Q38 30 26 38 Z', fill: '#d9a441', stroke: '#0d0b08' });
+    if (role === 'admiral') for (const x of [36, 64]) svg(s, 'rect', { x: x - 6, y: 66, width: 12, height: 5, fill: '#d9a441' });
+    else svg(s, 'path', { d: 'M38 50 L62 46 L62 50 L38 54 Z', fill: '#0d0b08' });
+    this.q('#roleTitle').textContent = 'The lot has fallen: you sail as ' + cap.title;
+    this.q('#roleName').textContent = cap.name;
+    this.q('#roleMission').textContent = cap.mission;
+    this.q('#rolePower').textContent = cap.power + '.';
+    this.q('#rolePowerText').textContent = cap.powerText;
+    this.q<HTMLElement>('.role').hidden = false;
+  }
   private spin(sel: string) { this.q<SVGElement>(sel + ' svg').style.transform = `rotate(${++this.capTurns * 120}deg)`; }
 
   private compass(s: SVGElement) {
@@ -160,7 +189,8 @@ export class Hud {
 
     this.q('#foeName').textContent = (foe.name || 'The other captain') + (note ? ` · ${note}` : '');
     const down = foe.sunk.map((s) => s.kind);
-    this.q('#foeFleet').innerHTML = FLEET.map((f) => `<span class="pips ${down.includes(f.kind) ? 'sunk' : ''}" title="${f.cls}">${'<i></i>'.repeat(f.len)}</span>`).join('');
+    const role = c.role, foeRole = roleOf(p, c.foe);
+    this.q('#foeFleet').innerHTML = FLEETS[foeRole].map((f) => `<span class="pips ${down.includes(f.kind) ? 'sunk' : ''}" title="${f.cls}">${'<i></i>'.repeat(f.len)}</span>`).join('');
 
     this.q('#orderText').textContent = c.order ? c.order.text : p.phase === 'placement' ? 'Sealed until the battle begins.' : '—';
     this.q('#orderMeta').textContent = c.order ? `Reward ${c.order.reward} doubloons · ${Math.max(0, c.order.deadline - p.round + 1)} rounds left` : '';
@@ -170,7 +200,7 @@ export class Hud {
       return `<li><button data-item="${id}" title="${esc(it.blurb)}" ${c.canBuy(id) ? '' : 'disabled'}><span>${it.name}</span><em>${it.ap} AP</em><b>${it.price}</b></button></li>`;
     }).join('');
     this.q('#fleet').innerHTML = c.ships.map((s) => {
-      const f = FLEET.find((q) => q.kind === s.kind)!;
+      const f = FLEETS[role].find((q) => q.kind === s.kind)!;
       const pips = s.hits.map((h) => `<i class="${h ? 'hit' : ''}"></i>`).join('');
       return `<li class="${s.sunk ? 'sunk' : ''}"><span>${s.cls}<em>${s.chained ? 'pinned by chain' : f.trait}</em></span><span class="pips">${pips}</span></li>`;
     }).join('');
@@ -186,14 +216,31 @@ export class Hud {
         const n = me.items.filter((q) => q === id).length;
         tool(id, ITEMS[id].name + (n > 1 ? ` ×${n}` : ''), ITEMS[id].ap, c.can(ITEMS[id].ap) && !(id === 'winds' && p.windsUsed));
       }
+      if (role !== 'classic' && !p.power[c.me]) tool('power', CAPTAINS[role].power, 1, c.canPower());
     }
     this.q('#belt').innerHTML = belt.join('');
 
+    const obj = this.q<HTMLElement>('#objective');
+    obj.hidden = role === 'classic' || p.phase === 'over';
+    if (!obj.hidden) {
+      const crates = '<i></i>'.repeat(p.cargo) + '<i class="gone"></i>'.repeat(3 - p.cargo);
+      const left = Math.max(0, SEASON - p.round + 1), mer = c.merchant;
+      const way = mer ? N - 1 - Math.max(...shipCells(mer).map(([x]) => x)) : 0;
+      obj.innerHTML = `<span><b>Cargo</b><span class="crates">${crates}</span></span>` +
+        (role === 'admiral' ? `<span><b>Home port</b>${way} column${way === 1 ? '' : 's'} east</span>` : '') +
+        `<span><b>Season closes</b>${p.phase === 'battle' ? `in ${left} round${left === 1 ? '' : 's'}` : `after round ${SEASON}`}</span>`;
+    }
     this.q<HTMLElement>('.over').hidden = p.phase !== 'over';
     if (p.phase === 'over') {
       const won = p.winner === c.me;
       this.q('#overTitle').textContent = won ? 'Victory' : 'Defeat';
-      this.q('#overText').textContent = won ? `The enemy fleet lies on the seabed after ${p.round} rounds.` : `Your last ship went down in round ${p.round}.`;
+      const text: Record<string, [string, string]> = {
+        fleet: [`The enemy fleet lies on the seabed after ${p.round} rounds.`, `Your last ship went down in round ${p.round}.`],
+        home: [`The merchantman made the Home Port with ${p.cargo} of 3 crates aboard.`, `The merchantman slipped past you with ${p.cargo} of 3 crates.`],
+        plunder: ['The last crate is yours and the merchantman is going down.', 'The merchantman is plundered and sunk.'],
+        season: ['The season closed with the cargo still at sea.', 'The season closed before the cargo reached home.'],
+      };
+      this.q('#overText').textContent = text[p.reason || 'fleet'][won ? 0 : 1];
     }
   }
 

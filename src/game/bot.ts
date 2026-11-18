@@ -2,6 +2,7 @@
 // opponent would: its own fleet and the public state.
 import { Client } from './engine';
 import { ITEMS, Item } from './powerups';
+import { SEASON } from './engine';
 import { N, Rnd, ZONE, inBoard, inZone, shipCells } from './rules';
 
 const NEIGH = [[1, 0], [-1, 0], [0, 1], [0, -1]];
@@ -33,6 +34,17 @@ function scoreGrid(c: Client, rnd: Rnd): number[][] {
     const v = sc.count === 0 ? -8 : Math.min(3.5, sc.count * 0.9) - age * 0.5;
     for (let y = sc.y - ZONE; y <= sc.y + ZONE; y++) for (let x = sc.x - ZONE; x <= sc.x + ZONE; x++) bump(x, y, v);
   }
+  if (c.role === 'corsair') {
+    // The prize matters more than the escorts: weigh where the merchantman must be by now.
+    const lo = Math.max(0, Math.floor(round * 0.7) - 1), hi = Math.min(N - 1, Math.ceil(round * 1.5) + 3);
+    for (let y = 0; y < N; y++) for (let x = lo; x <= hi; x++) bump(x, y, 0.9);
+    for (const w of foe.wakes) {
+      const age = round - w.round;
+      if (age <= 2) for (let x = lo; x <= hi; x++) bump(x, w.y, 3.2 - age);
+    }
+    const rk = c.pub.reckon;
+    if (rk) { const age = round - rk.round; if (age <= 2) for (let y = 0; y < N; y++) for (let x = rk.col - 1; x <= rk.col + 1 + age * 2; x++) bump(x, y, 3 - age); }
+  }
   for (const s of foe.sunk) for (const [x, y] of shipCells(s)) bump(x, y, -100);
   return score;
 }
@@ -46,6 +58,24 @@ export function botAct(c: Client, rnd: Rnd = Math.random): boolean {
   const me = c.side, foe = c.foeSide;
 
   if (c.has('winds') && !p.windsUsed && c.winds()) return true;
+
+  const mer = c.merchant;
+  if (c.role === 'admiral' && mer && !mer.sunk) {
+    // Bring the cargo home: creep unseen while safe, run when hunted or when the season is closing.
+    const cells = shipCells(mer), bow = Math.max(...cells.map(([x]) => x)), left = N - 1 - bow, turns = Math.max(1, SEASON - p.round);
+    const hunted = mer.hits.some(Boolean) || me.shots.some((s) => p.round - s.round <= 1 && cells.some(([x, y]) => Math.abs(x - s.x) <= 2 && Math.abs(y - s.y) <= 2));
+    if (hunted && c.canPower() && rnd() < 0.7) return c.power();
+    const want = hunted ? 3 : Math.max(1, Math.ceil(left / turns));
+    if (mer.dir === 'v') {
+      // Mid side-step: shift a row, then point east again.
+      const d = c.reach(mer.id, 1) ? 1 : c.reach(mer.id, -1) ? -1 : 0;
+      if (c.laden === 1 && d) return c.sail(mer.id, d, 1);
+      if (c.canTurn(mer.id)) return c.turn(mer.id);
+    } else if (c.reach(mer.id, 1) > 0) {
+      if (c.laden < want) return c.sail(mer.id, 1, 1);
+    } else if (left > 0 && c.laden === 0 && p.ap >= 3 && c.canTurn(mer.id)) return c.turn(mer.id); // the way east is blocked
+  }
+  if (c.role === 'corsair' && p.round >= 3 && c.canPower() && !foe.wakes.length && p.cargo === 3 && rnd() < 0.5) return c.power();
   const wounded = c.ships.filter((s) => !s.sunk && s.hits.some(Boolean));
   if (c.has('shipwright') && p.ap >= 2 && wounded.length) { const [x, y] = shipCells(wounded[0])[wounded[0].hits.indexOf(true)]; if (c.repair(x, y)) return true; }
 
@@ -89,7 +119,9 @@ export function botAct(c: Client, rnd: Rnd = Math.random): boolean {
   if (!lead && (c.has('spyglass') || c.alive('cutter')) && rnd() < 0.6) {
     // Sweep a patch that has not been looked at lately.
     for (let tries = 0; tries < 12; tries++) {
-      const x = ZONE + Math.floor(rnd() * (N - 2 * ZONE)), y = ZONE + Math.floor(rnd() * (N - 2 * ZONE));
+      // A corsair sweeps the band of sea the merchantman should have reached.
+      const band = c.role === 'corsair' ? Math.min(N - 1 - ZONE, Math.max(ZONE, Math.round(p.round * 1.1 + rnd() * 4 - 1))) : -1;
+      const x = band >= 0 ? band : ZONE + Math.floor(rnd() * (N - 2 * ZONE)), y = ZONE + Math.floor(rnd() * (N - 2 * ZONE));
       if (foe.scans.some((s) => p.round - s.round <= 5 && inZone(s.x, s.y, x, y))) continue;
       return c.scan(x, y, c.has('spyglass') ? 'spyglass' : 'cutter');
     }

@@ -136,3 +136,22 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); out
 @keyframes sway { 0%, 100% { rotate: -3deg; } 50% { rotate: 3deg; } }
 #needle { animation: sway 4s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { #log li, .belt button, #needle, #hud .rail, #hud .card, #lobby .card { animation: none !important; } }
+
+/* ---------- convoy ---------- */
+#lobby .modes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+#lobby .mode { text-align: left; background: none; border: 1.5px solid rgba(13, 11, 8, .45); padding: 9px 11px; cursor: pointer; color: var(--ink); font-family: var(--body); }
+#lobby .mode b { display: block; font: 700 12px var(--label); letter-spacing: .14em; text-transform: uppercase; margin-bottom: 3px; }
+#lobby .mode span { font-style: italic; font-size: 14px; line-height: 1.2; display: block; }
+#lobby .mode.on { background: var(--ink); color: var(--parch); border-color: var(--ink); } #lobby .mode.on b { color: var(--amber); }
+.objective { position: absolute; top: 72px; left: 50%; transform: translateX(-50%); display: flex; gap: 22px; padding: 6px 18px; background: var(--ink); border: 1px solid var(--brass); border-radius: 3px; font-style: italic; font-size: 14px; white-space: nowrap; }
+.objective > span { display: flex; align-items: center; gap: 7px; }
+.objective b { font: 700 9.5px var(--label); letter-spacing: .16em; text-transform: uppercase; color: var(--amber); font-style: normal; }
+.crates { display: flex; gap: 4px; } .crates i { width: 11px; height: 11px; background: var(--brass); border: 1px solid var(--parch); display: block; } .crates i.gone { background: none; border: 1px dashed #5e4717; }
+.role { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(13, 11, 8, .72); pointer-events: auto; padding: 16px; }
+.role .card { text-align: center; max-width: 470px; padding: 28px 38px; animation: rise .6s ease-out; }
+.role .medal { width: 104px; height: 104px; margin-bottom: 8px; filter: drop-shadow(0 3px 6px rgba(0, 0, 0, .6)); }
+.role h2 { font: 400 27px var(--display); letter-spacing: .03em; text-transform: none; border: 0; display: block; margin: 0 0 10px; }
+.role p { font-style: italic; font-size: 17px; line-height: 1.3; margin: 0 0 12px; }
+.role .pw { font-size: 15px; border-top: 1px solid var(--ink); padding-top: 10px; margin-bottom: 18px; } .role .pw b { font: 700 11px var(--label); letter-spacing: .12em; text-transform: uppercase; color: var(--wax); font-style: normal; }
+@media (max-width: 1000px) { .objective { font-size: 12px; gap: 12px; padding: 5px 10px; } }
+@media (max-width: 600px) { .objective { white-space: normal; flex-wrap: wrap; justify-content: center; width: calc(100% - 20px); } #lobby .modes { grid-template-columns: 1fr; } }

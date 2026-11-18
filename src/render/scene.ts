@@ -2,7 +2,7 @@
 // ride the swell and sink; everything else is rebuilt from the public state.
 import * as THREE from 'three';
 import { Pub, SidePub } from '../game/engine';
-import { Kind, N, Ship, ShotOutcome, ZONE, shipCells } from '../game/rules';
+import { Kind, N, START_COLS, Ship, ShotOutcome, ZONE, shipCells } from '../game/rules';
 import { Fx } from './fx';
 import { Post } from './post';
 import { Sea, waveH } from './sea';
@@ -12,6 +12,8 @@ export type Side = 'own' | 'enemy';
 export interface Cell { side: Side; x: number; y: number }
 export interface Highlight extends Cell { color: number; opacity?: number }
 export interface View { pub: Pub; me: 0 | 1; ships: Ship[]; selectedId?: number | null; invalid?: boolean; lifted?: boolean;
+  /** Convoy only: whose chart carries the route, and whether to mark the merchantman's starting waters. */
+  convoy?: { side: Side; zone: boolean };
   /** Rebuilding after a reload: show the present state without replaying how it came about. */
   quiet?: boolean }
 export type Sound = 'cannon' | 'splash' | 'hit' | 'clang' | 'sink' | 'coin' | 'glass';
@@ -52,6 +54,19 @@ function label(text: string, color: string): THREE.Sprite {
   s.scale.setScalar(1.5);
   return s;
 }
+/** Text laid flat along a chart edge, reading upwards. */
+function banner(text: string, color: string): THREE.Texture {
+  const cv = document.createElement('canvas');
+  cv.width = 64; cv.height = 1024;
+  const g = cv.getContext('2d')!;
+  g.translate(32, 512); g.rotate(-Math.PI / 2);
+  g.fillStyle = color; g.font = '700 34px Cinzel, Georgia, serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText(text.split('').join('\u2009'), 0, 2);
+  const t = new THREE.CanvasTexture(cv);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+const BANNERS = { colony: banner('THE COLONY', '#0d0b08'), home: banner('HOME PORT', '#0d0b08') };
 const puffTex = sprite((g) => {
   const r = g.createRadialGradient(64, 64, 4, 64, 64, 62);
   r.addColorStop(0, 'rgba(232,222,196,.95)'); r.addColorStop(0.55, 'rgba(214,204,178,.5)'); r.addColorStop(1, 'rgba(214,204,178,0)');
@@ -353,6 +368,7 @@ export class SeaScene {
     for (const c of o.decor.children) { const i = this.flames.indexOf(c); if (i >= 0) this.flames.splice(i, 1); }
     o.decor.clear();
     o.fires = [];
+    o.model.crates.forEach((c, i) => { c.visible = !hits[i]; });
     hits.forEach((h, i) => {
       if (!h) return;
       const at = new THREE.Vector3(i + 0.5 - o.len / 2, o.model.deckY + 0.05, 0);
@@ -426,6 +442,14 @@ export class SeaScene {
   }
   private embers0: THREE.Vector3[] = [];
 
+  /** A flat tinted band over a block of cells. */
+  private strip(side: Side, x: number, y: number, w: number, h: number, color: number, opacity: number, map?: THREE.Texture) {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color, map, transparent: true, opacity, depthWrite: false }));
+    m.rotation.x = -Math.PI / 2;
+    m.position.set(origin[side].x + x + w / 2, 0.095, origin[side].z + y + h / 2);
+    this.marks.add(m);
+  }
+
   /** Bring the scene in line with the current view. */
   sync(v: View) {
     this.last = v;
@@ -446,7 +470,7 @@ export class SeaScene {
       for (const m of o.model.mats) { m.uniforms.uTint.value.setHex(v.invalid ? C.wax : C.amber); m.uniforms.uTintAmt.value = sel ? 0.5 : 0; }
     }
     for (const s of v.pub.sides[foe].sunk) {
-      const key = 'e' + s.kind, o = this.ship(key, s.kind, s.len, 'enemy');
+      const key = `e${s.kind}:${s.x},${s.y}`, o = this.ship(key, s.kind, s.len, 'enemy');
       seen.add(key);
       this.aim(o, s);
       wreck(o);
@@ -464,6 +488,16 @@ export class SeaScene {
     this.marks.clear(); this.puffs = []; this.glints = []; this.embers0 = [];
     this.drawSide(v.pub.sides[v.me], 'own', v.pub.round);
     this.drawSide(v.pub.sides[foe], 'enemy', v.pub.round);
+    if (v.convoy) {
+      const side = v.convoy.side, adm = v.pub.sides[side === 'own' ? v.me : foe], mineToHide = side === 'own';
+      this.strip(side, 0, 0, 1, N, 0xffffff, 0.5, BANNERS.colony);
+      this.strip(side, N - 1, 0, 1, N, C.amber, 0.22);
+      this.strip(side, N - 1, 0, 1, N, 0xffffff, 0.6, BANNERS.home);
+      if (v.convoy.zone) this.strip(side, 0, 0, START_COLS, N, C.amber, 0.2);
+      for (const w of adm.wakes) this.strip(side, 0, w.y, N, 1, mineToHide ? C.wax : 0xfff4d6, Math.max(0.12, 0.42 - (v.pub.round - w.round) * 0.15));
+      const rk = v.pub.reckon;
+      if (rk && v.pub.round - rk.round <= 1) this.strip(side, rk.col, 0, 1, N, mineToHide ? C.wax : C.amber, 0.4);
+    }
     for (const t of v.pub.treasures) {
       const at = cellCenter({ side: t.side === v.me ? 'own' : 'enemy', x: t.x, y: t.y });
       const g = new THREE.Group(), chest = new THREE.Mesh(G.chest, M.chest), lid = new THREE.Mesh(G.lid, M.gold);

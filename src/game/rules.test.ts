@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { botAct, driveBot } from './bot';
 import { Client, Msg } from './engine';
 import { verify } from './verify';
-import { FLEET, N, Ship, attackCells, countScan, fits, randomFleet, resolveAttack, sailReach, sailShip, shipCells, turnShip } from './rules';
+import { FLEET, FLEETS, N, Ship, attackCells, countScan, fits, randomFleet, resolveAttack, sailReach, sailShip, shipCells, turnShip } from './rules';
 import { Bus } from '../net/session';
 
 function seeded(seed: number) {
@@ -10,7 +10,7 @@ function seeded(seed: number) {
   return () => (s = (s * 16807) % 2147483647) / 2147483647;
 }
 const mk = (id: number, kind: Ship['kind'], len: number, x: number, y: number, dir: 'h' | 'v'): Ship => ({
-  id, kind, cls: FLEET.find((f) => f.kind === kind)!.cls, len, x, y, dir, hits: new Array(len).fill(false), sunk: false, ...(kind === 'ironclad' ? { armour: true } : {}),
+  id, kind, cls: [...FLEET, ...FLEETS.admiral].find((f) => f.kind === kind)!.cls, len, x, y, dir, hits: new Array(len).fill(false), sunk: false, ...(kind === 'ironclad' ? { armour: true } : {}),
 });
 const tick = () => new Promise((r) => setTimeout(r, 0));
 
@@ -174,6 +174,132 @@ describe('protocol', () => {
     expect(again.ships).toEqual(a.ships);
     expect(again.attack('shot', 6, 5)).toBe(true);
     expect(b.ships[0].hits[1]).toBe(true);
+  });
+});
+
+/** A Convoy duel with fixed fleets; `adm` is whichever client drew the Admiral. */
+async function convoy(seed = 8) {
+  const bus = new Bus();
+  const a = new Client(0, seed, bus.send, seeded(seed + 1), 'A', 'convoy'), b = new Client(1, seed, bus.send, seeded(seed + 2), 'B', 'convoy');
+  bus.subscribe((m) => a.receive(m));
+  bus.subscribe((m) => b.receive(m));
+  const adm = a.role === 'admiral' ? a : b, cor = adm === a ? b : a;
+  adm.ships = [mk(0, 'line', 5, 6, 0, 'h'), mk(1, 'frigate', 4, 6, 2, 'h'), mk(2, 'ironclad', 3, 6, 4, 'h'), mk(3, 'cutter', 2, 6, 6, 'h'), mk(4, 'merchant', 3, 0, 10, 'h')];
+  cor.ships = [mk(0, 'frigate', 4, 5, 5, 'h'), mk(1, 'schooner', 3, 5, 7, 'h'), mk(2, 'schooner', 3, 5, 9, 'h'), mk(3, 'cutter', 2, 5, 11, 'h'), mk(4, 'cutter', 2, 5, 13, 'h')];
+  await a.ready(); await b.ready();
+  // Make it the given captain's turn.
+  const turnOf = (c: Client) => { if (!c.myTurn) (c === adm ? cor : adm).endTurn(); };
+  return { bus, a, b, adm, cor, turnOf };
+}
+
+describe('convoy', () => {
+  it('draws opposite roles from the shared seed and gives each its fleet', async () => {
+    const roles = new Set<string>();
+    for (let seed = 1; seed < 40; seed++) {
+      const a = new Client(0, seed, () => {}, seeded(seed), 'A', 'convoy'), b = new Client(1, seed, () => {}, seeded(seed), 'B', 'convoy');
+      expect(a.pub.admiral).toBe(b.pub.admiral);
+      expect(new Set([a.role, b.role])).toEqual(new Set(['admiral', 'corsair']));
+      roles.add(a.role);
+      const adm = a.role === 'admiral' ? a : b;
+      expect(adm.merchant && shipCells(adm.merchant).every(([x]) => x < 3)).toBe(true);
+      expect((adm === a ? b : a).ships.map((s) => s.kind)).toEqual(['frigate', 'schooner', 'schooner', 'cutter', 'cutter']);
+    }
+    expect(roles.size).toBe(2);
+  });
+  it('refuses a merchantman deployed away from the Colony', async () => {
+    const a = new Client(0, 8, () => {}, seeded(1), 'A', 'convoy'), b = new Client(1, 8, () => {}, seeded(2), 'B', 'convoy');
+    const adm = a.role === 'admiral' ? a : b;
+    adm.ships = [mk(4, 'merchant', 3, 6, 10, 'h')];
+    expect(await adm.ready()).toBe(false);
+    adm.merchant!.x = 0;
+    expect(await adm.ready()).toBe(true);
+  });
+  it('the first move of a turn is silent; full sail leaves a wake', async () => {
+    const { adm, turnOf } = await convoy();
+    turnOf(adm);
+    adm.sail(4, 1);
+    expect(adm.side.wakes).toEqual([]);
+    adm.sail(4, 1);
+    expect(adm.side.wakes).toEqual([{ y: 10, round: adm.pub.round }]);
+    adm.endTurn();
+    expect(adm.laden).toBe(0);
+  });
+  it('a hit on the merchantman plunders a crate; three sink her and the Corsair wins', async () => {
+    const { bus, a, adm, cor, turnOf } = await convoy();
+    turnOf(cor);
+    const gold = cor.side.doubloons;
+    cor.attack('shot', 0, 10);
+    expect(cor.pub.cargo).toBe(2);
+    expect(cor.side.doubloons).toBe(gold + 35);
+    cor.attack('shot', 1, 10); cor.attack('shot', 2, 10);
+    expect(a.pub).toMatchObject({ phase: 'over', winner: cor.me, reason: 'plunder', cargo: 0 });
+    expect(await verify(bus.log, adm.me, 'admiral')).toBeNull();
+    expect(await verify(bus.log, cor.me, 'corsair')).toBeNull();
+  });
+  it('the Admiral wins by reaching home with cargo aboard, and a false arrival is caught', async () => {
+    const { bus, a, adm, cor, turnOf } = await convoy();
+    turnOf(adm);
+    for (let guard = 0; guard < 200 && a.pub.phase === 'battle'; guard++) {
+      if (adm.myTurn) { if (!adm.sail(4, 1)) adm.endTurn(); } else cor.endTurn();
+    }
+    expect(a.pub).toMatchObject({ phase: 'over', winner: adm.me, reason: 'home' });
+    expect(adm.merchant!.x).toBe(13);
+    expect(await verify(bus.log, adm.me, 'admiral')).toBeNull();
+    let n = 0;
+    const forged: Msg[] = bus.log.map((m) => (m.t === 'move' && m.by === adm.me && ++n === 2 ? { ...m, home: true as const } : m));
+    expect(await verify(forged, adm.me, 'admiral')).toMatch(/reach home/);
+  });
+  it('the Corsair wins when the season closes', async () => {
+    const { a, adm, cor } = await convoy();
+    for (let guard = 0; guard < 200 && a.pub.phase === 'battle'; guard++) (adm.myTurn ? adm : cor).endTurn();
+    expect(a.pub).toMatchObject({ phase: 'over', winner: cor.me, reason: 'season', round: 13 });
+  });
+  it('the Admiral wins by sinking the whole corsair fleet', async () => {
+    const { a, adm, cor, turnOf } = await convoy();
+    turnOf(adm);
+    const next = () => { for (const s of cor.ships) { const cs = shipCells(s); for (let i = 0; i < s.len; i++) if (!s.hits[i]) return cs[i]; } return [0, 0] as [number, number]; };
+    for (let guard = 0; guard < 200 && a.pub.phase === 'battle'; guard++) {
+      if (adm.myTurn) { if (adm.pub.ap > 0) adm.attack('shot', ...next()); else adm.endTurn(); } else cor.endTurn();
+    }
+    expect(a.pub).toMatchObject({ phase: 'over', winner: adm.me, reason: 'fleet' });
+  });
+  it('Close Escort turns one hit aside; Dead Reckoning names the column', async () => {
+    const { bus, adm, cor, turnOf } = await convoy();
+    turnOf(adm);
+    expect(adm.power()).toBe(true);
+    expect(adm.power()).toBe(false);
+    adm.endTurn();
+    cor.attack('shot', 0, 10);
+    expect(cor.pub.cargo).toBe(3);
+    expect(adm.side.shots[0].result).toBe('clang');
+    cor.attack('shot', 0, 10);
+    expect(cor.pub.cargo).toBe(2);
+    expect(cor.power()).toBe(true);
+    expect(cor.pub.reckon).toEqual({ col: 1, round: cor.pub.round });
+    expect(cor.pub.ap).toBe(0);
+    for (let i = 0; i < 80 && adm.pub.phase === 'battle'; i++) (adm.myTurn ? adm : cor).endTurn();
+    expect(await verify(bus.log, adm.me, 'admiral')).toBeNull();
+  });
+  it('bots play Convoy to the end and neither role dominates', async () => {
+    const wins = { admiral: 0, corsair: 0 }, why: Record<string, number> = {}, G = 60;
+    for (let seed = 1; seed <= G; seed++) {
+      const bus = new Bus(), rnd = seeded(seed * 131);
+      const a = new Client(0, seed, bus.send, rnd, 'A', 'convoy'), b = new Client(1, seed, bus.send, rnd, 'B', 'convoy');
+      bus.subscribe((m) => a.receive(m));
+      bus.subscribe((m) => b.receive(m));
+      botAct(a, rnd); botAct(b, rnd);
+      while (a.pub.phase === 'placement') await tick();
+      driveBot(a, null, rnd); driveBot(b, null, rnd);
+      expect(a.pub.phase).toBe('over');
+      expect(a.pub).toEqual(b.pub);
+      expect(await verify(bus.log, 0, a.role)).toBeNull();
+      expect(await verify(bus.log, 1, b.role)).toBeNull();
+      wins[a.pub.winner === a.pub.admiral ? 'admiral' : 'corsair']++;
+      why[a.pub.reason!] = (why[a.pub.reason!] || 0) + 1;
+    }
+    console.log('convoy bot v bot:', wins, why);
+    expect(wins.admiral / G).toBeGreaterThan(0.3);
+    expect(wins.admiral / G).toBeLessThan(0.7);
   });
 });
 

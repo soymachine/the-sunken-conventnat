@@ -55,6 +55,7 @@ const SPECS: Record<Kind, Spec> = {
   frigate: { beam: 0.32, depth: 0.34, stern: 0.4, bow: 0.22, hull: 0x1c150d, strake: 0x8a6f2c, deck: 0x5f4526, rig: 'square', masts: [0.2, 0.47, 0.73], mastH: 1.5 },
   ironclad: { beam: 0.36, depth: 0.2, stern: 0.05, bow: 0.1, hull: 0x24221f, strake: 0x4a4640, deck: 0x55504a, rig: 'none', masts: [0.82], mastH: 0.8 },
   schooner: { beam: 0.26, depth: 0.27, stern: 0.2, bow: 0.3, hull: 0x2a1e12, strake: 0x5a4026, deck: 0x6a4e2c, rig: 'gaff', masts: [0.36, 0.66], mastH: 1.45 },
+  merchant: { beam: 0.4, depth: 0.34, stern: 0.4, bow: 0.15, hull: 0x3a2a18, strake: 0xcbb27a, deck: 0x7a5a34, rig: 'square', masts: [0.3, 0.68], mastH: 1.3 },
   cutter: { beam: 0.25, depth: 0.25, stern: 0.2, bow: 0.3, hull: 0x2a1e12, strake: 0x6b4e2c, deck: 0x6a4e2c, rig: 'gaff', masts: [0.52], mastH: 1.25 },
 };
 
@@ -133,6 +134,8 @@ export interface ShipModel {
   mats: THREE.ShaderMaterial[];
   /** Local position of the funnel mouth, for ships that smoke. */
   funnel?: THREE.Vector3;
+  /** Cargo on deck, one crate per hull section (merchantman only). */
+  crates: THREE.Object3D[];
   deckY: number;
 }
 
@@ -157,7 +160,7 @@ export function buildShip(kind: Kind, len: number): ShipModel {
     o.position.sub(new THREE.Vector3(c.x - len / 2, box.min.y, c.z));
     o.traverse((n) => { const m = n as THREE.Mesh; if (m.isMesh) { const col = (m.material as THREE.MeshStandardMaterial).color; m.material = mat(col ? col.getHex() : s.hull); m.castShadow = true; } });
     inner.add(o);
-    return { body, sails, mats, deckY: s.depth };
+    return { body, sails, mats, crates: [], deckY: s.depth };
   }
 
   const h = loft(len, s);
@@ -209,6 +212,19 @@ export function buildShip(kind: Kind, len: number): ShipModel {
     }
   });
 
+  const crates: THREE.Object3D[] = [];
+  if (kind === 'merchant') {
+    const box = new THREE.BoxGeometry(0.34, 0.26, 0.34), cm = mat(0xb08d3c), ce = new THREE.LineBasicMaterial({ color: 0x0d0b08 });
+    for (let i = 0; i < len; i++) {
+      const g = new THREE.Group();
+      g.add(new THREE.Mesh(box, cm), new THREE.LineSegments(new THREE.EdgesGeometry(box), ce));
+      (g.children[0] as THREE.Mesh).castShadow = true;
+      g.position.set(i + 0.5 + (i === 1 ? 0.12 : 0), s.depth + 0.1, i % 2 ? 0.1 : -0.1);
+      g.rotation.y = i * 0.5;
+      inner.add(g);
+      crates.push(g);
+    }
+  }
   let funnel: THREE.Vector3 | undefined;
   if (kind === 'ironclad') {
     const cm = add(inner, new THREE.CylinderGeometry(0.42, 0.62, 0.24, 4, 1), mat(0x3a3733));
@@ -236,5 +252,5 @@ export function buildShip(kind: Kind, len: number): ShipModel {
   const lines = new THREE.BufferGeometry();
   lines.setAttribute('position', new THREE.Float32BufferAttribute(rig, 3));
   inner.add(new THREE.LineSegments(lines, new THREE.LineBasicMaterial({ color: 0x0d0b08, transparent: true, opacity: 0.75 })));
-  return { body, sails, mats, funnel, deckY: s.depth };
+  return { body, sails, mats, funnel, crates, deckY: s.depth };
 }

@@ -1,21 +1,21 @@
 // After the battle each captain reveals their placement and hidden moves.
 // Replaying them against the public log shows whether every answer was honest.
 import { Act, Msg, Placement, commitHash } from './engine';
-import { CellResult, FLEET, Ship, XY, countScan, fits, repairShip, resolveAttack, sailShip, turnShip } from './rules';
+import { CellResult, FLEETS, N, Role, Ship, XY, countScan, fits, legalPlacement, repairShip, resolveAttack, sailShip, shipCells, turnShip } from './rules';
 
 // Compare by value: a database may hand objects back with their keys in another order.
-const sig = (rs: CellResult[]) => rs.map((r) => [r.x, r.y, r.r, r.ship ? [r.ship.kind, r.ship.x, r.ship.y, r.ship.dir] : 0].join()).join('|');
+const sig = (rs: CellResult[]) => rs.map((r) => [r.x, r.y, r.r, r.ship ? [r.ship.kind, r.ship.x, r.ship.y, r.ship.dir] : 0, r.cargo ? 1 : 0].join()).join('|');
 const cells = (cs: XY[]) => cs.map((c) => c[0] + ',' + c[1]).join('|');
 
 /** Returns null when `who` played honestly, or a description of the first discrepancy. */
-export async function verify(log: Msg[], who: 0 | 1): Promise<string | null> {
+export async function verify(log: Msg[], who: 0 | 1, role: Role = 'classic'): Promise<string | null> {
   const ready = log.find((m) => m.by === who && m.t === 'ready');
   const reveal = log.find((m) => m.by === who && m.t === 'reveal');
   if (!ready || ready.t !== 'ready' || !reveal || reveal.t !== 'reveal') return 'nothing was revealed';
   const initial: Placement[] = reveal.initial || [];
   if ((await commitHash(initial, reveal.salt)) !== ready.hash) return 'the fleet shown is not the fleet committed at the start';
   const ships: Ship[] = [];
-  for (const [id, f] of FLEET.entries()) {
+  for (const [id, f] of FLEETS[role].entries()) {
     const pl = initial.find((q) => q.id === id);
     if (!pl) return 'a ship is missing from the placement';
     const s: Ship = { id, kind: f.kind, cls: f.cls, len: f.len, x: pl.x, y: pl.y, dir: pl.dir, hits: new Array(f.len).fill(false), sunk: false };
@@ -23,20 +23,30 @@ export async function verify(log: Msg[], who: 0 | 1): Promise<string | null> {
     if (!fits(ships, s)) return 'the placement was not legal';
     ships.push(s);
   }
+  if (!legalPlacement(ships)) return 'the merchantman did not start at the Colony';
   const acts: Act[] = [...(reveal.acts || [])];
-  let expect: string | null = null;
+  let expect: string | null = null, laden = 0, shield = false;
   for (const m of log) {
     if (m.by === who && (m.t === 'move' || m.t === 'repair')) {
       const a = acts.shift();
       if (!a) return 'a hidden move was not disclosed';
       if (m.t === 'repair') { if (a.k !== 'repair' || !repairShip(ships, a.id, a.idx)) return 'an impossible repair'; continue; }
+      const moving = ships.find((s) => s.id === a.id);
       if (a.k === 'sail') {
         const debris = sailShip(ships, a.id, a.delta, a.steps);
         if (!debris || cells(debris) !== cells(m.debris || [])) return 'a ship sailed where it could not, or hid its wreckage';
       } else if (a.k !== 'turn' || !turnShip(ships, a.id)) return 'an impossible turn';
+      if (moving?.kind === 'merchant') {
+        if (++laden >= 2 && m.wake === undefined) return 'the merchantman ran under full sail and hid its wake';
+        if (!!m.home !== shipCells(moving).some(([x]) => x === N - 1)) return 'the merchantman did not truly reach home';
+      } else if (m.home) return 'a ship that is not the merchantman claimed the cargo';
     }
-    if (m.by === who && m.t === 'endTurn') for (const s of ships) s.chained = false;
-    if (m.by !== who && m.t === 'attack') expect = sig(resolveAttack(ships, m.cells, m.src === 'chain').results);
+    if (m.by === who && m.t === 'power' && role === 'admiral') shield = true;
+    if (m.by !== who && m.t === 'endTurn') shield = false;
+    if (m.by !== who && m.t === 'power' && role === 'admiral') { const mer = ships.find((s) => s.kind === 'merchant'); expect = 'col:' + (mer ? shipCells(mer)[1][0] : -1); }
+    if (m.by === who && m.t === 'powerResult' && expect !== null) { if ('col:' + m.col !== expect) return 'the merchantman was not where Dead Reckoning was told'; expect = null; }
+    if (m.by === who && m.t === 'endTurn') { for (const s of ships) s.chained = false; laden = 0; }
+    if (m.by !== who && m.t === 'attack') { const r = resolveAttack(ships, m.cells, m.src === 'chain', shield); if (r.shielded) shield = false; expect = sig(r.results); }
     if (m.by !== who && m.t === 'scan') expect = 'scan:' + countScan(ships, m.x, m.y);
     if (m.by === who && m.t === 'result' && expect !== null) {
       if (sig(m.results || []) !== expect) return 'a shot was answered falsely';
