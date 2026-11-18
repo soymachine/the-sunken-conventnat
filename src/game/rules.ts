@@ -70,6 +70,9 @@ export function rimCells(ships: Ship[], ring: number): XY[] {
 }
 export const inBoard = (x: number, y: number) => x >= 0 && y >= 0 && x < N && y < N;
 export const inZone = (cx: number, cy: number, x: number, y: number) => Math.abs(x - cx) <= ZONE && Math.abs(y - cy) <= ZONE;
+/** Nearest legal centre for a spyglass, so that its whole 5×5 patch lies on the chart. */
+export const clampZone = (v: number) => Math.min(N - 1 - ZONE, Math.max(ZONE, v));
+export const zoneFits = (x: number, y: number) => clampZone(x) === x && clampZone(y) === y;
 export const cellName = (x: number, y: number) => 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[x] + (y + 1);
 
 export function shipCells(s: Placed): XY[] {

@@ -16,7 +16,14 @@ export interface View { pub: Pub; me: 0 | 1; ships: Ship[]; selectedId?: number 
   /** Convoy only: whose chart carries the route, and whether to mark the merchantman's starting waters. */
   convoy?: { side: Side; zone: boolean };
   /** Rebuilding after a reload: show the present state without replaying how it came about. */
-  quiet?: boolean }
+  quiet?: boolean;
+  /** Blows still on their way: keys `side:x,y` whose marks and damage must not show yet. */
+  hide?: Set<string>;
+  /** Translucent previews of where a ship would lie after a turn. */
+  ghosts?: Ghost[] }
+export interface Ghost { kind: Kind; len: number; x: number; y: number; dir: 'h' | 'v'; rev: boolean; from: [number, number]; state: 'hot' | 'idle' | 'bad';
+  /** Draw the translucent ship itself (only for the turn being pointed at), not just its arrow. */
+  ship: boolean }
 export type Sound = 'cannon' | 'splash' | 'hit' | 'clang' | 'sink' | 'coin' | 'glass' | 'roar' | 'thunder';
 
 const C = { ink: 0x0d0b08, amber: 0xd9a441, parch: 0xe8d5a3, brass: 0xb08d3c, wax: 0x8c2f1b };
@@ -52,7 +59,7 @@ function label(text: string, color: string): THREE.Sprite {
     labels.set(text + color, m);
   }
   const s = new THREE.Sprite(m);
-  s.scale.setScalar(1.5);
+  s.scale.setScalar(0.85);
   return s;
 }
 /** Text laid flat along a chart edge, reading upwards. */
@@ -86,6 +93,8 @@ for (const k of ['disc', 'ring', 'ring2', 'cell', 'zone', 'eye', 'torus', 'beam'
 const M = {
   flame: new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 1.5, 0.35) }), gold: new THREE.MeshBasicMaterial({ color: new THREE.Color(1.15, 0.72, 0.16) }),
   chest: new THREE.MeshLambertMaterial({ color: 0x7a5a1e }), debris: new THREE.MeshLambertMaterial({ color: 0x2a2116 }), ball: new THREE.MeshLambertMaterial({ color: 0x15110b }),
+  chestDim: new THREE.MeshLambertMaterial({ color: 0x5a4a2a, transparent: true, opacity: 0.6 }), goldDim: new THREE.MeshBasicMaterial({ color: 0x8a6f2c, transparent: true, opacity: 0.6 }),
+  sealDim: new THREE.MeshBasicMaterial({ color: 0x6b2a1c, transparent: true, opacity: 0.6 }),
   chain: new THREE.MeshLambertMaterial({ color: C.wax }), seal: new THREE.MeshBasicMaterial({ color: new THREE.Color(0.75, 0.13, 0.06) }), line: new THREE.LineBasicMaterial({ color: C.ink }),
   lineAmber: new THREE.LineBasicMaterial({ color: C.amber }), lineWax: new THREE.LineBasicMaterial({ color: C.wax }),
 };
@@ -106,6 +115,9 @@ export class SeaScene {
   private shipsGroup = new THREE.Group();
   private misc = new THREE.Group();
   private hl = new THREE.Group();
+  private ghosts = new THREE.Group();
+  private ghostKey = '';
+  private pan: THREE.Vector3 | null = null;
   private fx = new Fx();
   private kraken = new Kraken();
   private stormy = false;
@@ -166,6 +178,28 @@ export class SeaScene {
     if (this.quality === 'high') this.post = new Post(this.renderer, this.scene, this.camera);
     addEventListener('resize', () => this.resize());
     canvas.addEventListener('wheel', (e) => { e.preventDefault(); this.wheel(e); }, { passive: false });
+    // Hold the middle button and drag to slide the charts under the camera.
+    canvas.addEventListener('pointerdown', (e) => {
+      if (e.button !== 1) return;
+      e.preventDefault();
+      this.pan = this.ground(e);
+      canvas.setPointerCapture(e.pointerId);
+      canvas.style.cursor = 'grabbing';
+    });
+    canvas.addEventListener('pointermove', (e) => {
+      if (!this.pan) return;
+      const g = this.ground(e);
+      if (!g) return;
+      this.target.add(this.pan.clone().sub(g));
+      this.target.x = Math.max(-this.extent.x, Math.min(this.extent.x, this.target.x));
+      this.target.z = Math.max(-this.extent.z, Math.min(this.extent.z, this.target.z));
+      this.place();
+    });
+    const drop = (e: PointerEvent) => { if (this.pan) { this.pan = null; canvas.style.cursor = ''; canvas.releasePointerCapture(e.pointerId); } };
+    canvas.addEventListener('pointerup', drop);
+    canvas.addEventListener('pointercancel', drop);
+    canvas.addEventListener('mousedown', (e) => { if (e.button === 1) e.preventDefault(); });
+    this.scene.add(this.ghosts);
     this.resize();
     void loadShipModels().then((n) => { if (n) { for (const o of this.ships.values()) this.shipsGroup.remove(o.root); this.ships.clear(); if (this.last) this.sync(this.last); } });
     let prev = performance.now();
@@ -203,6 +237,7 @@ export class SeaScene {
     this.ships.clear(); this.marks.clear(); this.misc.clear(); this.hl.clear();
     this.seas.own.clear(); this.seas.enemy.clear();
     this.kraken.setZone(null);
+    this.ghosts.clear(); this.ghostKey = '';
     this.last = null;
   }
 
@@ -221,7 +256,7 @@ export class SeaScene {
     this.fx.setScale(h * this.renderer.getPixelRatio() * 1.4);
     this.camera.aspect = w / h;
     const wide = w > 1000;
-    const safe = { left: wide ? 268 : 6, right: wide ? 18 : 6, top: 74, bottom: wide ? 196 : 150 };
+    const safe = { left: wide ? 268 : 6, right: wide ? 232 : 6, top: 74, bottom: wide ? 196 : 150 };
     const layout = wide && w / h > 1.25 ? ABREAST : STACKED;
     const changed = layout !== origin || !this.laid;
     this.laid = true;
@@ -267,7 +302,7 @@ export class SeaScene {
     this.zoom = Math.min(1, Math.max(0.35, this.zoom * Math.exp(e.deltaY * 0.0012)));
     this.place();
     const after = this.ground(e);
-    if (this.zoom >= 1) this.target.set(0, 0, 0);
+    if (this.zoom >= 1 && e.deltaY > 0) this.target.set(0, 0, 0); // zooming all the way out re-centres
     else if (before && after) {
       this.target.add(before.sub(after));
       this.target.x = Math.max(-this.extent.x, Math.min(this.extent.x, this.target.x));
@@ -354,6 +389,7 @@ export class SeaScene {
       c.position.y = c.userData.y0 + swell(c.position.x, c.position.z);
     }
     for (const sh of this.shadowPlanes) this.drape(sh, swell);
+    for (const g of this.ghosts.children) g.position.y = (g.userData.y0 ?? 0) + swell(g.position.x, g.position.z);
     if (this.stormy && (this.nextBolt -= dt) < 0) {
       this.nextBolt = 2.5 + Math.random() * 5;
       this.seas.own.flash(); this.seas.enemy.flash();
@@ -424,6 +460,7 @@ export class SeaScene {
 
   private drawSide(p: SidePub, side: Side, round: number) {
     for (const s of p.shots) {
+      if (this.hidden.has(`${side}:${s.x},${s.y}`)) continue;
       const age = round - s.round, fade = Math.max(0.3, 1 - age * 0.14), at = cellCenter({ side, x: s.x, y: s.y });
       if (s.result === 'miss') { this.flat(G.ring, C.ink, fade, at); this.flat(G.ring2, C.ink, fade, at); }
       else if (side === 'enemy') {
@@ -457,7 +494,7 @@ export class SeaScene {
       const box = new THREE.LineSegments(G.zone, side === 'enemy' ? M.lineAmber : M.lineWax);
       box.position.set(at.x, 0.12, at.z);
       const l = label(sc.count < 0 ? '?' : String(sc.count), side === 'enemy' ? '#d9a441' : '#c0563c');
-      l.position.set(at.x, 0.9, at.z);
+      l.position.set(at.x, 0.55, at.z);
       this.marks.add(box, l);
     }
     p.fogs.forEach((f, fi) => {
@@ -474,6 +511,7 @@ export class SeaScene {
     });
   }
   private embers0: THREE.Vector3[] = [];
+  private hidden = new Set<string>();
 
   /** A flat tinted band over a block of cells. */
   private strip(side: Side, x: number, y: number, w: number, h: number, color: number, opacity: number, map?: THREE.Texture) {
@@ -489,6 +527,8 @@ export class SeaScene {
   /** Bring the scene in line with the current view. */
   sync(v: View) {
     this.last = v;
+    this.hidden = v.hide || new Set();
+    const veiled = (side: Side, s: Pick<Ship, 'x' | 'y' | 'dir' | 'len'>) => shipCells(s).some(([x, y]) => this.hidden.has(`${side}:${x},${y}`));
     const foe = (1 - v.me) as 0 | 1, seen = new Set<string>();
     const wreck = (o: ShipObj) => {
       if (o.state !== 'afloat') return;
@@ -499,13 +539,16 @@ export class SeaScene {
       const key = 'o' + s.id, o = this.ship(key, s.kind, s.len, 'own');
       seen.add(key);
       this.aim(o, s);
-      if (s.sunk) { wreck(o); this.decorate(o, [], false); continue; }
-      this.decorate(o, s.hits, !!s.chained);
+      // Damage from a blow still in the air waits for it to land.
+      const cs = shipCells(s), hits = s.hits.map((h, i) => h && !this.hidden.has(`own:${cs[i][0]},${cs[i][1]}`));
+      if (s.sunk && !veiled('own', s)) { wreck(o); this.decorate(o, [], false); continue; }
+      this.decorate(o, hits, !!s.chained);
       const sel = s.id === v.selectedId;
       o.lift = sel && v.lifted ? 0.45 : 0;
       for (const m of o.model.mats) { m.uniforms.uTint.value.setHex(v.invalid ? C.wax : C.amber); m.uniforms.uTintAmt.value = sel ? 0.5 : 0; }
     }
     for (const s of v.pub.sides[foe].sunk) {
+      if (veiled('enemy', s)) continue;
       const key = `e${s.kind}:${s.x},${s.y}`, o = this.ship(key, s.kind, s.len, 'enemy');
       seen.add(key);
       this.aim(o, s);
@@ -553,11 +596,15 @@ export class SeaScene {
       const rk = v.pub.reckon;
       if (rk && v.pub.round - rk.round <= 1) this.strip(side, rk.col, 0, 1, N, mineToHide ? C.wax : C.amber, 0.4);
     }
+    this.syncGhosts(v.ghosts || []);
     for (const t of v.pub.treasures) {
-      const at = cellCenter({ side: t.side === v.me ? 'own' : 'enemy', x: t.x, y: t.y });
+      // The enemy's flotsam is only a clue to where their ships will go: draw it smaller and duller.
+      const theirs = t.side !== v.me, k = theirs ? 0.7 : 1;
+      const at = cellCenter({ side: theirs ? 'enemy' : 'own', x: t.x, y: t.y });
       if (t.kind === 'seal') {
         // A covenant seal: a disc of sealing wax standing in the water.
-        const g = new THREE.Group(), disc = new THREE.Mesh(G.seal, M.seal), rim = new THREE.Mesh(G.sealRim, M.gold);
+        const g = new THREE.Group(), disc = new THREE.Mesh(G.seal, theirs ? M.sealDim : M.seal), rim = new THREE.Mesh(G.sealRim, theirs ? M.goldDim : M.gold);
+        g.scale.setScalar(k);
         disc.rotation.x = rim.rotation.x = Math.PI / 2;
         disc.position.y = rim.position.y = 0.42;
         disc.castShadow = true;
@@ -567,7 +614,8 @@ export class SeaScene {
         this.glints.push(g);
         continue;
       }
-      const g = new THREE.Group(), chest = new THREE.Mesh(G.chest, M.chest), lid = new THREE.Mesh(G.lid, M.gold);
+      const g = new THREE.Group(), chest = new THREE.Mesh(G.chest, theirs ? M.chestDim : M.chest), lid = new THREE.Mesh(G.lid, theirs ? M.goldDim : M.gold);
+      g.scale.setScalar(k);
       chest.position.y = 0.15; lid.position.y = 0.35; chest.castShadow = true;
       const edge = new THREE.LineSegments(new THREE.EdgesGeometry(G.chest), M.line);
       edge.position.y = 0.15;
@@ -575,6 +623,49 @@ export class SeaScene {
       g.position.set(at.x, 0.08, at.z);
       this.marks.add(g);
       this.glints.push(g);
+    }
+  }
+
+  /** Translucent ships showing where a turn would leave her, each with an arc from the present bow. */
+  private syncGhosts(list: Ghost[]) {
+    const key = JSON.stringify(list);
+    if (key === this.ghostKey) return;
+    this.ghostKey = key;
+    this.ghosts.clear();
+    for (const gh of list) {
+      const color = gh.state === 'bad' ? C.wax : C.amber, alpha = gh.state === 'hot' ? 0.8 : gh.state === 'idle' ? 0.5 : 0.35;
+      const model = buildShip(gh.kind, gh.len), root = new THREE.Group();
+      for (const m of model.mats) { m.uniforms.uTint.value.setHex(color); m.uniforms.uTintAmt.value = gh.state === 'bad' ? 0.75 : 0.3; m.uniforms.uAlpha.value = gh.state === 'bad' ? 0.45 : 0.78; m.transparent = true; m.depthWrite = false; }
+      model.body.traverse((n) => {
+        n.castShadow = false;
+        const lm = (n as THREE.LineSegments).material as THREE.LineBasicMaterial;
+        if ((n as THREE.LineSegments).isLineSegments) { (n as THREE.LineSegments).material = new THREE.LineBasicMaterial({ color, transparent: true, opacity: alpha }); void lm; }
+      });
+      for (const c of model.crates) c.visible = false;
+      if (gh.ship) root.add(model.body);
+      const cs = shipCells(gh), a = cellCenter({ side: 'own', x: cs[0][0], y: cs[0][1] }), b = cellCenter({ side: 'own', x: cs[cs.length - 1][0], y: cs[cs.length - 1][1] });
+      root.position.copy(a).add(b).multiplyScalar(0.5);
+      root.rotation.y = [0, -Math.PI / 2, Math.PI, Math.PI / 2][headingOf(gh)];
+      root.userData.y0 = 0.12;
+      this.ghosts.add(root);
+      // The sweep of the bow, as an arc with an arrowhead.
+      const bow = gh.rev ? cs[0] : cs[cs.length - 1];
+      const p0 = cellCenter({ side: 'own', x: gh.from[0], y: gh.from[1] }), p2 = cellCenter({ side: 'own', x: bow[0], y: bow[1] });
+      const mid = p0.clone().add(p2).multiplyScalar(0.5), out = mid.clone().sub(root.position).setY(0);
+      const p1 = mid.clone().add(out.multiplyScalar(0.9));
+      const curve = new THREE.QuadraticBezierCurve3(p0.setY(1.0), p1.setY(1.0), p2.setY(1.0));
+      // Bright enough to glow: these are the things to click.
+      const glow = gh.state === 'bad' ? new THREE.Color(0.75, 0.16, 0.08) : gh.state === 'hot' ? new THREE.Color(2.6, 1.7, 0.4) : new THREE.Color(1.25, 0.85, 0.22);
+      const mat = new THREE.MeshBasicMaterial({ color: glow, transparent: true, opacity: gh.state === 'idle' ? 0.85 : 1, depthWrite: false });
+      const arc = new THREE.Mesh(new THREE.TubeGeometry(curve, 20, gh.state === 'hot' ? 0.07 : 0.045, 6), mat);
+      // A bold arrowhead on the square the bow would point from, aimed the way she would head.
+      const head = new THREE.Mesh(new THREE.ConeGeometry(gh.state === 'hot' ? 0.42 : 0.32, gh.state === 'hot' ? 0.95 : 0.75, 12), mat), way = p2.clone().sub(root.position).setY(0).normalize();
+      head.position.copy(p2).addScaledVector(way, 0.25);
+      head.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), way);
+      const arrow = new THREE.Group();
+      arrow.add(arc, head);
+      arrow.userData.y0 = 0;
+      this.ghosts.add(arrow);
     }
   }
 

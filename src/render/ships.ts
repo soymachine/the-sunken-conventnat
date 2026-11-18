@@ -22,7 +22,7 @@ void main() {
 }`;
 const FRAG = /* glsl */ `
 uniform vec3 uColor, uTint, uLight;
-uniform float uTintAmt;
+uniform float uTintAmt, uAlpha;
 varying vec3 vN;
 void main() {
   vec3 n = normalize(vN);
@@ -34,7 +34,7 @@ void main() {
   if (d <= 0.6) hatch -= 0.24 * step(0.55, fract((f.x + f.y) / 5.0));
   if (d <= 0.38) hatch -= 0.22 * step(0.55, fract((f.x - f.y) / 5.0));
   vec3 c = mix(uColor * band * hatch, uTint, uTintAmt);
-  gl_FragColor = vec4(c, 1.0);
+  gl_FragColor = vec4(c, uAlpha);
   #include <colorspace_fragment>
 }`;
 
@@ -42,7 +42,7 @@ void main() {
 export function inkMaterial(color: number, flutter = 0): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     vertexShader: VERT, fragmentShader: FRAG, side: THREE.DoubleSide,
-    uniforms: { uColor: { value: new THREE.Color(color) }, uTint: { value: new THREE.Color(0xd9a441) }, uTintAmt: { value: 0 }, uLight: { value: LIGHT }, uTime: time, uFlutter: { value: flutter } },
+    uniforms: { uColor: { value: new THREE.Color(color) }, uTint: { value: new THREE.Color(0xd9a441) }, uTintAmt: { value: 0 }, uAlpha: { value: 1 }, uLight: { value: LIGHT }, uTime: time, uFlutter: { value: flutter } },
   });
 }
 

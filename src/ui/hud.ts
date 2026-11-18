@@ -54,15 +54,16 @@ export class Hud {
       <header class="rail top">
         <div class="turn"><svg class="compass" viewBox="0 0 100 100"></svg><div><b id="turnTitle"></b><i id="turnSub"></i></div><button id="mute" class="mini" aria-pressed="false">Sound on</button></div>
         <h1>The Sunken Covenant</h1>
-        <div class="foe"><span id="foeName"></span><div id="foeFleet"></div></div>
+        <div class="foe"><span id="foeNote"></span></div>
       </header>
       <div class="objective" id="objective" hidden></div>
       <aside class="card left">
-        <h2>The covenant <span id="foeSeals"></span></h2><div class="seals" id="seals"></div>
+        <h2>The covenant</h2><div class="seals" id="seals"></div>
         <h2>Admiralty orders</h2><p id="orderText"></p><p id="orderMeta" class="meta"></p>
         <h2>Quartermaster <span id="gold" title="Doubloons"></span></h2><ul id="shop"></ul>
         <h2>Your fleet</h2><ul id="fleet"></ul>
       </aside>
+      <aside class="card right"><h2>Enemy fleet</h2><p id="foeName"></p><p class="meta" id="foeSeals"></p><ul id="foeFleet"></ul></aside>
       <p class="toast" id="toast" role="status"></p>
       <div class="belt" id="belt"></div>
       <footer class="rail bottom">
@@ -180,7 +181,7 @@ export class Hud {
     this.q('#turnTitle').textContent = p.phase === 'placement' ? 'Deploy your fleet' : p.phase === 'over' ? 'Battle over' : mine ? 'Your turn' : 'Enemy turn';
     this.q('#turnSub').textContent = p.phase === 'battle' ? `Round ${p.round}` : '';
     this.q('#seals').innerHTML = Array.from({ length: KRAKEN_SEALS }, (_, i) => `<i class="${i < me.seals ? 'lit' : ''}"></i>`).join('') + `<span>${me.seals >= KRAKEN_SEALS ? 'The Kraken will answer.' : `${Math.min(me.seals, KRAKEN_SEALS)} of ${KRAKEN_SEALS} seals`}</span>`;
-    this.q('#foeSeals').textContent = `enemy ${foe.seals}`;
+    this.q('#foeSeals').textContent = `${foe.seals} covenant seal${foe.seals === 1 ? '' : 's'} · ${foe.doubloons} doubloons`;
     this.q<SVGElement>('#needle').style.transform = `rotate(${mine ? 20 : 200}deg)`;
     const shown = Math.max(3, mine ? p.ap : 0);
     const tray = this.q('#tray');
@@ -192,10 +193,17 @@ export class Hud {
     this.q<HTMLButtonElement>('#shuffle').disabled = this.q<HTMLButtonElement>('#rotate').disabled = me.ready;
     this.q('#placeHint').textContent = me.ready ? 'Fleet committed. Waiting for the other captain…' : 'Click a ship to lift it, move it over your waters and click again to set it down.';
 
-    this.q('#foeName').textContent = (foe.name || 'The other captain') + (note ? ` · ${note}` : '');
-    const down = foe.sunk.map((s) => s.kind);
+    this.q('#foeName').textContent = foe.name || 'The other captain';
+    this.q('#foeNote').textContent = note;
     const role = c.role, foeRole = roleOf(p, c.foe);
-    this.q('#foeFleet').innerHTML = FLEETS[foeRole].map((f) => `<span class="pips ${down.includes(f.kind) ? 'sunk' : ''}" title="${f.cls}">${'<i></i>'.repeat(f.len)}</span>`).join('');
+    // One row per enemy ship; a sunk ship is struck through. Two ships of a kind are counted separately.
+    const lost: Record<string, number> = {};
+    for (const s of foe.sunk) lost[s.kind] = (lost[s.kind] || 0) + 1;
+    this.q('#foeFleet').innerHTML = FLEETS[foeRole].map((f) => {
+      const sunk = (lost[f.kind] || 0) > 0;
+      if (sunk) lost[f.kind]--;
+      return `<li class="${sunk ? 'sunk' : ''}"><span>${f.cls}</span><span class="pips">${`<i class="${sunk ? 'hit' : ''}"></i>`.repeat(f.len)}</span></li>`;
+    }).join('');
 
     this.q('#orderText').textContent = c.order ? c.order.text : p.phase === 'placement' ? 'Sealed until the battle begins.' : '—';
     this.q('#orderMeta').textContent = c.order ? `Reward ${c.order.reward} doubloons · ${Math.max(0, c.order.deadline - p.round + 1)} rounds left` : '';

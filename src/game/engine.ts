@@ -4,7 +4,7 @@
 import { Order, pickOrder } from './orders';
 import { ITEMS, Item, MAX_ITEMS, START_DOUBLOONS } from './powerups';
 import {
-  AP_PER_TURN, CellResult, Dir, KRAKEN_SEALS, Kind, MAELSTROM_ROUND, N, Revealed, Rnd, Role, Ship, XY, attackCells, countScan, inBoard, inKraken, inZone, legalPlacement, randomFleet,
+  AP_PER_TURN, CellResult, Dir, KRAKEN_SEALS, Kind, MAELSTROM_ROUND, N, Revealed, Rnd, Role, Ship, XY, attackCells, countScan, inBoard, inKraken, inZone, legalPlacement, randomFleet, zoneFits,
   repairShip, rimCells, resolveAttack, sailReach, sailShip, shipAt, shipCells, turnShip, canTurnShip, Way,
 } from './rules';
 
@@ -209,7 +209,7 @@ export function reduce(p: Pub, m: Msg): boolean {
       p.pending = true;
       return true;
     case 'scan':
-      if (inStorm(p, m.y) || !spend(1, m.src === 'spyglass' ? 'spyglass' : undefined)) return false;
+      if (!zoneFits(m.x, m.y) || inStorm(p, m.y) || !spend(1, m.src === 'spyglass' ? 'spyglass' : undefined)) return false;
       p.pending = true;
       return true;
     case 'move': {
@@ -429,7 +429,7 @@ export class Client {
   }
 
   scan(x: number, y: number, src: 'cutter' | 'spyglass'): boolean {
-    if (!inBoard(x, y) || !this.can(1) || inStorm(this.pub, y) || (src === 'cutter' ? !this.alive('cutter') : !this.has('spyglass'))) return false;
+    if (!zoneFits(x, y) || !this.can(1) || inStorm(this.pub, y) || (src === 'cutter' ? !this.alive('cutter') : !this.has('spyglass'))) return false;
     this.send({ t: 'scan', x, y, src });
     return true;
   }

@@ -150,6 +150,9 @@ describe('protocol', () => {
   });
   it('scans, fog and purchases', async () => {
     const { a, b } = await duel();
+    expect(a.scan(1, 7, 'cutter')).toBe(false); // part of the patch would fall off the chart
+    expect(a.scan(7, 14, 'cutter')).toBe(false);
+    expect(a.pub.ap).toBe(3);
     expect(a.scan(7, 7, 'cutter')).toBe(true);
     expect(a.foeSide.scans[0].count).toBe(12);
     a.endTurn();

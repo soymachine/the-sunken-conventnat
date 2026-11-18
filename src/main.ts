@@ -2,11 +2,11 @@
 import './ui/hud.css';
 import { Client, Msg, Snapshot, roleOf } from './game/engine';
 import { ITEMS, Item } from './game/powerups';
-import { Dir, Ship, Way, ZONE, ahead, attackCells, bowCell, cellName, fits, headingOf, inBoard, legalPlacement, randomFleet, shipAt, shipCells, turned } from './game/rules';
+import { Dir, Ship, Way, ZONE, ahead, attackCells, bowCell, cellName, clampZone, fits, headingOf, inBoard, legalPlacement, randomFleet, shipAt, shipCells, turned } from './game/rules';
 import { verify } from './game/verify';
 import { createRoom, firebaseConfigured, joinRoom } from './net/firebase';
 import { LocalSession, Session } from './net/session';
-import { Cell, Highlight, SeaScene } from './render/scene';
+import { Cell, Ghost, Highlight, SeaScene } from './render/scene';
 import { Sfx } from './ui/audio';
 import { Hud, Mode } from './ui/hud';
 import { Lobby } from './ui/lobby';
@@ -25,7 +25,9 @@ let mode: Mode = 'fire';
 let aimDir: Dir = 'h';
 let busy = false; // animations playing
 let selected: Ship | null = null; // ship chosen for sailing, or lifted during placement
-let lifted: { x: number; y: number; dir: Dir } | null = null;
+let lifted: { x: number; y: number; dir: Dir; rev: boolean } | null = null;
+let grab = 0; // which section of the lifted ship is under the pointer
+const flying = new Set<string>(); // blows on their way: `side:x,y`
 let hover: Cell | null = null;
 let foeOnline = true;
 const queue: Msg[] = [];
@@ -33,7 +35,7 @@ const queue: Msg[] = [];
 const HINTS: Record<string, string> = {
   fire: 'Fire — pick a square in enemy waters. One point a shot.',
   sail: 'Sail — pick one of your ships, then a square ahead of her bow. Ships cannot back up.',
-  turn: 'Turn — pick one of your ships, then the side her bow should swing to (or press Q for port, E for starboard).',
+  turn: 'Turn — pick one of your ships, then click the end where her bow should point: an arrow marks each choice (or press Q for port, E for starboard).',
   broadside: 'Broadside — three squares in a line. Press R to swing the line.',
   chain: 'Chain shot — a hit pins that ship for its next turn.',
   spy: 'Cutter’s glass — count hull sections in a 5×5 patch of enemy water.',
@@ -83,7 +85,7 @@ function start(s: Session, name: string) {
   let snap: Snapshot | null = null;
   try { snap = JSON.parse(localStorage.getItem(storeKey()) || 'null'); } catch { /* ignore */ }
   if (snap) c.restore(snap);
-  mode = 'fire'; selected = lifted = null; busy = false; queue.length = 0; foeOnline = true;
+  mode = 'fire'; selected = lifted = null; busy = false; queue.length = 0; foeOnline = true; flying.clear();
   scene.reset();
   seen.storm = seen.tide = seen.ring = 0;
   hud.clearLog();
@@ -93,6 +95,7 @@ function start(s: Session, name: string) {
     save();
     if (!ok) return;
     if (replay) { quiet = true; refresh(); quiet = false; return; }
+    if (m.t === 'result') for (const r of m.results) flying.add(`${m.by === c.me ? 'own' : 'enemy'}:${r.x},${r.y}`);
     queue.push(m);
     if (!busy) void drain();
   };
@@ -129,6 +132,7 @@ async function drain() {
       if (m.kraken) await Promise.all(m.results.map((r, i) => wait(i * 420).then(() => scene.lash({ side, x: r.x, y: r.y }, r.r))));
       else await Promise.all(m.results.map((r, i) => wait(i * 130).then(() => scene.shot({ side, x: r.x, y: r.y }, r.r))));
     }
+    if (m.t === 'result') for (const r of m.results) flying.delete(`${mine ? 'own' : 'enemy'}:${r.x},${r.y}`);
     if (m.t === 'drowned') for (const r of m.results) scene.drown({ side: mine ? 'own' : 'enemy', x: r.x, y: r.y }, r.r);
     if (m.t === 'powerResult') sfx.play('glass');
     if (m.t === 'scanResult') await scene.sweep({ side: mine ? 'own' : 'enemy', x: m.x, y: m.y });
@@ -254,18 +258,33 @@ function sailTargets(s: Ship): { cell: Cell; delta: 1 | -1; steps: number }[] {
 }
 
 const WAYS: Way[] = ['left', 'right'];
-/** Turn the selected ship; with a square given, towards whichever side's bow lands nearest to it. */
-function turnSelected(way?: Way, at?: { x: number; y: number }) {
+const whyNot = (s: Ship) => (c.held(s.id) ? 'the Kraken holds her' : s.chained ? 'she is pinned by chain shot' : s.hits.filter(Boolean).length >= 2 ? 'she is too badly damaged' : 'there is no sea room');
+/** The squares on the bow side of the pivot after a turn: the end of the new line she would point from. */
+function bowHalf(s: Ship, w: Way): [number, number][] {
+  const mid = Math.floor(s.len / 2), [px, py] = shipCells(s)[s.rev ? s.len - 1 - mid : mid], t = turned(s, w), [bx, by] = bowCell(t);
+  return shipCells(t).filter(([x, y]) => (x - px) * Math.sign(bx - px) + (y - py) * Math.sign(by - py) > 0);
+}
+/**
+ * Which turn the pointer is asking for. Port and starboard put her on the same line of squares and differ
+ * only in which end the bow is at, so the choice is made by pointing at that end.
+ */
+function hoverWay(): Way | null {
+  if (!selected || !hover || hover.side !== 'own') return null;
+  const on = WAYS.filter((w) => bowHalf(selected!, w).some(([x, y]) => x === hover!.x && y === hover!.y));
+  return on.length === 1 ? on[0] : null;
+}
+/** Arrows for both turns, and a translucent ship for the one being pointed at. */
+function turnGhosts(): Ghost[] {
+  if (!session || mode !== 'turn' || !selected || !myTurn()) return [];
+  const s = selected, hot = hoverWay(), from = bowCell(s);
+  return WAYS.map((w) => ({ kind: s.kind, ...turned(s, w), from, ship: hot === w, state: !c.canTurn(s.id, w) ? 'bad' as const : hot === w ? 'hot' as const : 'idle' as const }));
+}
+function turnSelected(way: Way) {
   if (!selected || !myTurn()) return;
   const s = selected;
-  let pick = way;
-  if (!pick && at) {
-    const open = WAYS.filter((w) => c.canTurn(s.id, w)).map((w) => { const [bx, by] = bowCell(turned(s, w)); return { w, d: Math.abs(bx - at.x) + Math.abs(by - at.y), on: shipCells(turned(s, w)).some(([x, y]) => x === at.x && y === at.y) }; });
-    pick = open.filter((o) => o.on).sort((a, b) => a.d - b.d)[0]?.w;
-  }
-  if (!pick) return;
-  if (c.turn(s.id, pick)) { selected = null; return; }
-  hud.log(`The ${s.cls} cannot turn that way — ${c.held(s.id) ? 'the Kraken holds her' : s.chained ? 'she is pinned by chain shot' : s.hits.filter(Boolean).length >= 2 ? 'too badly damaged' : 'no sea room'}.`);
+  if (c.turn(s.id, way)) selected = null;
+  else hud.log(`The ${s.cls} cannot turn to ${way === 'left' ? 'port' : 'starboard'} — ${whyNot(s)}.`, 'bad');
+  refresh();
 }
 
 function zone(side: Cell['side'], x: number, y: number, color: number, opacity: number): Highlight[] {
@@ -287,15 +306,17 @@ function refresh() {
   refreshHud();
   const invalid = !!lifted && (!fits(c.ships, selected!, selected!.id) || !legalPlacement(c.ships));
   const convoy = c.role === 'classic' ? undefined : { side: c.role === 'admiral' ? 'own' as const : 'enemy' as const, zone: c.role === 'admiral' && c.pub.phase === 'placement' };
-  scene.sync({ pub: c.pub, me: c.me, ships: c.ships, selectedId: selected?.id ?? null, invalid, lifted: !!lifted, quiet, convoy });
+  scene.sync({ pub: c.pub, me: c.me, ships: c.ships, selectedId: selected?.id ?? null, invalid, lifted: !!lifted, quiet, convoy, hide: flying, ghosts: turnGhosts() });
   scene.setTurn(c.pub.phase !== 'battle' || c.myTurn);
   const hl: Highlight[] = [];
+  // A lifted ship casts a pale shadow on the squares where she would be set down.
+  if (lifted && selected) for (const [x, y] of shipCells(selected)) if (inBoard(x, y)) hl.push({ side: 'own', x, y, color: invalid ? WAX : 0xfff4d6, opacity: invalid ? 0.5 : 0.6 });
   if (myTurn() && hover) {
     const { side, x, y } = hover;
     if (side === 'enemy') {
       if (mode === 'fire' || mode === 'chain') hl.push({ ...hover, color: WAX, opacity: 0.55 });
       if (mode === 'broadside' || mode === 'fireship') for (const [a, b] of attackCells(mode, x, y, aimDir)) hl.push({ side, x: a, y: b, color: WAX, opacity: 0.55 });
-      if (mode === 'spy' || mode === 'spyglass') hl.push(...zone(side, x, y, AMBER, 0.3));
+      if (mode === 'spy' || mode === 'spyglass') hl.push(...zone(side, clampZone(x), clampZone(y), AMBER, 0.3)); // the patch slides to stay on the chart
       if (mode === 'kraken') for (let b = y - 1; b <= y + 1; b++) for (let a = x - 1; a <= x + 1; a++) if (inBoard(a, b)) hl.push({ side, x: a, y: b, color: WAX, opacity: 0.5 });
     } else {
       if (mode === 'fog') hl.push(...zone(side, x, y, FOG, 0.45));
@@ -310,10 +331,12 @@ function refresh() {
   }
   if (myTurn() && mode === 'sail' && selected) for (const t of sailTargets(selected)) hl.push({ ...t.cell, color: AMBER, opacity: 0.7 });
   if (myTurn() && mode === 'turn' && selected) for (const w of WAYS) {
-    if (!c.canTurn(selected.id, w)) continue;
-    // Show where she would lie, with the square her bow swings to marked strongly.
-    const t = turned(selected, w), [bx, by] = bowCell(t);
-    for (const [x, y] of shipCells(t)) hl.push({ side: 'own', x, y, color: AMBER, opacity: x === bx && y === by ? 0.8 : 0.28 });
+    // The line she would lie on, with the end the bow would take marked more strongly.
+    const ok = c.canTurn(selected.id, w), hot = hoverWay() === w, half = bowHalf(selected, w);
+    for (const [x, y] of shipCells(turned(selected, w))) if (inBoard(x, y)) {
+      const bowEnd = half.some(([a, b]) => a === x && b === y);
+      hl.push({ side: 'own', x, y, color: ok ? AMBER : WAX, opacity: bowEnd ? (hot ? 0.7 : 0.38) : 0.12 });
+    }
   }
   scene.setHighlights(hl);
 }
@@ -321,9 +344,9 @@ function refresh() {
 /* ---------- placement ---------- */
 function moveLifted(cell: Cell) {
   if (!selected || cell.side !== 'own') return;
-  const k = Math.floor(selected.len / 2);
-  selected.x = selected.dir === 'h' ? cell.x - k : cell.x;
-  selected.y = selected.dir === 'h' ? cell.y : cell.y - k;
+  // Keep hold of the section that was picked up, so the ship does not jump under the pointer.
+  selected.x = selected.dir === 'h' ? cell.x - grab : cell.x;
+  selected.y = selected.dir === 'h' ? cell.y : cell.y - grab;
 }
 function rotateLifted() {
   if (!lifted || !selected) return;
@@ -340,7 +363,7 @@ function placementClick(cell: Cell) {
     if (fits(c.ships, selected, selected.id) && legalPlacement(c.ships)) selected = lifted = null;
   } else {
     const at = shipAt(c.ships, cell.x, cell.y);
-    if (at) { selected = at.ship; lifted = { x: at.ship.x, y: at.ship.y, dir: at.ship.dir }; moveLifted(cell); }
+    if (at) { selected = at.ship; lifted = { x: at.ship.x, y: at.ship.y, dir: at.ship.dir, rev: !!at.ship.rev }; grab = at.idx; }
   }
   refresh();
 }
@@ -352,8 +375,8 @@ function battleClick(cell: Cell) {
   if (side === 'enemy') {
     if (mode === 'fire') c.attack('shot', x, y);
     else if (mode === 'broadside' || mode === 'chain' || mode === 'fireship') c.attack(mode, x, y, aimDir);
-    else if (mode === 'spy') c.scan(x, y, 'cutter');
-    else if (mode === 'spyglass') c.scan(x, y, 'spyglass');
+    else if (mode === 'spy') c.scan(clampZone(x), clampZone(y), 'cutter');
+    else if (mode === 'spyglass') c.scan(clampZone(x), clampZone(y), 'spyglass');
     else if (mode === 'kraken') c.kraken(x, y);
     return;
   }
@@ -361,14 +384,11 @@ function battleClick(cell: Cell) {
   if (mode === 'shipwright') { if (!c.repair(x, y)) hud.log('Nothing to repair there.'); return; }
   const at = shipAt(c.ships, x, y);
   if (mode === 'turn') {
-    // First click picks the ship, second picks the side her bow swings to.
-    if (selected && !(at && at.ship === selected && WAYS.every((w) => !shipCells(turned(selected!, w)).some(([a, b]) => a === x && b === y)))) {
-      const before = c.pub.ap;
-      turnSelected(undefined, { x, y });
-      if (c.pub.ap !== before || !selected) return;
-    }
-    selected = at && !at.ship.sunk ? at.ship : null;
-    if (selected && WAYS.every((w) => !c.canTurn(selected!.id, w))) { hud.log(`The ${selected.cls} cannot turn — ${c.held(selected.id) ? 'the Kraken holds her' : selected.chained ? 'she is pinned by chain shot' : selected.hits.filter(Boolean).length >= 2 ? 'too badly damaged' : 'no sea room'}.`); selected = null; }
+    // First click picks the ship; then click one of the two previews.
+    const way = hoverWay();
+    if (selected && way) { turnSelected(way); return; }
+    selected = at && !at.ship.sunk && at.ship !== selected ? at.ship : null;
+    if (selected && WAYS.every((w) => !c.canTurn(selected!.id, w))) hud.log(`The ${selected.cls} cannot turn — ${whyNot(selected)}.`, 'bad');
     refresh();
     return;
   }
@@ -391,8 +411,22 @@ canvas.addEventListener('pointermove', (e) => {
   if (canPlace() && lifted && cell) moveLifted(cell);
   refresh();
 });
+/** A small note beside the pointer explaining the flotsam on a square. */
+const tip = document.body.appendChild(Object.assign(document.createElement('div'), { id: 'tip', hidden: true }));
+canvas.addEventListener('pointermove', (e) => {
+  const t = session && hover && c.pub.phase !== 'over' ? c.pub.treasures.find((q) => (q.side === c.me) === (hover!.side === 'own') && q.x === hover!.x && q.y === hover!.y) : undefined;
+  tip.hidden = !t;
+  if (!t) return;
+  const mine = t.side === c.me, seal = t.kind === 'seal';
+  tip.textContent = mine
+    ? (seal ? 'A covenant seal. Sail a ship onto it to take it — the enemy will see where you were.' : `Treasure worth ${t.value} doubloons. Sail a ship onto it to collect — the enemy will see where you were.`)
+    : (seal ? 'An enemy seal. You cannot take it, but one of their ships may come for it.' : 'Enemy treasure. You cannot take it, but one of their ships may come for it.');
+  tip.style.left = Math.min(innerWidth - 260, e.clientX + 16) + 'px';
+  tip.style.top = e.clientY + 18 + 'px';
+});
+canvas.addEventListener('pointerleave', () => { tip.hidden = true; });
 canvas.addEventListener('click', (e) => {
-  if (!session) return;
+  if (!session || e.button !== 0) return;
   const cell = scene.pick(e);
   if (!cell) return;
   hover = cell;
@@ -410,7 +444,8 @@ addEventListener('keydown', (e) => {
   if (k === 'f' || k === '1') setMode('fire');
   if (k === 's' || k === '2') setMode('sail');
   if (k === 't' || k === '3') setMode('turn');
-  if (mode === 'turn' && (k === 'q' || k === 'e')) turnSelected(k === 'q' ? 'left' : 'right');
+  if (mode === 'turn' && selected && (k === 'q' || k === 'e')) turnSelected(k === 'q' ? 'left' : 'right');
+  if (k === 'escape' && selected) { selected = null; refresh(); }
   if (k === 'a' || k === '4') setMode('broadside');
   if (k === 'r') { aimDir = aimDir === 'h' ? 'v' : 'h'; refresh(); }
   if (k === ' ' && myTurn()) { e.preventDefault(); c.endTurn(); }

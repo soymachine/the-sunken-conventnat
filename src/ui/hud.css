@@ -176,3 +176,15 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); out
 @media (max-width: 1000px) { .toast { bottom: 158px; font-size: 13px; } .battle { gap: 10px; } .helm { gap: 12px; } .helm .ap { padding-bottom: 8px; } }
 @media (max-width: 600px) { .battle { grid-template-columns: auto 1fr; } }
 @media (prefers-reduced-motion: reduce) { .toast.show { animation-duration: 4.5s; } }
+
+/* ---------- enemy fleet card, tooltip ---------- */
+.right { bottom: auto; overflow: visible; }
+.right p { margin: 0 0 4px; font-style: italic; font-size: 16px; }
+#foeFleet li { display: flex; flex-direction: column; gap: 5px; padding: 7px 0; border-bottom: 1px dotted rgba(13, 11, 8, .4); font-size: 15px; }
+#foeFleet li:last-child { border-bottom: 0; }
+#foeFleet .pips { gap: 5px; } #foeFleet .pips i { width: 17px; height: 17px; background: var(--ink); }
+#foeFleet .pips i.hit { background: var(--wax); }
+#foeFleet li.sunk span:first-child { text-decoration: line-through; opacity: .55; }
+.foe { justify-content: center; }
+#tip { position: fixed; z-index: 5; pointer-events: none; max-width: 240px; padding: 6px 10px; background: var(--ink); color: var(--parch); border: 1px solid var(--brass); border-radius: 3px; font: italic 14px var(--body); line-height: 1.25; }
+#foeFleet { display: block; }
