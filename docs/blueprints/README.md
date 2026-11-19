@@ -46,7 +46,7 @@ place of the procedural ship (see `public/models/README.md`).
 
 ## Text prompts
 
-If the service also takes a description, these match the sheets.
+The full prompts for Meshy, with the settings to use, are in `docs/meshy-prompts.md`. Short versions:
 
 - **Ship of the Line** — A British 74-gun ship of the line of the early 1800s, three masts with square
   sails set, two gun decks with ochre strakes and black gun ports, high stern with gallery windows,
