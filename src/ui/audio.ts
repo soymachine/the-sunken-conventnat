@@ -1,11 +1,17 @@
-// Every sound is synthesised with Web Audio: no audio files to load.
-export type SfxName = 'roar' | 'thunder' | 'cannon' | 'splash' | 'hit' | 'clang' | 'sink' | 'coin' | 'glass' | 'click' | 'bell' | 'creak';
+// Most sounds are synthesised with Web Audio; a few recorded ones (public/sfx/*.mp3) are loaded once sound wakes up.
+export type SfxName = 'roar' | 'thunder' | 'cannon' | 'splash' | 'hit' | 'clang' | 'sink' | 'coin' | 'glass' | 'click' | 'bell' | 'creak' | 'gull' | 'treasure';
+const SAMPLES = { rain: 'rain-heavy', thunder: 'thunder', cannon: 'cannon-fire-distant', gull: 'seagull-cry', treasure: 'treasure-reveal' } as const;
+type Sample = keyof typeof SAMPLES;
 
 export class Sfx {
   private ctx: AudioContext | null = null;
   private out!: GainNode;
   private noiseBuf!: AudioBuffer;
   muted = false;
+  private buf: Partial<Record<Sample, AudioBuffer>> = {};
+  private rainVoice: { src: AudioBufferSourceNode; g: GainNode } | null = null;
+  private rainWanted = false;
+  private thunderVoice: GainNode | null = null;
 
   constructor() {
     try { this.muted = localStorage.getItem('tsc:mute') === '1'; } catch { /* ignore */ }
@@ -26,6 +32,45 @@ export class Sfx {
     this.noiseBuf = this.ctx.createBuffer(1, this.ctx.sampleRate * 2, this.ctx.sampleRate);
     const d = this.noiseBuf.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    for (const [k, f] of Object.entries(SAMPLES) as [Sample, string][]) {
+      void fetch(`/sfx/${f}.mp3`).then((r) => r.arrayBuffer()).then((a) => this.ctx!.decodeAudioData(a)).then((b) => {
+        this.buf[k] = b;
+        if (k === 'rain' && this.rainWanted) this.setRain(true);
+      }).catch(() => { /* fall back to the synthesised sound */ });
+    }
+  }
+
+  /** Play a recorded sound; false when it has not loaded (yet). */
+  private sample(k: Sample, gain: number, opts: { fadeOutAt?: number; rate?: number } = {}): GainNode | null {
+    const c = this.ctx!, b = this.buf[k];
+    if (!b) return null;
+    const src = c.createBufferSource(), g = c.createGain(), t = c.currentTime;
+    src.buffer = b; src.playbackRate.value = opts.rate ?? 1;
+    g.gain.value = gain;
+    if (opts.fadeOutAt) { g.gain.setValueAtTime(gain, t + opts.fadeOutAt); g.gain.linearRampToValueAtTime(0, t + opts.fadeOutAt + 2.5); src.stop(t + opts.fadeOutAt + 2.6); }
+    src.connect(g).connect(this.out);
+    src.start(t);
+    return g;
+  }
+
+  /** Heavy rain: fades in and loops while a storm is over the charts, fades out when it clears. */
+  setRain(on: boolean) {
+    this.rainWanted = on;
+    if (!this.ctx) return;
+    const c = this.ctx, t = c.currentTime;
+    if (on && !this.rainVoice && this.buf.rain) {
+      const src = c.createBufferSource(), g = c.createGain();
+      src.buffer = this.buf.rain; src.loop = true;
+      // The recording fades away in its last half second: loop inside it so the seam is not heard.
+      src.loopStart = 0.2; src.loopEnd = this.buf.rain.duration - 0.6;
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.75, t + 4);
+      src.connect(g).connect(this.out); src.start(t, 0.2);
+      this.rainVoice = { src, g };
+    } else if (!on && this.rainVoice) {
+      const v = this.rainVoice; this.rainVoice = null;
+      v.g.gain.cancelScheduledValues(t); v.g.gain.setValueAtTime(v.g.gain.value, t); v.g.gain.linearRampToValueAtTime(0, t + 3);
+      v.src.stop(t + 3.1);
+    }
   }
 
   /** Returns true when sound is now off. */
@@ -63,6 +108,18 @@ export class Sfx {
     if (!this.ctx || this.muted) return;
     if (this.ctx.state === 'suspended') void this.ctx.resume();
     const t = this.ctx.currentTime;
+    // Recorded sounds first, with the synthesised ones as a fallback until they load.
+    if (name === 'thunder' && this.buf.thunder) {
+      // A new clap cuts the long rumble of the last one short, so storms never pile up into a roar.
+      const prev = this.thunderVoice;
+      if (prev) { prev.gain.cancelScheduledValues(t); prev.gain.setValueAtTime(prev.gain.value, t); prev.gain.linearRampToValueAtTime(0, t + 0.8); }
+      this.thunderVoice = this.sample('thunder', 0.9, { fadeOutAt: 6 });
+      return;
+    }
+    if (name === 'cannon' && this.sample('cannon', 0.85, { rate: 0.94 + Math.random() * 0.12 })) return;
+    if (name === 'gull') { this.sample('gull', 0.35, { rate: 0.9 + Math.random() * 0.2 }); return; }
+    if (name === 'treasure' && this.sample('treasure', 0.8)) return;
+    if (name === 'treasure') name = 'coin';
     switch (name) {
       case 'cannon': this.tone(t, 150, 38, 0.5, 0.9); this.noise(t, 0.45, 0.6, 'lowpass', 2400, 180); break;
       case 'splash': this.noise(t, 0.6, 0.35, 'bandpass', 2600, 500, 0.8); break;

@@ -200,11 +200,30 @@ export class Hud {
   }
 
   /** A ribbon sweeps across the screen to announce whose turn it is. */
+  /** Each ribbon plays to the end before the next: a quick enemy turn no longer cuts its own ribbon short. */
   herald(title: string, sub: string, mine: boolean) {
+    this.heralds.push({ title, sub, mine });
+    if (this.heralds.length > 2) this.heralds.splice(0, this.heralds.length - 2);
+    if (!this.heralding) this.nextHerald();
+  }
+  private heralds: { title: string; sub: string; mine: boolean }[] = [];
+  private heralding = false;
+  private held: [string, '' | 'head' | 'bad' | 'good'][] = [];
+  private nextHerald() {
+    const n = this.heralds.shift();
+    if (!n) {
+      // The ribbon has gone: now show the notices that waited behind it, one after another.
+      this.heralding = false;
+      const held = this.held; this.held = [];
+      held.forEach(([text, kind], i) => setTimeout(() => this.log(text, kind), i * 1700));
+      return;
+    }
+    this.heralding = true;
     const h = this.q<HTMLElement>('#herald');
-    h.querySelector('b')!.textContent = title; h.querySelector('span')!.textContent = sub;
-    h.classList.toggle('foe', !mine);
+    h.querySelector('b')!.textContent = n.title; h.querySelector('span')!.textContent = n.sub;
+    h.classList.toggle('enemy', !n.mine);
     h.classList.remove('go'); void h.offsetWidth; h.classList.add('go');
+    setTimeout(() => this.nextHerald(), matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 2150);
   }
 
   setHint(text: string) { this.q('#hint').textContent = text; }
@@ -304,6 +323,8 @@ export class Hud {
   log(text: string, kind: '' | 'head' | 'bad' | 'good' = '') {
     // There is no log panel for now: the latest event shows briefly above the controls.
     if (kind === 'head') return;
+    // Never over the turn ribbon: wait until it has passed.
+    if (this.heralding) { this.held.push([text, kind]); return; }
     const t = this.q<HTMLElement>('#toast');
     t.textContent = text;
     t.className = 'toast show ' + kind;

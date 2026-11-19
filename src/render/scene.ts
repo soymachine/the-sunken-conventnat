@@ -25,7 +25,7 @@ export interface View { pub: Pub; me: 0 | 1; ships: Ship[]; selectedId?: number 
 export interface Ghost { kind: Kind; len: number; x: number; y: number; dir: 'h' | 'v'; rev: boolean; from: [number, number]; pivot: [number, number]; state: 'hot' | 'idle' | 'bad';
   /** Draw the translucent ship itself (only for the turn being pointed at), not just its arrow. */
   ship: boolean }
-export type Sound = 'cannon' | 'splash' | 'hit' | 'clang' | 'sink' | 'coin' | 'glass' | 'roar' | 'thunder';
+export type Sound = 'cannon' | 'splash' | 'hit' | 'clang' | 'sink' | 'coin' | 'glass' | 'roar' | 'thunder' | 'gull' | 'treasure';
 
 const C = { ink: 0x0d0b08, amber: 0xd9a441, parch: 0xe8d5a3, brass: 0xb08d3c, wax: 0x8c2f1b };
 const HALF = N / 2;
@@ -206,6 +206,9 @@ function treasureModel(kind: 'gold' | 'seal', faded: boolean): THREE.Group {
 export class SeaScene {
   /** Set by the controller to play sounds in step with the effects. */
   sound: (s: Sound) => void = () => {};
+  /** Set by the controller: heavy rain on or off while a storm is over the charts. */
+  rain: (on: boolean) => void = () => {};
+  private nextGull = 8;
   private renderer: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
   private camera = new THREE.PerspectiveCamera(38, 1, 0.1, 400);
@@ -446,6 +449,7 @@ export class SeaScene {
     this.ships.clear(); this.marks.clear(); this.misc.clear(); this.hl.clear();
     this.seas.own.clear(); this.seas.enemy.clear();
     this.kraken.setZone(null);
+    this.rain(false);
     this.ghosts.clear(); this.ghostKey = '';
     this.last = null;
   }
@@ -640,6 +644,8 @@ export class SeaScene {
     }
     this.seas.own.update(dt, t); this.seas.enemy.update(dt, t);
     this.weather.update(dt, t);
+    // Now and then a gull cries overhead (they keep away from storms).
+    if ((this.nextGull -= dt) < 0) { this.nextGull = 14 + Math.random() * 26; if (!this.stormy && this.last?.pub.phase === 'battle') this.sound('gull'); }
     this.fx.update(dt);
     this.shakeAmt *= Math.exp(-dt * 7);
     this.camera.position.copy(this.camPos);
@@ -847,6 +853,7 @@ export class SeaScene {
     this.stormy = !!st && v.pub.phase === 'battle';
     this.weather.setCharts(origin.own, origin.enemy);
     this.weather.setStorm(this.stormy ? st!.row : null);
+    this.rain(this.stormy);
     for (const side of ['own', 'enemy'] as Side[]) {
       this.seas[side].setStorm(st ? st.row : null);
       this.seas[side].setRing(v.pub.ring);
@@ -1060,5 +1067,5 @@ export class SeaScene {
     });
   }
 
-  coins(c: Cell) { this.fx.coins(cellCenter(c).setY(0.4)); this.sound('coin'); }
+  coins(c: Cell, mine = true) { this.fx.coins(cellCenter(c).setY(0.4)); this.sound(mine ? 'treasure' : 'coin'); }
 }

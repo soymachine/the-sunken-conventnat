@@ -14,11 +14,10 @@ import { Lobby } from './ui/lobby';
 const AMBER = 0xd9a441, WAX = 0x8c2f1b, INK = 0x0d0b08, FOG = 0xcfc4a8;
 const canvas = document.getElementById('sea') as HTMLCanvasElement;
 const scene = new SeaScene(canvas);
-// ?debug exposes the scene to the console, to trigger weather by hand.
-if (new URLSearchParams(location.search).has('debug')) Object.assign(window, { scene });
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const sfx = new Sfx();
 scene.sound = (s) => sfx.play(s);
+scene.rain = (on) => sfx.setRain(on);
 let quiet = false; // rebuilding the view from history: no animations
 
 let session: Session | null = null;
@@ -60,6 +59,8 @@ const hud = new Hud({
   leave,
 });
 hud.setPrefs(sfx.muted, scene.getQuality());
+// ?debug exposes the scene and HUD to the console, to trigger weather and notices by hand.
+if (new URLSearchParams(location.search).has('debug')) Object.assign(window, { scene, hud });
 const lobby = new Lobby({
   bot: (name, mode) => start(new LocalSession(mode), name),
   create: async (name, mode) => {
@@ -140,7 +141,7 @@ async function drain() {
     if (m.t === 'drowned') for (const r of m.results) scene.drown({ side: mine ? 'own' : 'enemy', x: r.x, y: r.y }, r.r);
     if (m.t === 'powerResult') sfx.play('glass');
     if (m.t === 'scanResult') await scene.sweep({ side: mine ? 'own' : 'enemy', x: m.x, y: m.y });
-    if (m.t === 'move' && m.treasure) scene.coins({ side: mine ? 'own' : 'enemy', x: m.treasure[0], y: m.treasure[1] });
+    if (m.t === 'move' && m.treasure) scene.coins({ side: mine ? 'own' : 'enemy', x: m.treasure[0], y: m.treasure[1] }, mine);
     if (m.t === 'move' && mine) sfx.play('creak');
     if (m.t === 'buy' && mine) sfx.play('coin');
     if (m.t === 'endTurn' && c.myTurn) sfx.play('bell');
@@ -323,6 +324,7 @@ function refresh() {
   // Announce each new turn once, with a ribbon across the screen.
   const turnKey = c.pub.phase === 'battle' ? `${c.pub.round}:${c.pub.current}` : '';
   if (turnKey && turnKey !== lastTurnKey && !quiet) hud.herald(c.myTurn ? 'Your turn' : 'The enemy moves', `Round ${c.pub.round}`, c.myTurn);
+  if (turnKey && turnKey !== lastTurnKey) hud.setHint(c.myTurn ? HINTS[mode] || '' : 'The enemy is at the helm. Watch your waters…');
   lastTurnKey = turnKey;
   const hl: Highlight[] = [];
   // A lifted ship casts a pale shadow on the squares where she would be set down.

@@ -225,13 +225,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); out
 #foeFleet { display: block; }
 
 /* ---------- turn herald: a ribbon that sweeps across ---------- */
-.herald { position: absolute; left: 0; right: 0; top: 34%; display: flex; justify-content: center; pointer-events: none; opacity: 0; z-index: 4; }
+.herald { position: absolute; left: 0; right: 0; top: 30%; display: flex; justify-content: center; pointer-events: none; opacity: 0; z-index: 4; }
 .herald > div { width: min(760px, 80vw); padding: 14px 0 12px; text-align: center; background: linear-gradient(90deg, transparent, rgba(13, 11, 8, .9) 18%, rgba(13, 11, 8, .9) 82%, transparent); position: relative; }
 .herald > div::before, .herald > div::after { content: ""; position: absolute; left: 10%; right: 10%; height: 1px; background: linear-gradient(90deg, transparent, var(--brass), transparent); }
 .herald > div::before { top: 4px; } .herald > div::after { bottom: 4px; }
 .herald b { display: block; font: 400 44px var(--display); letter-spacing: .14em; background: linear-gradient(#fff3c8, #e9bf63 45%, #9a6d22 60%, #e2b357); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 2px 3px #000); }
 .herald span { display: block; font: 500 12px var(--label); letter-spacing: .32em; text-transform: uppercase; color: var(--parch); margin-top: 2px; }
-.herald.foe b { background: linear-gradient(#f2d8c8, #c0563c 50%, #6e2414 62%, #b8604a); -webkit-background-clip: text; background-clip: text; }
+.herald.enemy b { background: linear-gradient(#f2d8c8, #c0563c 50%, #6e2414 62%, #b8604a); -webkit-background-clip: text; background-clip: text; }
 .herald.go { animation: herald 2.1s cubic-bezier(.2, .7, .3, 1) forwards; }
 @keyframes herald {
   0% { opacity: 0; transform: translateX(-14%) scaleY(.6); }
