@@ -13,6 +13,13 @@ export const CAPTAINS: Record<Exclude<Role, 'classic'>, { name: string; title: s
 };
 const SECTORS = ['fire', 'sail', 'turn', 'ability'] as const;
 const NS = 'http://www.w3.org/2000/svg';
+/* Measured on public/ui/console.webp (729 x 521): dial centre and face radii, the four cups
+   (the last is Trade Winds' extra point), and the needle picture with its pivot cap. */
+const TG = {
+  w: 729, h: 521, view: '0 0 729 521', cx: 361, cy: 462, rx: 280, ry: 296, ri: 52,
+  cups: [[151, 94], [292, 39], [442, 39], [581, 95]] as [number, number][], ball: 26,
+  needle: { w: 55, h: 300, capX: 27.3, capY: 272.3, scale: 0.7 },
+};
 
 export const TOOLS: Record<'broadside' | 'chain' | 'spy', { name: string; ap: number }> = {
   broadside: { name: 'Broadside', ap: 2 },
@@ -45,6 +52,7 @@ export class Hud {
   private root: HTMLElement;
   private lever!: SVGGElement;
   private sectors: [SVGPathElement, SVGTextElement][] = [];
+  private balls: SVGGElement[] = [];
   private capTurns = 0;
   private q = <T extends Element>(s: string) => this.root.querySelector(s) as T;
 
@@ -70,8 +78,7 @@ export class Hud {
         <div class="battle">
           <p id="hint"></p>
           <div class="helm">
-            <svg class="telegraph" viewBox="0 0 260 150"></svg>
-            <div class="ap"><span class="lbl">Action points</span><div class="tray" id="tray"></div></div>
+            <svg class="telegraph" viewBox="${TG.view}" role="group" aria-label="Orders and action points"></svg>
           </div>
           <button class="capstan" id="endTurn" aria-label="End turn"><svg viewBox="0 0 100 100"></svg><span>End turn</span></button>
         </div>
@@ -137,29 +144,45 @@ export class Hud {
     svg(s, 'circle', { cx: 50, cy: 50, r: 3.5, fill: '#b08d3c' });
   }
 
+  /* The helm console is public/ui/console.webp (dial with four shot cups on its crest) and
+     public/ui/needle.webp. Everything here is in the source picture's pixels (see TG); the
+     order sectors, their words and glow, the needle and the cannonballs are drawn on top. */
   private telegraph(s: SVGElement) {
-    const x = 130, y = 132, r = 112, span = 180 / SECTORS.length;
+    const { cx, cy, rx, ry, ri } = TG, span = 180 / SECTORS.length;
+    const P = (r: number, deg: number) => [cx + r * Math.cos((deg * Math.PI) / 180), cy - (r * ry / rx) * Math.sin((deg * Math.PI) / 180)];
     const d = svg(s, 'defs', {});
     const g = svg(d, 'radialGradient', { id: 'brass', cx: 0.35, cy: 0.3, r: 0.9 });
     svg(g, 'stop', { offset: 0, 'stop-color': '#f0d489' }); svg(g, 'stop', { offset: 0.45, 'stop-color': '#b08d3c' }); svg(g, 'stop', { offset: 1, 'stop-color': '#5e4717' });
-    const o = polar(x, y, r * 1.06, 180), o2 = polar(x, y, r * 1.06, 0);
-    svg(s, 'path', { d: `M${o} A${r * 1.06},${r * 1.06} 0 0 1 ${o2}Z`, fill: 'url(#brass)', stroke: '#0d0b08' });
+    const glow = svg(d, 'radialGradient', { id: 'sectorGlow', cx: 0.5, cy: 1, r: 1 });
+    svg(glow, 'stop', { offset: 0.25, 'stop-color': '#ffcf6a', 'stop-opacity': 0.92 }); svg(glow, 'stop', { offset: 1, 'stop-color': '#c98a22', 'stop-opacity': 0.7 });
+    const iron = svg(d, 'radialGradient', { id: 'iron', cx: 0.35, cy: 0.3, r: 0.75 });
+    [[0, '#a29d93'], [0.3, '#3b3833'], [0.85, '#0c0b0a'], [1, '#3a2b12']].forEach(([o, c]) => svg(iron, 'stop', { offset: o, 'stop-color': c }));
+    svg(s, 'image', { href: '/ui/console.webp', x: 0, y: 0, width: TG.w, height: TG.h });
+    const labels: SVGTextElement[] = [];
     SECTORS.forEach((m, i) => {
-      const t1 = 180 - span * i, t0 = t1 - span, ri = r * 0.3;
-      const a = polar(x, y, ri, t1), b = polar(x, y, r, t1), c = polar(x, y, r, t0), e = polar(x, y, ri, t0);
-      const path = svg(s, 'path', { d: `M${a} L${b} A${r},${r} 0 0 1 ${c} L${e} A${ri},${ri} 0 0 0 ${a}Z`, stroke: '#5e4717', 'stroke-width': 1.5, class: 'sector' });
-      const mid = t1 - span / 2, p = polar(x, y, r * 0.7, mid);
-      const text = svg(s, 'text', { x: p[0], y: p[1] + 4, 'text-anchor': 'middle', transform: `rotate(${90 - mid} ${p[0]} ${p[1]})`, class: 'sectorLabel' }, m.toUpperCase());
+      const t1 = 180 - span * i, t0 = t1 - span, k = ry / rx;
+      const a = P(ri, t1), b = P(rx, t1), c = P(rx, t0), e = P(ri, t0);
+      const path = svg(s, 'path', { d: `M${a} L${b} A${rx},${ry} 0 0 1 ${c} L${e} A${ri},${ri * k} 0 0 0 ${a}Z`, class: 'sector' });
+      if (i < SECTORS.length - 1) { const [x1, y1] = P(ri + 12, t0), [x2, y2] = P(rx - 6, t0); svg(s, 'line', { x1, y1, x2, y2, class: 'sectorRule' }); }
+      const tr = rx * 0.74, id = `arc${i}`, p0 = P(tr, t1 - 3), p1 = P(tr, t0 + 3);
+      svg(d, 'path', { id, d: `M${p0} A${tr},${tr * k} 0 0 1 ${p1}` });
+      const text = svg(document.createElementNS(NS, 'g'), 'text', { class: 'sectorLabel' });
+      svg(text, 'textPath', { href: `#${id}`, startOffset: '50%', 'text-anchor': 'middle' }, m.toUpperCase());
+      labels.push(text);
       path.addEventListener('click', () => this.on.mode(m === 'ability' ? 'broadside' : m));
       this.sectors.push([path, text]);
     });
+    TG.cups.forEach(([x, y]) => {
+      const b = svg(s, 'g', { class: 'ball spent' });
+      svg(b, 'circle', { cx: x, cy: y, r: TG.ball, fill: 'url(#iron)' });
+      svg(b, 'ellipse', { cx: x - TG.ball * 0.38, cy: y - TG.ball * 0.42, rx: TG.ball * 0.26, ry: TG.ball * 0.16, fill: '#fff', opacity: 0.25 });
+      this.balls.push(b);
+    });
     this.lever = svg(s, 'g', { class: 'lever' });
-    this.lever.style.transformOrigin = `${x}px ${y}px`;
-    svg(this.lever, 'line', { x1: x, y1: y, x2: x, y2: y - r * 1.1, stroke: '#5e4717', 'stroke-width': 9, 'stroke-linecap': 'round' });
-    svg(this.lever, 'line', { x1: x, y1: y, x2: x, y2: y - r * 1.1, stroke: '#b08d3c', 'stroke-width': 5, 'stroke-linecap': 'round' });
-    svg(this.lever, 'circle', { cx: x, cy: y - r * 1.12, r: 9, fill: '#3b2a18', stroke: '#d9a441', 'stroke-width': 1.5 });
-    svg(s, 'circle', { cx: x, cy: y, r: 20, fill: 'url(#brass)', stroke: '#0d0b08' });
-    svg(s, 'circle', { cx: x, cy: y, r: 6, fill: '#0d0b08' });
+    this.lever.style.transformOrigin = `${cx}px ${cy}px`;
+    const n = TG.needle;
+    svg(this.lever, 'image', { href: '/ui/needle.webp', x: cx - n.capX * n.scale, y: cy - n.capY * n.scale, width: n.w * n.scale, height: n.h * n.scale });
+    labels.forEach((t) => s.appendChild(t));
   }
 
   private capstan(s: Element) {
@@ -175,7 +198,8 @@ export class Hud {
     const p = c.pub, me = c.side, foe = c.foeSide, mine = c.myTurn;
     this.root.dataset.phase = p.phase;
     const i = mode === 'fire' ? 0 : mode === 'sail' ? 1 : mode === 'turn' ? 2 : 3, span = 180 / SECTORS.length;
-    this.lever.style.transform = `rotate(${90 - (180 - span * i - span / 2)}deg)`;
+    const mid = ((180 - span * i - span / 2) * Math.PI) / 180;
+    this.lever.style.transform = `rotate(${90 - (Math.atan2(Math.sin(mid) * TG.ry, Math.cos(mid) * TG.rx) * 180) / Math.PI}deg)`;
     this.sectors.forEach(([path, t], k) => { path.classList.toggle('on', k === i); t.classList.toggle('on', k === i); });
 
     this.q('#turnTitle').textContent = p.phase === 'placement' ? 'Deploy your fleet' : p.phase === 'over' ? 'Battle over' : mine ? 'Your turn' : 'Enemy turn';
@@ -183,11 +207,7 @@ export class Hud {
     this.q('#seals').innerHTML = Array.from({ length: KRAKEN_SEALS }, (_, i) => `<i class="${i < me.seals ? 'lit' : ''}"></i>`).join('') + `<span>${me.seals >= KRAKEN_SEALS ? 'The Kraken will answer.' : `${Math.min(me.seals, KRAKEN_SEALS)} of ${KRAKEN_SEALS} seals`}</span>`;
     this.q('#foeSeals').textContent = `${foe.seals} covenant seal${foe.seals === 1 ? '' : 's'} · ${foe.doubloons} doubloons`;
     this.q<SVGElement>('#needle').style.transform = `rotate(${mine ? 20 : 200}deg)`;
-    const shown = Math.max(3, mine ? p.ap : 0);
-    const tray = this.q('#tray');
-    while (tray.children.length < shown) tray.appendChild(document.createElement('i')).className = 'spent';
-    while (tray.children.length > shown) tray.lastChild!.remove();
-    [...tray.children].forEach((b, k) => b.classList.toggle('spent', !(mine && k < p.ap)));
+    this.balls.forEach((b, k) => b.classList.toggle('spent', !(mine && k < p.ap)));
     this.q<HTMLButtonElement>('#endTurn').disabled = !c.can();
     this.q<HTMLButtonElement>('#ready').disabled = me.ready;
     this.q<HTMLButtonElement>('#shuffle').disabled = this.q<HTMLButtonElement>('#rotate').disabled = me.ready;
