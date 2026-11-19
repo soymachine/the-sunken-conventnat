@@ -65,7 +65,7 @@ export class Hud {
         <div class="turn"><button id="menuBtn" class="mini" aria-expanded="false" aria-controls="menu">Settings</button></div>
         <h1 class="title"><span>The Sunken Covenant</span></h1>
         <div class="foe"><span id="foeNote"></span></div>
-        <div class="status" role="status"><b id="turnTitle"></b><span id="turnSub"></span></div>
+        <div class="status" role="status"><b id="turnTitle"></b><span id="turnSub"></span><p id="placeHint"></p></div>
       </header>
       <div class="menu card" id="menu" hidden>
         <h2>Settings</h2>
@@ -96,9 +96,6 @@ export class Hud {
           <button class="capstan" id="endTurn" aria-label="End turn"><img src="/ui/wheel.webp" alt="" draggable="false"><span>End turn</span></button>
         </div>
         <div class="placing">
-          <button class="plaque" id="shuffle">Shuffle</button>
-          <button class="plaque" id="rotate">Rotate (R)</button>
-          <p id="placeHint"></p>
           <button class="capstan" id="ready" aria-label="Ready"><img src="/ui/wheel.webp" alt="" draggable="false"><span>Ready</span></button>
         </div>
       </footer>
@@ -107,8 +104,6 @@ export class Hud {
     this.telegraph(this.q('.telegraph'));
     this.q<HTMLElement>('#endTurn').onclick = () => { this.spin('#endTurn'); on.endTurn(); };
     this.q<HTMLElement>('#ready').onclick = () => { this.spin('#ready'); on.ready(); };
-    this.q<HTMLElement>('#shuffle').onclick = () => on.shuffle();
-    this.q<HTMLElement>('#rotate').onclick = () => on.rotate();
     this.q<HTMLElement>('#leave').onclick = () => on.leave();
     this.q<HTMLElement>('#roleOk').onclick = () => { this.q<HTMLElement>('.role').hidden = true; };
     // Settings: sound and 3D quality, in a small parchment menu at the top left.
@@ -260,8 +255,7 @@ export class Hud {
     this.balls.forEach((b, k) => b.classList.toggle('spent', !(mine && k < p.ap)));
     this.q<HTMLButtonElement>('#endTurn').disabled = !c.can();
     this.q<HTMLButtonElement>('#ready').disabled = me.ready;
-    this.q<HTMLButtonElement>('#shuffle').disabled = this.q<HTMLButtonElement>('#rotate').disabled = me.ready;
-    this.q('#placeHint').textContent = me.ready ? 'Fleet committed. Waiting for the other captain…' : 'Click a ship to lift it, move it over your waters and click again to set it down.';
+    this.q('#placeHint').innerHTML = p.phase !== 'placement' ? '' : me.ready ? 'Fleet committed. Waiting for the other captain…' : 'Click a ship to lift it, move it over your waters and click again to set it down. <kbd>R</kbd> to rotate it.';
 
     this.q('#foeName').textContent = foe.name || 'The other captain';
     this.q('#foeNote').textContent = note;

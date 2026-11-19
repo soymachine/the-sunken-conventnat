@@ -50,9 +50,10 @@ export class Sfx {
     const src = c.createBufferSource(), g = c.createGain(), t = c.currentTime;
     src.buffer = b; src.playbackRate.value = opts.rate ?? 1;
     g.gain.value = gain;
-    if (opts.fadeOutAt) { g.gain.setValueAtTime(gain, t + opts.fadeOutAt); g.gain.linearRampToValueAtTime(0, t + opts.fadeOutAt + 2.5); src.stop(t + opts.fadeOutAt + 2.6); }
     src.connect(g).connect(this.out);
     src.start(t);
+    // A source can only be told when to stop once it has been started.
+    if (opts.fadeOutAt) { g.gain.setValueAtTime(gain, t + opts.fadeOutAt); g.gain.linearRampToValueAtTime(0, t + opts.fadeOutAt + 2.5); src.stop(t + opts.fadeOutAt + 2.6); }
     return g;
   }
 

@@ -255,3 +255,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); out
 .shopTip .cost { display: block; font: 600 10px var(--label); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 3px 0 7px; }
 .shopTip p { margin: 0; font-size: 14.5px; line-height: 1.3; }
 .shopTip p.why { margin-top: 8px; padding-top: 7px; border-top: 1px solid rgba(176, 141, 60, .4); color: #e0795c; font-style: italic; }
+
+/* Placement: the instructions sit under "Deploy your fleet"; the Ready wheel is centred in the bar. */
+.status p { margin: 8px auto 0; max-width: 560px; white-space: normal; font: italic 16px/1.3 var(--body); color: var(--parch); }
+.status p:empty { display: none; }
+.status kbd { font: 700 11px var(--label); color: var(--ink); background: var(--parch); border: 1px solid var(--brass); border-radius: 3px; padding: 1px 6px; box-shadow: 0 2px 0 #5e4717; font-style: normal; }
+.placing { justify-content: center; }
