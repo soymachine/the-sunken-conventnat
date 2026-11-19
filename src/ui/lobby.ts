@@ -20,7 +20,8 @@ export class Lobby {
           <path id="bannerLine" d="M232,443 C243,442 279,436 300,434 C321,432 340,428 360,429 C380,430 402,434 420,439 C438,444 452,450 470,456 C488,462 510,470 530,477 C550,484 570,491 590,497 C610,503 630,509 650,513 C670,517 690,521 710,520 C730,519 753,513 770,508 C787,503 803,493 810,490" />
           <filter id="inkRough" x="-5%" y="-20%" width="110%" height="140%">
             <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="7" />
-            <feDisplacementMap in="SourceGraphic" scale="2.5" result="ink" />
+            <feDisplacementMap in="SourceGraphic" scale="1.6" result="rough" />
+            <feGaussianBlur in="rough" stdDeviation=".55" result="ink" />
             <feGaussianBlur in="ink" stdDeviation="2.4" result="soft" />
             <feOffset in="soft" dx="2" dy="4" result="drop" />
             <feFlood flood-color="#3a2410" flood-opacity=".42" />
@@ -29,7 +30,7 @@ export class Lobby {
           </filter>
         </defs>
         <image href="/ui/crest.webp" width="1024" height="1024" />
-        <text class="bannerText" filter="url(#inkRough)"><textPath href="#bannerLine" startOffset="50%" text-anchor="middle" textLength="548" lengthAdjust="spacingAndGlyphs">The Sunken Covenant</textPath></text>
+        <text class="bannerText" filter="url(#inkRough)"><textPath href="#bannerLine" startOffset="50%" text-anchor="middle" textLength="586" lengthAdjust="spacingAndGlyphs">The Sunken Covenant</textPath></text>
         <g class="monogram" text-anchor="middle">
           <text x="511" y="828" fill="#3d0f07" opacity=".8">SC</text>
           <text x="517" y="834" fill="#e68a6c" opacity=".35">SC</text>
