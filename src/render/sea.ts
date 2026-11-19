@@ -79,6 +79,13 @@ void main() {
 const FRAG = /* glsl */ `
 uniform sampler2D uMap, uEnergy;
 uniform float uTime, uEnemy, uNight, uRing, uFlash;
+// Hulls on this chart: uHull = (x, y, heading, half length), uHull2 = (half beam, speed 0..1, afloat, 0).
+#define MAXH 8
+uniform vec4 uHull[MAXH];
+uniform vec4 uHull2[MAXH];
+uniform int uHullN;
+uniform float uWake;
+
 ${TIDE}
 uniform vec2 uStorm;
 varying vec2 vUv;
@@ -119,6 +126,63 @@ void main() {
     col = mix(col, INK, smoothstep(0.86, 0.99, sin(e * 15.0 - uTime * 2.6 - 0.9)) * smoothstep(0.1, 0.4, e) * 0.5);
     col *= 1.0 - 0.3 * smoothstep(1.4, 0.0, min(edge.x, edge.y));
     col *= 0.97 + 2.6 * vShade;
+
+    // ---- water around the hulls (style chosen by uWake) ----
+    if (uWake > 0.5 && uHullN > 0) {
+      float dMin = 9.0, aN = 0.0, lN = 1.0, bN = 0.3, sN = 0.0, wake = 0.0, churn = 0.0;
+      for (int i = 0; i < MAXH; i++) {
+        if (i >= uHullN) break;
+        vec4 h = uHull[i], h2 = uHull2[i];
+        vec2 dir = vec2(cos(h.z), sin(h.z)), v = p - h.xy;
+        float a = dot(v, dir), c = dot(v, vec2(-dir.y, dir.x)), L = h.w, B = h2.x;
+        float d = length(vec2(max(abs(a) - (L - B), 0.0), c)) - B;
+        if (d < dMin) { dMin = d; aN = a; lN = L; bN = B; sN = h2.y; }
+        // A moving hull draws a V of waves behind her stern and churns the water in her track.
+        float t = -a - (L - B);
+        if (h2.y > 0.02 && t > 0.0) {
+          float arm = abs(abs(c) - t * 0.36);
+          wake += h2.y * exp(-t * 0.32) * smoothstep(0.09, 0.0, arm) * (0.6 + 0.4 * sin(t * 9.0 - uTime * 6.0));
+          churn += h2.y * exp(-t * 0.55) * smoothstep(B * 1.1, 0.0, abs(c));
+        }
+      }
+      float d = dMin, near = step(0.0, d);
+      float bow = smoothstep(lN * 0.35, lN, aN);
+      if (uWake < 1.5) {
+        // 1 · Engraved contours: ink lines that follow the hull and drift slowly outwards.
+        float f = fract(d * 4.2 - uTime * 0.28);
+        float line = smoothstep(0.1, 0.0, abs(f - 0.5) - 0.37) * exp(-d * 1.5) * near;
+        line *= 0.55 + 0.45 * smoothstep(0.25, 0.65, noise(p * 3.0 + uTime * 0.1));
+        col = mix(col, INK, clamp(line * 0.7, 0.0, 0.7));
+        col = mix(col, vec3(0.99, 0.95, 0.85), smoothstep(0.05, 0.0, abs(d - 0.03)) * 0.55);
+      } else if (uWake < 2.5) {
+        // 2 · Foam and shadow: lace of foam hugging the hull, heavier at the bow, over a darker trough.
+        col *= 1.0 - 0.28 * exp(-max(d, 0.0) * 5.0) * near;
+        float lace = smoothstep(0.38, 0.62, noise(p * 13.0 + vec2(uTime * 0.7, -uTime * 0.4)));
+        float foam = smoothstep(0.13 + 0.16 * bow, 0.0, d) * near * (0.45 + 0.55 * lace);
+        col = mix(col, vec3(0.99, 0.96, 0.88), clamp(foam, 0.0, 0.9));
+      } else if (uWake < 3.5) {
+        // 3 · Hatched water: the sea shaded in fine diagonal strokes close to the hull, like an engraving.
+        float band = exp(-d * 2.4) * near;
+        float hatch = smoothstep(0.55, 0.85, sin((p.x - p.y) * 46.0 + noise(p * 4.0) * 2.0));
+        float cross = smoothstep(0.7, 0.95, sin((p.x + p.y) * 46.0)) * smoothstep(0.25, 0.0, d);
+        col = mix(col, INK, clamp((hatch * band + cross * near) * 0.85, 0.0, 0.8));
+        col = mix(col, vec3(0.99, 0.95, 0.85), smoothstep(0.035, 0.0, abs(d - 0.025)) * 0.7);
+      } else {
+        // 4 · Ripples: crisp rings that leave the hull and fade, light crest and dark trough.
+        float r1 = fract(uTime * 0.45), r2 = fract(uTime * 0.45 + 0.5);
+        float ring = 0.0, trough = 0.0;
+        for (int k = 0; k < 2; k++) {
+          float r = k == 0 ? r1 : r2, at = r * 0.85, fade = (1.0 - r) * (1.0 - r);
+          ring += smoothstep(0.045, 0.0, abs(d - at)) * fade;
+          trough += smoothstep(0.05, 0.0, abs(d - at + 0.07)) * fade;
+        }
+        col = mix(col, INK, clamp(trough * 0.45 * near, 0.0, 0.5));
+        col = mix(col, vec3(1.0, 0.97, 0.88), clamp(ring * 0.8 * near, 0.0, 0.8));
+        col = mix(col, vec3(0.99, 0.95, 0.85), smoothstep(0.06, 0.0, d) * near * 0.5);
+      }
+      col = mix(col, vec3(1.0, 0.97, 0.88), clamp(wake * 1.1 + churn * 0.5 * smoothstep(0.4, 0.75, noise(p * 9.0 - uTime)), 0.0, 0.8));
+      col = mix(col, INK, clamp(wake * 0.25, 0.0, 0.3));
+    }
     // Storm front: rows darken under slanting rain and flare with lightning.
     float st = uStorm.y * step(uStorm.x, p.y) * step(p.y, uStorm.x + 3.0);
     // Raindrops ring the wet paper where they land.
@@ -177,7 +241,8 @@ export class Sea {
     this.tex.magFilter = this.tex.minFilter = THREE.LinearFilter;
     this.mat = new THREE.ShaderMaterial({
       vertexShader: VERT, fragmentShader: FRAG,
-      uniforms: { uMap: { value: chartTexture(enemy) }, uEnergy: { value: this.tex }, uTime: { value: 0 }, uEnemy: { value: enemy ? 1 : 0 }, uN: { value: N }, uNight: { value: 0 }, uRing: { value: 0 }, uFlash: { value: 0 }, uStorm: { value: new THREE.Vector2(0, 0) }, uTide: { value: new THREE.Vector4(1, 0, -99, 0) } },
+      uniforms: { uMap: { value: chartTexture(enemy) }, uEnergy: { value: this.tex }, uTime: { value: 0 }, uEnemy: { value: enemy ? 1 : 0 }, uN: { value: N }, uNight: { value: 0 }, uRing: { value: 0 }, uFlash: { value: 0 }, uStorm: { value: new THREE.Vector2(0, 0) }, uTide: { value: new THREE.Vector4(1, 0, -99, 0) },
+        uHull: { value: Array.from({ length: 8 }, () => new THREE.Vector4()) }, uHull2: { value: Array.from({ length: 8 }, () => new THREE.Vector4()) }, uHullN: { value: 0 }, uWake: { value: Sea.wake } },
     });
     const geo = new THREE.PlaneGeometry(N + 1, N + 1, 96, 96);
     geo.rotateX(-Math.PI / 2);
@@ -200,6 +265,17 @@ export class Sea {
     if (this.energy[i] < v) this.energy[i] = Math.min(v, this.energy[i] + 0.04);
   }
   clear() { this.energy.fill(0); this.night = 0; (this.mat.uniforms.uTide.value as THREE.Vector4).w = 0; }
+
+  /** How the water is drawn around hulls: 0 the old stirred rings, 1 contours, 2 foam, 3 hatching, 4 ripples. */
+  static wake = (() => { try { const n = Number(localStorage.getItem('tsc:water')); return n >= 1 && n <= 4 ? n : 2; } catch { return 2; } })();
+  /** The hulls on this chart, in chart squares: centre, heading (radians, x towards y), half length, half beam, speed 0..1. */
+  setHulls(list: { x: number; y: number; dir: number; half: number; beam: number; speed: number }[]) {
+    const u = this.mat.uniforms, a = u.uHull.value as THREE.Vector4[], b = u.uHull2.value as THREE.Vector4[];
+    const n = Math.min(8, list.length);
+    for (let i = 0; i < n; i++) { const h = list[i]; a[i].set(h.x, h.y, h.dir, h.half); b[i].set(h.beam, h.speed, 1, 0); }
+    u.uHullN.value = n;
+    u.uWake.value = Sea.wake;
+  }
 
   /** Target darkness of this chart (1 while the Kraken holds it). */
   night = 0;

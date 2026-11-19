@@ -41,6 +41,7 @@ export interface HudHandlers {
   mode(m: Mode): void;
   mute(): boolean;
   quality(q: 'auto' | 'high' | 'low'): void;
+  water(n: number): void;
   buy(item: Item): void;
   endTurn(): void;
   shuffle(): void;
@@ -57,6 +58,7 @@ export class Hud {
   private capTurns = 0;
   private muted = false;
   private qualityPref = 'auto';
+  private waterPref = '2';
   private q = <T extends Element>(s: string) => this.root.querySelector(s) as T;
 
   constructor(private on: HudHandlers) {
@@ -74,6 +76,8 @@ export class Hud {
         <div class="seg" data-pref="sound" role="radiogroup" aria-label="Sound"><button data-v="on" role="radio">On</button><button data-v="off" role="radio">Off</button></div>
         <p class="opt">3D quality</p>
         <div class="seg" data-pref="quality" role="radiogroup" aria-label="3D quality"><button data-v="auto" role="radio">Auto</button><button data-v="high" role="radio">High</button><button data-v="low" role="radio">Low</button></div>
+        <p class="opt">Water around ships</p>
+        <div class="seg two" data-pref="water" role="radiogroup" aria-label="Water around ships"><button data-v="1" role="radio">Contours</button><button data-v="2" role="radio">Foam</button><button data-v="3" role="radio">Hatched</button><button data-v="4" role="radio">Ripples</button></div>
         <p class="meta">Auto steps down by itself if the game runs slowly. Low drops shadows, glow and the print grade.</p>
       </div>
       <div class="herald" id="herald" aria-hidden="true"><div><b></b><span></span></div></div>
@@ -124,6 +128,7 @@ export class Hud {
       const pref = b.parentElement!.dataset.pref, v = b.dataset.v!;
       if (pref === 'sound' && (v === 'off') !== this.muted) this.muted = on.mute();
       if (pref === 'quality') { on.quality(v as 'auto' | 'high' | 'low'); this.qualityPref = v; }
+      if (pref === 'water') { on.water(+v); this.waterPref = v; }
       this.paintPrefs();
     };
     this.q<HTMLElement>('#shop').onclick = (e) => { const b = (e.target as Element).closest('button'); if (b) on.buy(b.dataset.item as Item); };
@@ -208,11 +213,11 @@ export class Hud {
   }
 
   /** Show the saved settings in the menu. */
-  setPrefs(muted: boolean, quality: string) { this.muted = muted; this.qualityPref = quality; this.paintPrefs(); }
+  setPrefs(muted: boolean, quality: string, water: number) { this.muted = muted; this.qualityPref = quality; this.waterPref = String(water); this.paintPrefs(); }
   private paintPrefs() {
     this.root.querySelectorAll<HTMLElement>('#menu .seg button').forEach((b) => {
       const pref = b.parentElement!.dataset.pref, v = b.dataset.v;
-      const on = pref === 'sound' ? (v === 'off') === this.muted : v === this.qualityPref;
+      const on = pref === 'sound' ? (v === 'off') === this.muted : pref === 'water' ? v === this.waterPref : v === this.qualityPref;
       b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on));
     });
   }

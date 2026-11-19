@@ -108,6 +108,10 @@ interface ShipObj {
   root: THREE.Group; tilt: THREE.Group; model: ShipModel; decor: THREE.Group; decorKey: string;
   kind: Kind; len: number; side: Side; pos: THREE.Vector3; yaw: number; phase: number;
   state: 'afloat' | 'sinking' | 'wreck'; sink: number; lift: number; fires: THREE.Vector3[]; cells: [number, number][]; fresh: boolean;
+  /** Smoothed speed over the water, for the wake. */
+  way?: number;
+  /** Where the hull meets the water, in the ship's own frame: centre along her length, half length, half beam. */
+  foot?: { cx: number; cz: number; half: number; beam: number };
 }
 
 export class SeaScene {
@@ -304,6 +308,9 @@ export class SeaScene {
     else { this.raise(); this.frames = 0; this.slow = 0; }
   }
   getQuality(): Quality { return this.qualityPref; }
+  /** Choose how water is drawn around hulls (0 to 4); see Sea.wake. */
+  setWake(n: number) { Sea.wake = n; try { localStorage.setItem('tsc:water', String(n)); } catch { /* storage unavailable */ } }
+  getWake() { return Sea.wake; }
 
   private refreshMaterials() {
     this.scene.traverse((o) => {
@@ -465,7 +472,7 @@ export class SeaScene {
       if (o.state === 'afloat') {
         // A moving hull leaves a wake and heels into its turn.
         const speed = before.distanceTo(p) / Math.max(dt, 1e-3), turning = Math.abs(swing);
-        if (speed > 0.3) sea.bump(Math.floor(before.x - origin[o.side].x), Math.floor(before.z - origin[o.side].z), 0.06);
+        if (speed > 0.3 && !Sea.wake) sea.bump(Math.floor(before.x - origin[o.side].x), Math.floor(before.z - origin[o.side].z), 0.06);
         const bob = calm ? 0 : 1;
         // Ride the bending chart: rise with it and lean with its slope along and across the hull.
         const cy = Math.cos(o.root.rotation.y), sy = Math.sin(o.root.rotation.y), half = o.len * 0.35;
@@ -474,7 +481,10 @@ export class SeaScene {
         o.tilt.position.y += (waveH(p.x, p.z, t) * bob + o.lift - o.tilt.position.y) * Math.min(1, k * 2);
         o.tilt.rotation.x = bob * (0.04 * Math.sin(t * 1.25 + o.phase) - Math.atan2(beam, 0.6)) + turning * 0.5;
         o.tilt.rotation.z = bob * (0.015 * Math.sin(t * 0.9 + o.phase * 2.3) + Math.atan2(fore, half * 2)) - Math.min(0.06, speed * 0.02);
-        for (const [x, y] of o.cells) sea.hold(x, y, 0.55);
+        // The wake builds quickly under way and lingers a moment after she stops, as real wakes do.
+        const want = Math.min(1, speed / 1.2), was = o.way ?? 0;
+        o.way = was + (want - was) * Math.min(1, dt * (want > was ? 6 : 0.7));
+        if (!Sea.wake) for (const [x, y] of o.cells) sea.hold(x, y, 0.55);
         if (o.model.funnel) this.fx.funnel(o.root.localToWorld(o.model.funnel.clone().setY(o.model.funnel.y + o.tilt.position.y)), dt);
       } else {
         if (o.state === 'sinking') {
@@ -515,6 +525,17 @@ export class SeaScene {
       if (st) this.weather.strike(cellCenter({ side, x: Math.floor(Math.random() * N), y: st.row + Math.floor(Math.random() * 3) }));
       this.sound('thunder');
     }
+    // The water around each hull follows her real outline, heading and way.
+    for (const side of ['own', 'enemy'] as Side[]) {
+      const list = [];
+      for (const o of this.ships.values()) {
+        if (o.side !== side || o.state === 'wreck' || !o.root.visible || !o.root.parent) continue;
+        const p = o.root.position, y = o.root.rotation.y, f = (o.foot ??= this.footprint(o));
+        const cx = p.x + Math.cos(y) * f.cx + Math.sin(y) * f.cz, cz = p.z - Math.sin(y) * f.cx + Math.cos(y) * f.cz;
+        list.push({ x: cx - origin[side].x, y: cz - origin[side].z, dir: -y, half: f.half, beam: f.beam, speed: o.state === 'afloat' ? o.way ?? 0 : 0 });
+      }
+      this.seas[side].setHulls(list);
+    }
     this.seas.own.update(dt, t); this.seas.enemy.update(dt, t);
     this.weather.update(dt, t);
     this.fx.update(dt);
@@ -522,6 +543,31 @@ export class SeaScene {
     this.camera.position.copy(this.camPos);
     if (this.shakeAmt > 0.002) this.camera.position.add(new THREE.Vector3((Math.random() - 0.5) * this.shakeAmt, (Math.random() - 0.5) * this.shakeAmt, 0));
     if (this.post) this.post.render(t); else this.renderer.render(this.scene, this.camera);
+  }
+
+  /** Measure a ship's hull below her deck (no sails, no bowsprit above it) in her own frame. */
+  private footprint(o: ShipObj) {
+    o.root.updateMatrixWorld(true);
+    const inv = o.root.matrixWorld.clone().invert(), v = new THREE.Vector3(), m = new THREE.Matrix4();
+    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+    const top = o.model.deckY * 0.9;
+    o.model.body.traverse((c) => {
+      const mesh = c as THREE.Mesh;
+      if (!mesh.isMesh || !mesh.geometry?.attributes.position) return;
+      let sail = false;
+      for (let a: THREE.Object3D | null = mesh; a; a = a.parent) if (a === o.model.sails) sail = true;
+      if (sail) return;
+      m.multiplyMatrices(inv, mesh.matrixWorld);
+      const pos = mesh.geometry.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        v.fromBufferAttribute(pos, i).applyMatrix4(m);
+        if (v.y > top) continue;
+        x0 = Math.min(x0, v.x); x1 = Math.max(x1, v.x); z0 = Math.min(z0, v.z); z1 = Math.max(z1, v.z);
+      }
+    });
+    if (!isFinite(x0)) return { cx: 0, cz: 0, half: o.len * 0.47, beam: 0.3 };
+    const beam = (z1 - z0) / 2;
+    return { cx: (x0 + x1) / 2, cz: (z0 + z1) / 2, half: Math.max((x1 - x0) / 2, beam + 0.05), beam };
   }
 
   /* ---------- ships ---------- */
