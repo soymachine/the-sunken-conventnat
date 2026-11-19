@@ -40,6 +40,7 @@ const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 export interface HudHandlers {
   mode(m: Mode): void;
   mute(): boolean;
+  quality(q: 'auto' | 'high' | 'low'): void;
   buy(item: Item): void;
   endTurn(): void;
   shuffle(): void;
@@ -54,16 +55,27 @@ export class Hud {
   private sectors: [SVGPathElement, SVGTextElement][] = [];
   private balls: SVGGElement[] = [];
   private capTurns = 0;
+  private muted = false;
+  private qualityPref = 'auto';
   private q = <T extends Element>(s: string) => this.root.querySelector(s) as T;
 
   constructor(private on: HudHandlers) {
     this.root = document.getElementById('hud')!;
     this.root.innerHTML = `
       <header class="rail top">
-        <div class="turn"><svg class="compass" viewBox="0 0 100 100"></svg><div><b id="turnTitle"></b><i id="turnSub"></i></div><button id="mute" class="mini" aria-pressed="false">Sound on</button></div>
+        <div class="turn"><svg class="compass" viewBox="0 0 100 100"></svg><button id="menuBtn" class="mini" aria-expanded="false" aria-controls="menu">Settings</button></div>
         <h1 class="title"><span>The Sunken Covenant</span></h1>
         <div class="foe"><span id="foeNote"></span></div>
+        <div class="status" role="status"><b id="turnTitle"></b><span id="turnSub"></span></div>
       </header>
+      <div class="menu card" id="menu" hidden>
+        <h2>Settings</h2>
+        <p class="opt">Sound</p>
+        <div class="seg" data-pref="sound" role="radiogroup" aria-label="Sound"><button data-v="on" role="radio">On</button><button data-v="off" role="radio">Off</button></div>
+        <p class="opt">3D quality</p>
+        <div class="seg" data-pref="quality" role="radiogroup" aria-label="3D quality"><button data-v="auto" role="radio">Auto</button><button data-v="high" role="radio">High</button><button data-v="low" role="radio">Low</button></div>
+        <p class="meta">Auto steps down by itself if the game runs slowly. Low drops shadows, glow and the print grade.</p>
+      </div>
       <div class="objective" id="objective" hidden></div>
       <aside class="card left">
         <h2>The covenant</h2><div class="seals" id="seals"></div>
@@ -99,7 +111,20 @@ export class Hud {
     this.q<HTMLElement>('#rotate').onclick = () => on.rotate();
     this.q<HTMLElement>('#leave').onclick = () => on.leave();
     this.q<HTMLElement>('#roleOk').onclick = () => { this.q<HTMLElement>('.role').hidden = true; };
-    this.q<HTMLElement>('#mute').onclick = (e) => { const off = on.mute(), b = e.currentTarget as HTMLElement; b.textContent = off ? 'Sound off' : 'Sound on'; b.setAttribute('aria-pressed', String(off)); };
+    // Settings: sound and 3D quality, in a small parchment menu under the compass.
+    const menu = this.q<HTMLElement>('#menu'), menuBtn = this.q<HTMLElement>('#menuBtn');
+    const show = (open: boolean) => { menu.hidden = !open; menuBtn.setAttribute('aria-expanded', String(open)); };
+    menuBtn.onclick = (e) => { e.stopPropagation(); show(menu.hidden === true); };
+    addEventListener('pointerdown', (e) => { if (!menu.hidden && !menu.contains(e.target as Node) && e.target !== menuBtn) show(false); });
+    addEventListener('keydown', (e) => { if (e.key === 'Escape') show(false); });
+    menu.onclick = (e) => {
+      const b = (e.target as Element).closest<HTMLElement>('.seg button');
+      if (!b) return;
+      const pref = b.parentElement!.dataset.pref, v = b.dataset.v!;
+      if (pref === 'sound' && (v === 'off') !== this.muted) this.muted = on.mute();
+      if (pref === 'quality') { on.quality(v as 'auto' | 'high' | 'low'); this.qualityPref = v; }
+      this.paintPrefs();
+    };
     this.q<HTMLElement>('#shop').onclick = (e) => { const b = (e.target as Element).closest('button'); if (b) on.buy(b.dataset.item as Item); };
     this.q<HTMLElement>('#belt').onclick = (e) => { const b = (e.target as Element).closest('button'); if (b) on.mode(b.dataset.tool as Mode); };
   }
@@ -179,6 +204,16 @@ export class Hud {
     const n = TG.needle;
     svg(this.lever, 'image', { href: '/ui/needle.webp', x: cx - n.capX * n.scale, y: cy - n.capY * n.scale, width: n.w * n.scale, height: n.h * n.scale });
     labels.forEach((t) => s.appendChild(t));
+  }
+
+  /** Show the saved settings in the menu. */
+  setPrefs(muted: boolean, quality: string) { this.muted = muted; this.qualityPref = quality; this.paintPrefs(); }
+  private paintPrefs() {
+    this.root.querySelectorAll<HTMLElement>('#menu .seg button').forEach((b) => {
+      const pref = b.parentElement!.dataset.pref, v = b.dataset.v;
+      const on = pref === 'sound' ? (v === 'off') === this.muted : v === this.qualityPref;
+      b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on));
+    });
   }
 
   setHint(text: string) { this.q('#hint').textContent = text; }

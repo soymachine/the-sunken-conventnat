@@ -197,7 +197,8 @@ class Gulls {
       const a = t * g.sp + g.ph, y = g.h + 0.4 * Math.sin(t * 0.7 + g.ph) + this.away * 14;
       g.body.position.set(g.c.x + Math.cos(a) * g.rad * (1 + this.away), y, g.c.y + Math.sin(a) * g.rad * 0.8 * (1 + this.away));
       // Face along the circle and bank into it.
-      g.body.rotation.set(0, -a + (g.sp > 0 ? Math.PI : 0), 0.35 * Math.sign(g.sp));
+      // The model's head points +z; flying round the circle its heading is -a (or -a + pi going the other way).
+      g.body.rotation.set(0, -a + (g.sp > 0 ? 0 : Math.PI), 0.35 * Math.sign(g.sp));
       // Flap in bursts, then glide.
       const flap = Math.sin(t * 1.3 + g.ph) > 0.1 ? Math.sin(t * 11 + g.ph) : 0.15;
       g.l.rotation.z = -0.5 * flap; g.r.rotation.z = 0.5 * flap;

@@ -30,6 +30,7 @@ export type Sound = 'cannon' | 'splash' | 'hit' | 'clang' | 'sink' | 'coin' | 'g
 const C = { ink: 0x0d0b08, amber: 0xd9a441, parch: 0xe8d5a3, brass: 0xb08d3c, wax: 0x8c2f1b };
 const HALF = N / 2;
 /** World position of each chart's (0,0) corner. Stacked on tall screens, side by side on wide ones. */
+export type Quality = 'auto' | 'high' | 'low';
 const STACKED: Record<Side, { x: number; z: number }> = { enemy: { x: -HALF, z: -(N + 0.5) }, own: { x: -HALF, z: 0.5 } };
 const ABREAST: Record<Side, { x: number; z: number }> = { own: { x: -(N + 0.75), z: -HALF }, enemy: { x: 0.75, z: -HALF } };
 let origin = STACKED;
@@ -147,27 +148,31 @@ export class SeaScene {
   private extent = { x: HALF, z: N };
   private last: View | null = null;
   private quality: 'high' | 'low';
+  /** What the player chose: 'auto' lowers the quality by itself on slow machines. */
+  private qualityPref: Quality = 'auto';
+  private paperShadows: THREE.Mesh[] = [];
   private frames = 0; private slow = 0; private laid = false;
   private time = 0;
 
   constructor(private canvas: HTMLCanvasElement) {
-    const forced = new URLSearchParams(location.search).get('q');
-    this.quality = forced === 'low' ? 'low' : 'high';
+    const forced = new URLSearchParams(location.search).get('q') as Quality | null;
+    let stored: string | null = null;
+    try { stored = localStorage.getItem('tsc:quality'); } catch { /* storage unavailable */ }
+    this.qualityPref = forced ?? (stored === 'high' || stored === 'low' ? stored : 'auto');
+    this.quality = this.qualityPref === 'low' ? 'low' : 'high';
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.enabled = this.quality === 'high';
     this.scene.background = new THREE.Color(C.ink);
     this.scene.add(new THREE.HemisphereLight(0xfff1cf, 0x2a2116, 2.0));
     this.sun.position.set(-9, 16, 8);
-    this.sun.castShadow = true;
+    this.sun.castShadow = this.quality === 'high';
     this.sun.shadow.mapSize.set(2048, 2048);
     const sc = this.sun.shadow.camera;
     sc.left = -N - 3; sc.right = N + 3; sc.top = N + 3; sc.bottom = -N - 3; sc.near = 1; sc.far = 60;
     this.sun.shadow.bias = -0.002;
     this.scene.add(this.sun);
-    const table = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), new THREE.MeshLambertMaterial({ color: 0x120e09 }));
-    table.rotation.x = -Math.PI / 2; table.position.y = -1.2;
-    this.scene.add(table);
+    this.scene.add(this.chartTable());
     this.seas = { enemy: new Sea(true), own: new Sea(false) };
     for (const side of ['enemy', 'own'] as Side[]) {
       this.scene.add(this.seas[side].mesh);
@@ -176,6 +181,7 @@ export class SeaScene {
       shGeo.rotateX(-Math.PI / 2);
       const sh = new THREE.Mesh(shGeo, new THREE.ShadowMaterial({ opacity: 0.32 }));
       sh.receiveShadow = true; sh.userData.lift = 0.03;
+      sh.visible = this.quality === 'high';
       this.shadowPlanes.push(sh);
       this.scene.add(sh);
     }
@@ -214,7 +220,7 @@ export class SeaScene {
       this.time += dt;
       this.frame(dt, this.time);
       // Drop the expensive passes on machines that cannot keep up (unless a quality was forced).
-      if (!forced && this.quality === 'high' && this.frames++ > 20 && this.frames < 140) {
+      if (this.qualityPref === 'auto' && this.quality === 'high' && this.frames++ > 20 && this.frames < 140) {
         if (dt > 0.036) this.slow++;
         if (this.frames === 139 && this.slow > 70) this.lower();
       }
@@ -223,13 +229,81 @@ export class SeaScene {
     loop();
   }
 
+  /** The charts lie on the captain's table: dark oak under a pool of lamplight, each sheet casting a soft shadow. */
+  private chartTable(): THREE.Group {
+    const g = new THREE.Group();
+    const wood = new THREE.TextureLoader().load('/ui/wood.jpg');
+    wood.wrapS = wood.wrapT = THREE.RepeatWrapping;
+    wood.repeat.set(300 / 9, 300 / 9);
+    wood.colorSpace = THREE.SRGBColorSpace;
+    wood.anisotropy = 8;
+    const table = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), new THREE.MeshStandardMaterial({ map: wood, color: 0x8a7462, roughness: 0.82 }));
+    table.rotation.x = -Math.PI / 2; table.position.y = -1.2;
+    const canvasTex = (draw: (c: CanvasRenderingContext2D) => void) => {
+      const cv = document.createElement('canvas'); cv.width = cv.height = 256;
+      draw(cv.getContext('2d')!);
+      const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
+    };
+    // Lamplight falls off into darkness away from the charts.
+    const dusk = canvasTex((c) => {
+      const r = c.createRadialGradient(128, 128, 30, 128, 128, 128);
+      r.addColorStop(0, 'rgba(13,11,8,0)'); r.addColorStop(0.55, 'rgba(13,11,8,.35)'); r.addColorStop(1, 'rgba(13,11,8,1)');
+      c.fillStyle = r; c.fillRect(0, 0, 256, 256);
+    });
+    const pool = new THREE.Mesh(new THREE.PlaneGeometry(110, 110), new THREE.MeshBasicMaterial({ map: dusk, transparent: true, depthWrite: false }));
+    pool.rotation.x = -Math.PI / 2; pool.position.y = -1.18;
+    const far = new THREE.Mesh(new THREE.RingGeometry(54, 200, 48), new THREE.MeshBasicMaterial({ color: C.ink }));
+    far.rotation.x = -Math.PI / 2; far.position.y = -1.17;
+    const soft = canvasTex((c) => {
+      c.filter = 'blur(14px)'; c.fillStyle = 'rgba(0,0,0,.85)'; c.fillRect(36, 36, 184, 184);
+    });
+    for (let i = 0; i < 2; i++) {
+      const s = new THREE.Mesh(new THREE.PlaneGeometry(N + 4, N + 4), new THREE.MeshBasicMaterial({ map: soft, transparent: true, depthWrite: false }));
+      s.rotation.x = -Math.PI / 2;
+      this.paperShadows.push(s);
+      g.add(s);
+    }
+    g.add(table, pool, far);
+    return g;
+  }
+
+  /** Choose the 3D quality: 'auto' starts high and steps down on a slow machine. Remembered between visits. */
+  setQuality(q: Quality) {
+    this.qualityPref = q;
+    try { localStorage.setItem('tsc:quality', q); } catch { /* storage unavailable */ }
+    if (q === 'low') this.lower();
+    else { this.raise(); this.frames = 0; this.slow = 0; }
+  }
+  getQuality(): Quality { return this.qualityPref; }
+
+  private refreshMaterials() {
+    this.scene.traverse((o) => {
+      const m = (o as THREE.Mesh).material;
+      if (m) for (const x of Array.isArray(m) ? m : [m]) x.needsUpdate = true;
+    });
+  }
+
+  private raise() {
+    if (this.quality === 'high') return;
+    this.quality = 'high';
+    this.post = new Post(this.renderer, this.scene, this.camera);
+    this.renderer.shadowMap.enabled = true;
+    this.sun.castShadow = true;
+    for (const p of this.shadowPlanes) p.visible = true;
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    this.refreshMaterials();
+    this.resize();
+  }
+
   private lower() {
+    if (this.quality === 'low' && !this.post && !this.renderer.shadowMap.enabled) return;
     this.quality = 'low';
     this.post = null;
     this.renderer.shadowMap.enabled = false;
     this.sun.castShadow = false;
     for (const p of this.shadowPlanes) p.visible = false;
     this.renderer.setPixelRatio(1);
+    this.refreshMaterials();
     this.resize();
   }
 
@@ -275,6 +349,7 @@ export class SeaScene {
     (['enemy', 'own'] as Side[]).forEach((side, i) => {
       this.seas[side].mesh.position.set(origin[side].x + HALF, 0, origin[side].z + HALF);
       this.shadowPlanes[i].position.set(origin[side].x + HALF, 0, origin[side].z + HALF);
+      this.paperShadows[i].position.set(origin[side].x + HALF + 0.5, -1.185, origin[side].z + HALF + 0.7);
     });
     this.dir.set(0, 1, layout === ABREAST ? 0.7 : 0.95).normalize();
     this.extent = layout === ABREAST ? { x: N + 0.75, z: HALF } : { x: HALF, z: N + 0.5 };
@@ -711,8 +786,9 @@ export class SeaScene {
     const guns = [...this.ships.values()].filter((o) => o.side === 'own' && o.state === 'afloat');
     const armed = guns.filter((o) => o.model.gun);
     if (target.side === 'enemy' && armed.length) {
-      // A ship with a deck gun swings it onto the target and fires from its muzzle.
-      return this.layGun(armed[0], to).then(() => this.fly(armed[0].model.gun!.muzzle.getWorldPosition(new THREE.Vector3()), to, target, outcome, armed[0]));
+      // One of the armed ships swings her deck gun onto the target and fires from its muzzle.
+      const g = armed[Math.floor(Math.random() * armed.length)];
+      return this.layGun(g, to).then(() => this.fly(g.model.gun!.muzzle.getWorldPosition(new THREE.Vector3()), to, target, outcome, g));
     }
     if (target.side === 'enemy' && guns.length) {
       const g = guns[Math.floor(Math.random() * guns.length)];

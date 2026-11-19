@@ -51,6 +51,7 @@ const HINTS: Record<string, string> = {
 const hud = new Hud({
   mode: (m) => { sfx.play('click'); setMode(m); },
   mute: () => sfx.toggle(),
+  quality: (q) => scene.setQuality(q),
   buy: (item) => { if (c.buy(item)) setMode(item === 'winds' ? mode : item); },
   endTurn: () => { if (!busy) c.endTurn(); },
   shuffle: () => { if (canPlace()) { c.ships = randomFleet(Math.random, c.role); selected = lifted = null; refresh(); } },
@@ -58,6 +59,7 @@ const hud = new Hud({
   ready: () => { if (!canPlace() || lifted) return; if (!legalPlacement(c.ships)) hud.log('The merchantman must start in the Colony: columns A to C.', 'bad'); else void c.ready(); },
   leave,
 });
+hud.setPrefs(sfx.muted, scene.getQuality());
 const lobby = new Lobby({
   bot: (name, mode) => start(new LocalSession(mode), name),
   create: async (name, mode) => {
