@@ -53,6 +53,7 @@ class FirebaseSession implements Session {
       if (m.t === 'move') m.debris ||= [];
       if (m.t === 'result' || m.t === 'drowned') m.results ||= [];
       if (m.t === 'reveal') { m.acts ||= []; m.initial ||= []; m.final ||= []; }
+      if (m.t === 'peekResult') m.ships ||= [];
       cb(m as Msg);
     });
     this.unsub.push(() => off(log));

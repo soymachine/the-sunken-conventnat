@@ -79,6 +79,8 @@ void main() {
 const FRAG = /* glsl */ `
 uniform sampler2D uMap, uEnergy;
 uniform float uTime, uEnemy, uNight, uRing, uFlash;
+// The Long Glass: uPeek = (left, top, start time, strength 0..1) of a 2×2 patch, in chart squares.
+uniform vec4 uPeek;
 // Hulls on this chart: uHull = (x, y, heading, half length), uHull2 = (half beam, speed 0..1, afloat, 0).
 #define MAXH 14
 uniform vec4 uHull[MAXH];
@@ -116,12 +118,26 @@ void main() {
   vec2 edge = min(p, uN - p);
   float inside = step(0.0, min(edge.x, edge.y));
   if (inside > 0.5) {
+    // Inside the Long Glass the fog of war lifts: the paper clears from the centre outwards.
+    vec2 pc = uPeek.xy + 1.0, pd = abs(p - pc);
+    float box = step(max(pd.x, pd.y), 1.0);
+    float grow = clamp((uTime - uPeek.z) * 1.4, 0.0, 1.0);
+    float rr = length(p - pc), front = grow * 1.5;
+    float lens = uPeek.w * box * smoothstep(front, front - 0.25, rr);
     float ink = strokes(p, uTime, 1.0) * 0.62 + strokes(p + 7.3, uTime * 0.7, 0.55) * 0.34;
     float hatch = 0.5 + 0.5 * sin((p.x + p.y) * 21.0 + fbm(p * 1.3 + uTime * 0.04) * 7.0);
-    ink += uEnemy * smoothstep(0.6, 0.95, hatch) * 0.3;
+    ink += uEnemy * smoothstep(0.6, 0.95, hatch) * 0.3 * (1.0 - lens);
     float e = texture2D(uEnergy, p / uN).r;
     float ring = smoothstep(0.84, 0.98, sin(e * 15.0 - uTime * 2.6)) * smoothstep(0.04, 0.3, e);
-    col = mix(col, INK, clamp(ink, 0.0, 0.75));
+    col = mix(col, INK, clamp(ink * (1.0 - 0.6 * lens), 0.0, 0.75));
+    if (uPeek.w > 0.0 && box > 0.5) {
+      // Clear, sunlit water in the glass, rimmed by the inked edge of the advancing reveal and a brass frame.
+      col = mix(col, col * vec3(1.16, 1.12, 1.02) + vec3(0.05, 0.05, 0.03), lens);
+      col += lens * 0.06 * sin(rr * 26.0 - uTime * 3.0) * smoothstep(1.4, 0.2, rr);
+      col = mix(col, INK, uPeek.w * box * smoothstep(0.07, 0.0, abs(rr - front)) * step(grow, 0.999) * 0.8);
+      float edge = smoothstep(0.06, 0.0, abs(max(pd.x, pd.y) - 1.0));
+      col = mix(col, vec3(0.85, 0.62, 0.22), uPeek.w * edge * 0.9);
+    }
     col = mix(col, vec3(1.0, 0.95, 0.8), ring * 0.6);
     col = mix(col, INK, smoothstep(0.86, 0.99, sin(e * 15.0 - uTime * 2.6 - 0.9)) * smoothstep(0.1, 0.4, e) * 0.5);
     col *= 1.0 - 0.3 * smoothstep(1.4, 0.0, min(edge.x, edge.y));
@@ -241,7 +257,7 @@ export class Sea {
     this.tex.magFilter = this.tex.minFilter = THREE.LinearFilter;
     this.mat = new THREE.ShaderMaterial({
       vertexShader: VERT, fragmentShader: FRAG,
-      uniforms: { uMap: { value: chartTexture(enemy) }, uEnergy: { value: this.tex }, uTime: { value: 0 }, uEnemy: { value: enemy ? 1 : 0 }, uN: { value: N }, uNight: { value: 0 }, uRing: { value: 0 }, uFlash: { value: 0 }, uStorm: { value: new THREE.Vector2(0, 0) }, uTide: { value: new THREE.Vector4(1, 0, -99, 0) },
+      uniforms: { uMap: { value: chartTexture(enemy) }, uEnergy: { value: this.tex }, uTime: { value: 0 }, uEnemy: { value: enemy ? 1 : 0 }, uN: { value: N }, uNight: { value: 0 }, uRing: { value: 0 }, uFlash: { value: 0 }, uStorm: { value: new THREE.Vector2(0, 0) }, uTide: { value: new THREE.Vector4(1, 0, -99, 0) }, uPeek: { value: new THREE.Vector4(0, 0, 0, 0) },
         uHull: { value: Array.from({ length: 14 }, () => new THREE.Vector4()) }, uHull2: { value: Array.from({ length: 14 }, () => new THREE.Vector4()) }, uHullN: { value: 0 }, uWake: { value: Sea.wake } },
     });
     const geo = new THREE.PlaneGeometry(N + 1, N + 1, 96, 96);
@@ -282,6 +298,15 @@ export class Sea {
   setStorm(row: number | null) { (this.mat.uniforms.uStorm.value as THREE.Vector2).set(row ?? 0, row === null ? 0 : 1); }
   setRing(ring: number) { this.mat.uniforms.uRing.value = ring; }
   flash() { this.mat.uniforms.uFlash.value = 1; }
+  /** Open the Long Glass on the 2×2 patch at (x, y), from time t; null closes it. */
+  setPeek(at: { x: number; y: number } | null, t: number) {
+    const v = this.mat.uniforms.uPeek.value as THREE.Vector4;
+    if (!at) { this.peekWant = 0; return; }
+    if (v.x !== at.x || v.y !== at.y || v.w === 0) v.set(at.x, at.y, t, v.w);
+    this.peekWant = 1;
+  }
+  private peekWant = 0;
+
   /** Send a tide wave across the chart in direction (dx, dy), starting at time t. */
   tide(dx: number, dy: number, t: number) { (this.mat.uniforms.uTide.value as THREE.Vector4).set(dx, dy, t, 1); }
 
@@ -293,6 +318,9 @@ export class Sea {
     const u = this.mat.uniforms;
     u.uNight.value += (this.night - u.uNight.value) * Math.min(1, dt * 1.6);
     u.uFlash.value *= Math.exp(-dt * 9);
+    const pk = u.uPeek.value as THREE.Vector4;
+    pk.w += (this.peekWant - pk.w) * Math.min(1, dt * (this.peekWant ? 6 : 2.5));
+    if (pk.w < 0.01 && !this.peekWant) pk.w = 0;
     const td = u.uTide.value as THREE.Vector4;
     if (td.w && t - td.z > 18) td.w = 0;
   }

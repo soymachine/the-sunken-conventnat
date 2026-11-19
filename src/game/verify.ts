@@ -1,10 +1,11 @@
 // After the battle each captain reveals their placement and hidden moves.
 // Replaying them against the public log shows whether every answer was honest.
 import { Act, Mode, Msg, Placement, commitHash, newPub, reduce } from './engine';
-import { CellResult, FLEETS, N, Role, Ship, XY, countScan, fits, inKraken, legalPlacement, repairShip, resolveAttack, rimCells, sailShip, shipCells, turnShip } from './rules';
+import { CellResult, FLEETS, N, Revealed, Role, Ship, XY, countScan, inZone, peekShips, fits, inKraken, legalPlacement, repairShip, resolveAttack, rimCells, sailShip, shipCells, turnShip } from './rules';
 
 // Compare by value: a database may hand objects back with their keys in another order.
 const sig = (rs: CellResult[]) => rs.map((r) => [r.x, r.y, r.r, r.ship ? [r.ship.kind, r.ship.x, r.ship.y, r.ship.dir] : 0, r.cargo ? 1 : 0].join()).join('|');
+const peekSig = (rs: Revealed[]) => [...rs].sort((a, b) => a.kind.localeCompare(b.kind)).map((r) => [r.kind, r.len, r.x, r.y, r.dir, r.rev ? 1 : 0].join()).join('|');
 const cells = (cs: XY[]) => cs.map((c) => c[0] + ',' + c[1]).join('|');
 
 /**
@@ -55,6 +56,14 @@ export async function verify(log: Msg[], who: 0 | 1, role: Role = 'classic', see
     if (m.by === who && m.t === 'endTurn') { for (const s of ships) s.chained = false; laden = 0; }
     if (m.by !== who && m.t === 'attack') { const r = resolveAttack(ships, m.cells, m.src === 'chain', shield); if (r.shielded) shield = false; expect = sig(r.results); }
     if (m.by !== who && m.t === 'scan') expect = 'scan:' + countScan(ships, m.x, m.y);
+    if (m.by !== who && m.t === 'peek') expect = 'peek:' + peekSig(peekShips(ships, m.x, m.y));
+    if (m.by === who && m.t === 'peekResult' && expect !== null) {
+      // Fog may hide the patch only if a fog bank really covered it.
+      const sq: XY[] = [[m.x, m.y], [m.x + 1, m.y], [m.x, m.y + 1], [m.x + 1, m.y + 1]];
+      const fogged = p.sides[who].fogs.some((f) => sq.some(([a, b]) => inZone(f.x, f.y, a, b)));
+      if (m.fog ? !fogged : 'peek:' + peekSig(m.ships || []) !== expect) return 'the Long Glass was shown a false picture';
+      expect = null;
+    }
     if (m.by === who && m.t === 'result' && expect !== null) {
       if (sig(m.results || []) !== expect) return m.kraken ? 'the Kraken\'s strike was answered falsely' : 'a shot was answered falsely';
       expect = null;

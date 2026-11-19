@@ -452,6 +452,37 @@ describe('the covenant', () => {
     const forged: Msg[] = bus.log.map((m) => (m.t === 'drowned' && m.by === 0 && m.results.length ? { ...m, results: m.results.slice(1) } : m));
     expect(await verify(forged, 0, 'classic', 7)).toMatch(/maelstrom/);
   });
+  it('the Long Glass shows a 2×2 patch truthfully, honours fog, and a false picture is caught', async () => {
+    const { bus, a, b } = await duel();
+    for (const c of [a, b]) c.pub.sides[0].doubloons = 200;
+    expect(a.buy('longglass')).toBe(true);
+    // b's frigate lies along row 7 from column 5: the patch (6,6)-(7,7) catches it.
+    expect(a.peek(6, 6)).toBe(true);
+    const peeks = a.pub.sides[0].peeks!, seen = peeks[peeks.length - 1];
+    expect(seen.fog).toBe(false);
+    expect(seen.ships.map((s) => [s.kind, s.x, s.y, s.dir])).toEqual([['frigate', 5, 7, 'h']]);
+    expect(a.pub.ap).toBe(1);
+    expect(a.pub).toEqual(b.pub);
+    sinkAll(b, a);
+    expect(await verify(bus.log, 1, 'classic', 7)).toBeNull();
+    const lied: Msg[] = bus.log.map((m) => (m.t === 'peekResult' ? { ...m, ships: [] } : m));
+    expect(await verify(lied, 1, 'classic', 7)).toMatch(/Long Glass/);
+    const fogged: Msg[] = bus.log.map((m) => (m.t === 'peekResult' ? { ...m, ships: [], fog: true } : m));
+    expect(await verify(fogged, 1, 'classic', 7)).toMatch(/Long Glass/);
+  });
+  it('a message in a bottle: one a turn, on your own turn, trimmed, and the log still verifies', async () => {
+    const { bus, a, b } = await duel();
+    expect(b.note('Too soon')).toBe(false);
+    expect(a.note('  Fair   winds, brother — ' + 'x'.repeat(100))).toBe(true);
+    expect(a.note('And another')).toBe(false);
+    expect(a.pub.notes![0].text.length).toBe(80);
+    expect(a.pub.notes![0].text.startsWith('Fair winds, brother')).toBe(true);
+    a.endTurn();
+    expect(b.note('Strike your colours!')).toBe(true);
+    expect(a.pub).toEqual(b.pub);
+    sinkAll(b, a);
+    expect(await verify(bus.log, 1, 'classic', 7)).toBeNull();
+  });
   it('a sunk ship leaves open water: others sail through her squares and shots there fall in the sea', () => {
     const line = mk(0, 'line', 5, 0, 0, 'h'), cutter = mk(1, 'cutter', 2, 5, 0, 'h');
     cutter.sunk = true; cutter.hits = [true, true];

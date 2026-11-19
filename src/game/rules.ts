@@ -92,6 +92,15 @@ export function fits(ships: Placed[] & { id?: number }[], cand: Placed, ignoreId
   return true;
 }
 
+/** The ships afloat with a section in the 2×2 patch whose top-left square is (x, y), as the Long Glass shows them. */
+export function peekShips(ships: Ship[], x: number, y: number): Revealed[] {
+  return ships.filter((s) => !s.sunk && shipCells(s).some(([a, b]) => a >= x && a <= x + 1 && b >= y && b <= y + 1))
+    .map((s) => ({ kind: s.kind, cls: s.cls, len: s.len, x: s.x, y: s.y, dir: s.dir, rev: !!s.rev }))
+    .sort((a, b) => a.kind.localeCompare(b.kind));
+}
+/** A 2×2 patch fits on the chart when its top-left square is at most N − 2 across and down. */
+export const peekFits = (x: number, y: number) => x >= 0 && y >= 0 && x <= N - 2 && y <= N - 2;
+
 export function shipAt(ships: Ship[], x: number, y: number): { ship: Ship; idx: number } | null {
   // A sunk ship is gone from the chart: only ships afloat can be found, or struck, at a square.
   for (const ship of ships) {

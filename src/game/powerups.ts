@@ -1,7 +1,8 @@
-export type Item = 'spyglass' | 'fireship' | 'fog' | 'shipwright' | 'winds';
+export type Item = 'spyglass' | 'longglass' | 'fireship' | 'fog' | 'shipwright' | 'winds';
 
 export const ITEMS: Record<Item, { name: string; price: number; ap: number; blurb: string }> = {
   spyglass: { name: 'Spyglass', price: 30, ap: 1, blurb: 'Count hulls in a 5×5 patch of enemy water' },
+  longglass: { name: 'Long Glass', price: 45, ap: 2, blurb: 'See a 2×2 patch of enemy water clearly for the rest of your turn' },
   fireship: { name: 'Fire Ship', price: 50, ap: 2, blurb: 'Strike five squares in a cross' },
   fog: { name: 'Fog Bank', price: 40, ap: 1, blurb: 'Blind enemy spyglasses over a 5×5 patch of yours' },
   shipwright: { name: 'Shipwright', price: 60, ap: 2, blurb: 'Repair one damaged section' },
@@ -9,6 +10,7 @@ export const ITEMS: Record<Item, { name: string; price: number; ap: number; blur
 };
 /** What each item does, told in full for the quartermaster's tooltip. */
 export const ITEM_HELP: Record<Item, string> = {
+  longglass: 'A brass telescope of great power: pick a 2×2 patch of enemy water and see it as it truly is, every hull in it drawn plain, until your turn ends. A fog bank there hides it.',
   spyglass: 'Pick the centre of a 5×5 patch of enemy water: you learn how many ship sections lie inside it. A fog bank there answers only "?".',
   fireship: 'Send a burning hulk into enemy water: it strikes five squares at once, the one you pick and the four around it in a cross.',
   fog: 'Hide a 5×5 patch of your own water for two rounds: enemy spyglasses and the cutter\'s glass read only "?" there.',

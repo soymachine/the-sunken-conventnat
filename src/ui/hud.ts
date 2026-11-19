@@ -48,6 +48,8 @@ export interface HudHandlers {
   mode(m: Mode): void;
   mute(): boolean;
   quality(q: 'auto' | 'high' | 'low'): void;
+  note(text: string): void;
+  letterRead(): void;
   buy(item: Item): void;
   endTurn(): void;
   shuffle(): void;
@@ -84,6 +86,15 @@ export class Hud {
         <p class="meta">Auto steps down by itself if the game runs slowly. Low drops shadows, glow and the print grade.</p>
       </div>
       <div class="shopTip" id="shopTip" role="tooltip" hidden></div>
+      <form class="compose card" id="compose" hidden>
+        <h2>A message in a bottle</h2>
+        <label for="noteText" class="meta">One a turn, for the other captain's eyes. It costs nothing.</label>
+        <textarea id="noteText" maxlength="80" rows="2" placeholder="Fair winds, and a fair fight…"></textarea>
+        <div class="row"><span class="count" id="noteCount">0 / 80</span><button type="button" class="plaque dark" id="noteCancel">Keep it</button><button type="submit" class="plaque" id="noteSend">Seal &amp; cast</button></div>
+      </form>
+      <div class="letter" id="letter" hidden role="dialog" aria-labelledby="letterHead">
+        <div class="card"><p class="meta" id="letterHead">A bottle washes up on your waters</p><p class="ink" id="letterText"></p><p class="sign" id="letterSign"></p><button class="plaque" id="letterOk">Fold it away</button></div>
+      </div>
       <div class="herald" id="herald" aria-hidden="true"><div><b></b><span></span></div></div>
       <div class="objective" id="objective" hidden></div>
       <aside class="card left">
@@ -97,7 +108,7 @@ export class Hud {
       <div class="belt" id="belt"></div>
       <footer class="rail bottom">
         <div class="battle">
-          <p id="hint"></p>
+          <div class="say"><p id="hint"></p><button class="bottleBtn" id="noteBtn" aria-expanded="false" aria-controls="compose"><svg viewBox="0 0 40 16" aria-hidden="true"><path d="M2 5h20l6-3h7v12h-7l-6-3H2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><rect x="35" y="4" width="3" height="8" rx="1" fill="currentColor"/><path d="M6 8h12" stroke="currentColor" stroke-width="1.2" stroke-dasharray="2 2"/></svg>Cast a bottle</button></div>
           <div class="helm">
             <svg class="telegraph" viewBox="${TG.view}" role="group" aria-label="Orders and action points"></svg>
           </div>
@@ -142,6 +153,18 @@ export class Hud {
     });
     shop.addEventListener('pointerleave', () => { tip.hidden = true; });
     this.q<HTMLElement>('#shop').onclick = (e) => { const b = (e.target as Element).closest('button'); if (b && !b.classList.contains('off')) on.buy(b.dataset.item as Item); };
+    // The message in a bottle: a small sheet to write on, sealed and cast with one button.
+    const compose = this.q<HTMLFormElement>('#compose'), noteBtn = this.q<HTMLElement>('#noteBtn'), noteText = this.q<HTMLTextAreaElement>('#noteText');
+    const showCompose = (open: boolean) => {
+      compose.hidden = !open; noteBtn.setAttribute('aria-expanded', String(open));
+      if (open) { const r = noteBtn.getBoundingClientRect(); compose.style.left = Math.max(12, r.left) + 'px'; compose.style.bottom = innerHeight - r.top + 12 + 'px'; noteText.focus(); }
+    };
+    noteBtn.onclick = () => showCompose(compose.hidden === true);
+    noteText.oninput = () => { this.q('#noteCount').textContent = `${noteText.value.length} / 80`; };
+    noteText.onkeydown = (e) => { e.stopPropagation(); if (e.key === 'Escape') showCompose(false); };
+    this.q<HTMLElement>('#noteCancel').onclick = () => showCompose(false);
+    compose.onsubmit = (e) => { e.preventDefault(); if (!noteText.value.trim()) return; on.note(noteText.value); noteText.value = ''; this.q('#noteCount').textContent = '0 / 80'; showCompose(false); };
+    this.q<HTMLElement>('#letterOk').onclick = () => { this.q<HTMLElement>('#letter').hidden = true; on.letterRead(); };
     this.q<HTMLElement>('#belt').onclick = (e) => { const b = (e.target as Element).closest('button'); if (b && !b.classList.contains('off')) on.mode(b.dataset.tool as Mode); };
     // The same tooltip explains the special actions above the helm, shown above the button.
     const belt = this.q<HTMLElement>('#belt');
@@ -255,6 +278,14 @@ export class Hud {
     setTimeout(() => this.nextHerald(), matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 2150);
   }
 
+  /** A bottle has washed up: unroll its letter. */
+  letter(text: string, from: string) {
+    this.q('#letterText').textContent = `“${text}”`;
+    this.q('#letterSign').textContent = `— ${from}`;
+    const l = this.q<HTMLElement>('#letter');
+    l.hidden = false; l.classList.remove('open'); void l.offsetWidth; l.classList.add('open');
+  }
+
   setHint(text: string) { this.q('#hint').textContent = text; }
 
   update(c: Client, mode: Mode, note = '') {
@@ -274,6 +305,10 @@ export class Hud {
     this.q('#foeSeals').textContent = `${foe.seals} covenant seal${foe.seals === 1 ? '' : 's'} · ${foe.doubloons} doubloons`;
     this.balls.forEach((b, k) => b.classList.toggle('spent', !(mine && k < p.ap)));
     this.q<HTMLButtonElement>('#endTurn').disabled = !c.can();
+    const noteBtn = this.q<HTMLButtonElement>('#noteBtn');
+    noteBtn.disabled = !(p.phase === 'battle' && mine && !p.noteSent);
+    noteBtn.title = p.noteSent && mine ? 'One bottle a turn: you have cast yours.' : mine ? 'Send the other captain a short note.' : 'You may cast a bottle on your own turn.';
+    if (noteBtn.disabled) { this.q<HTMLElement>('#compose').hidden = true; noteBtn.setAttribute('aria-expanded', 'false'); }
     this.q<HTMLButtonElement>('#ready').disabled = me.ready;
     this.q('#placeHint').innerHTML = p.phase !== 'placement' ? '' : me.ready ? 'Fleet committed. Waiting for the other captain…' : 'Click a ship to lift it, move it over your waters and click again to set it down. <kbd>R</kbd> to rotate it.';
 

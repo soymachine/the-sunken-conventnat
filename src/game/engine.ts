@@ -4,11 +4,13 @@
 import { Order, pickOrder } from './orders';
 import { ITEMS, Item, MAX_ITEMS, START_DOUBLOONS } from './powerups';
 import {
-  AP_PER_TURN, CellResult, Dir, KRAKEN_SEALS, Kind, MAELSTROM_ROUND, N, Revealed, Rnd, Role, Ship, XY, attackCells, countScan, inBoard, inKraken, inZone, legalPlacement, randomFleet, zoneFits,
+  AP_PER_TURN, CellResult, Dir, KRAKEN_SEALS, Kind, MAELSTROM_ROUND, N, Revealed, Rnd, Role, Ship, XY, attackCells, countScan, inBoard, inKraken, inZone, legalPlacement, peekFits, peekShips, randomFleet, zoneFits,
   repairShip, rimCells, resolveAttack, sailReach, sailShip, shipAt, shipCells, turnShip, canTurnShip, Way,
 } from './rules';
 
 export type Mode = 'classic' | 'convoy';
+/** Longest message in a bottle, in characters. */
+export const NOTE_MAX = 80;
 /** Rounds the Admiral has to bring the cargo home. */
 export const SEASON = 12;
 export const CRATES = 3;
@@ -28,6 +30,9 @@ export type Body =
   | { t: 'powerResult'; col: number }
   | { t: 'scan'; x: number; y: number; src: 'cutter' | 'spyglass' }
   | { t: 'scanResult'; x: number; y: number; count: number }
+  | { t: 'peek'; x: number; y: number }
+  | { t: 'note'; text: string }
+  | { t: 'peekResult'; x: number; y: number; ships: Revealed[]; fog: boolean }
   | { t: 'buy'; item: Item }
   | { t: 'fog'; x: number; y: number }
   | { t: 'repair' }
@@ -47,6 +52,8 @@ export interface SidePub {
   sunk: Revealed[];
   spotted: { x: number; y: number; round: number }[];
   scans: { x: number; y: number; count: number; round: number }[];
+  /** What this captain's Long Glass showed: a 2×2 patch of the enemy chart, seen for the rest of the turn. */
+  peeks?: { x: number; y: number; ships: Revealed[]; fog: boolean; round: number }[];
   fogs: { x: number; y: number; until: number }[];
   /** Rows in which the laden merchantman was seen running under full sail. */
   wakes: { y: number; round: number }[];
@@ -66,6 +73,10 @@ export interface Pub {
   /** An attack or scan is waiting for the defender's answer. */
   pending: boolean;
   windsUsed: boolean;
+  /** A message in a bottle was already cast this turn. */
+  noteSent?: boolean;
+  /** Every note cast so far, oldest first. */
+  notes?: { by: 0 | 1; text: string; round: number }[];
   rng: number;
   sides: [SidePub, SidePub];
   treasures: Treasure[];
@@ -185,14 +196,25 @@ export function reduce(p: Pub, m: Msg): boolean {
     return true;
   }
 
-  if (m.t === 'result' || m.t === 'scanResult' || m.t === 'powerResult') {
+  if (m.t === 'result' || m.t === 'scanResult' || m.t === 'powerResult' || m.t === 'peekResult') {
     if (!p.pending || m.by === p.current) return false;
     p.pending = false;
     if (m.t === 'powerResult') { p.reckon = { col: m.col, round: p.round }; return true; }
     if (m.t === 'scanResult') { mine.scans.push({ x: m.x, y: m.y, count: m.count, round: p.round }); return true; }
+    // The answer belongs to the captain who looked (the one whose turn it is).
+    if (m.t === 'peekResult') { (p.sides[p.current].peeks ??= []).push({ x: m.x, y: m.y, ships: m.ships || [], fog: !!m.fog, round: p.round }); return true; }
     applyResults(p, m.by, m.results || [], true);
     if (p.strike) { p.strike = undefined; if (p.kraken && p.kraken.left <= 0) p.kraken = undefined; }
     if (m.lost && (p.phase as Pub['phase']) !== 'over') { p.phase = 'over'; p.winner = foe; p.reason = 'fleet'; }
+    return true;
+  }
+
+  // A message in a bottle: one a turn, on your own turn, at no cost. It changes nothing else.
+  if (m.t === 'note') {
+    const text = String(m.text || '').replace(/\s+/g, ' ').trim().slice(0, NOTE_MAX);
+    if (p.phase !== 'battle' || m.by !== p.current || p.noteSent || !text) return false;
+    p.noteSent = true;
+    (p.notes ??= []).push({ by: m.by, text, round: p.round });
     return true;
   }
 
@@ -206,6 +228,10 @@ export function reduce(p: Pub, m: Msg): boolean {
   switch (m.t) {
     case 'attack':
       if (!m.cells?.length || m.cells.some(([, y]) => inStorm(p, y)) || !spend(COST[m.src], m.src === 'fireship' ? 'fireship' : undefined)) return false;
+      p.pending = true;
+      return true;
+    case 'peek':
+      if (!peekFits(m.x, m.y) || inStorm(p, m.y) || inStorm(p, m.y + 1) || !spend(ITEMS.longglass.ap, 'longglass')) return false;
       p.pending = true;
       return true;
     case 'scan':
@@ -263,6 +289,7 @@ export function reduce(p: Pub, m: Msg): boolean {
       p.current = foe;
       p.ap = AP_PER_TURN;
       p.windsUsed = false;
+      p.noteSent = false;
       if (p.current === 0) {
         p.round++;
         for (const s of p.sides) { s.fogs = s.fogs.filter((f) => f.until >= p.round); s.wakes = s.wakes.filter((w) => p.round - w.round <= 2); }
@@ -372,6 +399,11 @@ export class Client {
       if (r.results.some((c) => c.r === 'hit' || c.r === 'sunk')) { this.hurt = true; if (this.order?.id === 'unscathed') this.order.n = 0; }
       this.send({ t: 'result', ...r });
     }
+    if (m.t === 'peek' && theirs) {
+      const cells: XY[] = [[m.x, m.y], [m.x + 1, m.y], [m.x, m.y + 1], [m.x + 1, m.y + 1]];
+      const fog = this.side.fogs.some((f) => cells.some(([a, b]) => inZone(f.x, f.y, a, b)));
+      this.send({ t: 'peekResult', x: m.x, y: m.y, ships: fog ? [] : peekShips(this.ships, m.x, m.y), fog });
+    }
     if (m.t === 'scan' && theirs) {
       const fogged = this.side.fogs.some((f) => inZone(f.x, f.y, m.x, m.y));
       this.send({ t: 'scanResult', x: m.x, y: m.y, count: fogged ? -1 : countScan(this.ships, m.x, m.y) });
@@ -426,6 +458,20 @@ export class Client {
     if (src === 'chain' && !this.alive('frigate')) return false;
     if (src === 'fireship' && !this.has('fireship')) return false;
     this.send({ t: 'attack', src, cells: attackCells(src, x, y, dir).filter(([, b]) => !inStorm(this.pub, b)) });
+    return true;
+  }
+
+  /** Cast a message in a bottle to the other captain (one a turn). */
+  note(text: string): boolean {
+    if (!this.myTurn || this.pub.phase !== 'battle' || this.pub.noteSent || !text.trim()) return false;
+    this.send({ t: 'note', text: text.replace(/\s+/g, ' ').trim().slice(0, NOTE_MAX) });
+    return true;
+  }
+
+  /** Look through the Long Glass at the 2×2 patch of enemy water whose top-left square is (x, y). */
+  peek(x: number, y: number): boolean {
+    if (!peekFits(x, y) || !this.can(ITEMS.longglass.ap) || !this.has('longglass') || inStorm(this.pub, y) || inStorm(this.pub, y + 1)) return false;
+    this.send({ t: 'peek', x, y });
     return true;
   }
 

@@ -2,7 +2,7 @@
 import './ui/hud.css';
 import { Client, Msg, Snapshot, roleOf } from './game/engine';
 import { ITEMS, Item } from './game/powerups';
-import { Dir, Ship, Way, ZONE, ahead, attackCells, bowCell, cellName, clampZone, fits, headingOf, inBoard, legalPlacement, pivotCell, randomFleet, shipAt, shipCells, turned, MAELSTROM_ROUND } from './game/rules';
+import { Dir, Ship, Way, ZONE, ahead, attackCells, bowCell, cellName, clampZone, fits, headingOf, inBoard, legalPlacement, pivotCell, randomFleet, shipAt, shipCells, turned, MAELSTROM_ROUND, N } from './game/rules';
 import { verify } from './game/verify';
 import { createRoom, firebaseConfigured, joinRoom } from './net/firebase';
 import { LocalSession, Session } from './net/session';
@@ -42,6 +42,7 @@ const HINTS: Record<string, string> = {
   chain: 'Chain shot — a hit pins that ship for its next turn.',
   spy: 'Cutter’s glass — count hull sections in a 5×5 patch of enemy water.',
   spyglass: 'Spyglass — count hull sections in a 5×5 patch of enemy water.',
+  longglass: 'Long Glass — pick a 2×2 patch of enemy water to see it plainly until your turn ends.',
   fireship: 'Fire ship — five squares in a cross.',
   fog: 'Fog bank — pick the centre of a 5×5 patch of your own water.',
   kraken: 'Summon the Kraken — pick the centre of a 3×3 patch of enemy water. It strikes now and again next turn, and holds the ships it finds.',
@@ -52,6 +53,8 @@ const hud = new Hud({
   mode: (m) => { sfx.play('click'); setMode(m); },
   mute: () => sfx.toggle(),
   quality: (q) => scene.setQuality(q),
+  note: (text) => { if (!c.note(text)) hud.log('One bottle a turn, and only on your own turn.', 'bad'); },
+  letterRead: () => scene.clearBottles(),
   buy: (item) => { if (c.buy(item)) setMode(item === 'winds' ? mode : item); },
   endTurn: () => { if (!busy) c.endTurn(); },
   shuffle: () => { if (canPlace()) { c.ships = randomFleet(Math.random, c.role); selected = lifted = null; refresh(); } },
@@ -61,7 +64,7 @@ const hud = new Hud({
 });
 hud.setPrefs(sfx.muted, scene.getQuality());
 // ?debug exposes the scene and HUD to the console, to trigger weather and notices by hand.
-if (new URLSearchParams(location.search).has('debug')) Object.assign(window, { scene, hud });
+if (new URLSearchParams(location.search).has('debug')) { Object.assign(window, { scene, hud }); Object.defineProperty(window, 'game', { get: () => ({ c, session }) }); }
 const lobby = new Lobby({
   bot: (name, mode) => start(new LocalSession(mode), name),
   create: async (name, mode) => {
@@ -132,6 +135,12 @@ async function drain() {
     const m = queue.shift()!;
     const mine = m.by === c.me;
     if (m.t === 'kraken') { sfx.play('roar'); refresh(); await wait(1300); }
+    // A bottle drifts across; one that reaches my waters unrolls its letter when it lands.
+    if (m.t === 'note') {
+      const text = c.pub.notes?.slice(-1)[0]?.text ?? m.text, from = c.pub.sides[m.by].name || 'The other captain';
+      if (mine) void scene.bottle('enemy', false);
+      else void scene.bottle('own', true).then(() => hud.letter(text, from));
+    }
     if (m.t === 'result') {
       refreshHud();
       const side = mine ? 'own' : 'enemy';
@@ -212,6 +221,9 @@ function describe(m: Msg, mine: boolean) {
       if (m.wake !== undefined) hud.log(mine ? `Under full sail your merchantman is sighted in row ${m.wake + 1}.` : `A laden ship is sighted under full sail in row ${m.wake + 1}.`, mine ? 'bad' : 'good');
       if (m.treasure) hud.log(mine ? 'Treasure hauled aboard — but your ship was sighted.' : `${foe} lifts a treasure at ${cellName(...m.treasure)} — a ship is there.`, 'good');
       break;
+    case 'note': if (mine) hud.log('Your bottle is cast. It drifts towards the other captain.'); break;
+    case 'peek': if (!mine) hud.log(`${foe} levels a long glass at ${cellName(m.x, m.y)}: they see that water plainly this turn.`, 'bad'); break;
+    case 'peekResult': if (!mine) hud.log(m.fog ? `The long glass meets only fog at ${cellName(m.x, m.y)}.` : m.ships?.length ? `Through the long glass: ${m.ships.map((s) => s.cls).join(' and ')} at ${cellName(m.x, m.y)}!` : `Through the long glass: open water at ${cellName(m.x, m.y)}.`, m.ships?.length ? 'good' : ''); break;
     case 'scan': if (!mine) hud.log(`${foe} trains a spyglass on ${cellName(m.x, m.y)}.`, 'bad'); break;
     case 'scanResult': if (!mine) hud.log(m.count < 0 ? `Spyglass on ${cellName(m.x, m.y)}: nothing but fog.` : `Spyglass on ${cellName(m.x, m.y)}: ${m.count} hull section${m.count === 1 ? '' : 's'}.`, m.count > 0 ? 'good' : ''); break;
     case 'buy': hud.log(mine ? `You buy ${ITEMS[m.item].name}.` : `${foe} buys ${ITEMS[m.item].name}.`); break;
@@ -338,6 +350,7 @@ function refresh() {
       if (mode === 'fire' || mode === 'chain') hl.push({ ...hover, color: WAX, opacity: 0.55 });
       if (mode === 'broadside' || mode === 'fireship') for (const [a, b] of attackCells(mode, x, y, aimDir)) hl.push({ side, x: a, y: b, color: WAX, opacity: 0.55 });
       if (mode === 'spy' || mode === 'spyglass') hl.push(...zone(side, clampZone(x), clampZone(y), AMBER, 0.3)); // the patch slides to stay on the chart
+      if (mode === 'longglass') { const a0 = Math.min(x, N - 2), b0 = Math.min(y, N - 2); for (const [a, b] of [[a0, b0], [a0 + 1, b0], [a0, b0 + 1], [a0 + 1, b0 + 1]]) hl.push({ side, x: a, y: b, color: AMBER, opacity: 0.45 }); }
       if (mode === 'kraken') for (let b = y - 1; b <= y + 1; b++) for (let a = x - 1; a <= x + 1; a++) if (inBoard(a, b)) hl.push({ side, x: a, y: b, color: WAX, opacity: 0.5 });
     } else {
       if (mode === 'fog') hl.push(...zone(side, x, y, FOG, 0.45));
@@ -395,6 +408,7 @@ function battleClick(cell: Cell) {
     else if (mode === 'broadside' || mode === 'chain' || mode === 'fireship') c.attack(mode, x, y, aimDir);
     else if (mode === 'spy') c.scan(clampZone(x), clampZone(y), 'cutter');
     else if (mode === 'spyglass') c.scan(clampZone(x), clampZone(y), 'spyglass');
+    else if (mode === 'longglass') c.peek(Math.min(x, N - 2), Math.min(y, N - 2));
     else if (mode === 'kraken') c.kraken(x, y);
     return;
   }

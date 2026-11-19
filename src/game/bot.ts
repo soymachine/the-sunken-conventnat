@@ -54,6 +54,9 @@ function scoreGrid(c: Client, rnd: Rnd): number[][] {
 }
 
 /** Take one step for the bot. Returns true if it did something. */
+/** What the machine writes back when a bottle reaches it. */
+const REPLIES = ['Brave words for a captain with so much water left to lose.', 'The sea keeps its own counsel, and so do I.', 'Fair winds to you, while they last.', 'Your bottle sank before I could read it. A pity.', 'Strike your colours and I may be merciful.', 'I have read your note. I am unmoved.'];
+
 export function botAct(c: Client, rnd: Rnd = Math.random): boolean {
   const p = c.pub;
   if (p.phase === 'placement') { if (!c.side.ready) { void c.ready(); return true; } return false; }
@@ -62,6 +65,10 @@ export function botAct(c: Client, rnd: Rnd = Math.random): boolean {
   const me = c.side, foe = c.foeSide;
 
   if (c.has('winds') && !p.windsUsed && c.winds()) return true;
+
+  // Answer a bottle with one of its own, now and then.
+  const notes = p.notes || [], last = notes[notes.length - 1];
+  if (last && last.by !== c.me && !p.noteSent && rnd() < 0.8) return c.note(REPLIES[Math.floor(rnd() * REPLIES.length)]);
 
   const mer = c.merchant;
   if (c.role === 'admiral' && mer && !mer.sunk) {
