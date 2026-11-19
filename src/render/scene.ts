@@ -693,6 +693,11 @@ export class SeaScene {
     const to = cellCenter(target);
     let from: THREE.Vector3;
     const guns = [...this.ships.values()].filter((o) => o.side === 'own' && o.state === 'afloat');
+    const armed = guns.filter((o) => o.model.gun);
+    if (target.side === 'enemy' && armed.length) {
+      // A ship with a deck gun swings it onto the target and fires from its muzzle.
+      return this.layGun(armed[0], to).then(() => this.fly(armed[0].model.gun!.muzzle.getWorldPosition(new THREE.Vector3()), to, target, outcome, armed[0]));
+    }
     if (target.side === 'enemy' && guns.length) {
       const g = guns[Math.floor(Math.random() * guns.length)];
       from = g.root.position.clone().setY(0.6);
@@ -702,6 +707,40 @@ export class SeaScene {
       // The enemy's guns stay hidden: shots arrive from beyond their chart.
       const c = cellCenter({ side: 'enemy', x: 2 + Math.random() * (N - 4), y: 2 + Math.random() * (N - 4) });
       from = c.setY(0.6);
+    }
+    return this.fly(from, to, target, outcome);
+  }
+
+  /** Turn a ship's deck gun towards a point; resolves once it is laid. */
+  private layGun(o: ShipObj, to: THREE.Vector3): Promise<void> {
+    const { pivot } = o.model.gun!;
+    o.tilt.updateMatrixWorld(true);
+    const local = pivot.parent!.worldToLocal(to.clone());
+    const want = Math.atan2(-(local.z - pivot.position.z), local.x - pivot.position.x);
+    const start = pivot.rotation.y, delta = Math.atan2(Math.sin(want - start), Math.cos(want - start));
+    const dur = calm ? 0 : 140 + Math.abs(delta) * 220, t0 = performance.now();
+    return new Promise((res) => {
+      const step = () => {
+        const u = dur ? Math.min(1, (performance.now() - t0) / dur) : 1, e = u * u * (3 - 2 * u);
+        pivot.rotation.y = start + delta * e;
+        if (u < 1) requestAnimationFrame(step); else res();
+      };
+      step();
+    });
+  }
+
+  /** The ball's flight and what it does where it lands. */
+  private fly(from: THREE.Vector3, to: THREE.Vector3, target: Cell, outcome: ShotOutcome, gunner?: ShipObj): Promise<void> {
+    if (gunner) {
+      const { barrel } = gunner.model.gun!;
+      this.fx.muzzle(from);
+      this.seas.own.bump(Math.floor(from.x - origin.own.x), Math.floor(from.z - origin.own.z), 0.25);
+      // Recoil: the barrel kicks back along its bore and eases forward again.
+      if (!calm) {
+        const t0 = performance.now();
+        const kick = () => { const u = (performance.now() - t0) / 450; barrel.position.x = -0.012 * Math.max(0, u < 0.15 ? u / 0.15 : 1 - (u - 0.15) / 0.85); if (u < 1) requestAnimationFrame(kick); else barrel.position.x = 0; };
+        kick();
+      }
     }
     this.sound('cannon');
     const ball = new THREE.Mesh(G.ball, M.ball);

@@ -143,6 +143,8 @@ export interface ShipModel {
   /** Cargo on deck, one crate per hull section (merchantman only). */
   crates: THREE.Object3D[];
   deckY: number;
+  /** A deck gun that turns to its target: `pivot` swings about its vertical axis, `muzzle` is where shots leave. */
+  gun?: { pivot: THREE.Object3D; barrel: THREE.Object3D; muzzle: THREE.Object3D };
 }
 
 export function buildShip(kind: Kind, len: number): ShipModel {
@@ -184,7 +186,9 @@ export function buildShip(kind: Kind, len: number): ShipModel {
       m.castShadow = true;
     });
     inner.add(o);
-    return { body, sails, mats, crates: [], deckY };
+    const pivot = o.getObjectByName('cannon'), barrel = o.getObjectByName('barrel'), muzzle = o.getObjectByName('muzzle');
+    const gun = pivot && barrel && muzzle ? { pivot, barrel, muzzle } : undefined;
+    return { body, sails, mats, crates: [], deckY, gun };
   }
 
   const h = loft(len, s);

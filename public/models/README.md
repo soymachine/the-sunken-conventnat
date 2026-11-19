@@ -4,7 +4,19 @@ A `.glb` here named after a ship class replaces the procedural ship of that clas
 
 `line.glb` · `frigate.glb` · `ironclad.glb` · `schooner.glb` · `cutter.glb` · `merchant.glb`
 
-Present now: `line.glb` (Ship of the Line, generated with Meshy and prepared with the script below).
+Present now: `line.glb` (Ship of the Line, generated with Meshy, prepared with the script below and then
+refitted by `tools/refit_line.py`: a plank deck over the generated one, framed stern and quarter windows,
+and a swivel deck gun).
+
+## A deck gun
+
+A model may carry a gun that turns to its target. The game looks for three nodes by name:
+
+- `cannon` — the pivot: it turns about its vertical axis; the barrel must point along +X at rest;
+- `barrel` — a child of `cannon`, pushed back along X for the recoil;
+- `muzzle` — a child of `barrel` at the mouth: where shots, flash and smoke start.
+
+When the player's ship with a gun is afloat, every shot is fired from it.
 
 ## Preparing a model
 
