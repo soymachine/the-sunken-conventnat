@@ -18,6 +18,7 @@ const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const sfx = new Sfx();
 scene.sound = (s) => sfx.play(s);
 scene.rain = (on) => sfx.setRain(on);
+scene.ambience = (on) => sfx.setAmbience(on);
 let quiet = false; // rebuilding the view from history: no animations
 
 let session: Session | null = null;

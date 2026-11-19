@@ -1,6 +1,6 @@
 // Oak-and-brass HUD drawn with DOM + SVG over the 3D canvas.
 import { Client, SEASON, roleOf } from '../game/engine';
-import { ITEMS, ITEM_IDS, Item } from '../game/powerups';
+import { ITEMS, ITEM_HELP, ITEM_IDS, Item, MAX_ITEMS } from '../game/powerups';
 import { FLEETS, KRAKEN_SEALS, N, Role, shipCells } from '../game/rules';
 
 export type Tool = 'broadside' | 'chain' | 'spy' | Item;
@@ -75,6 +75,7 @@ export class Hud {
         <div class="seg" data-pref="quality" role="radiogroup" aria-label="3D quality"><button data-v="auto" role="radio">Auto</button><button data-v="high" role="radio">High</button><button data-v="low" role="radio">Low</button></div>
         <p class="meta">Auto steps down by itself if the game runs slowly. Low drops shadows, glow and the print grade.</p>
       </div>
+      <div class="shopTip" id="shopTip" role="tooltip" hidden></div>
       <div class="herald" id="herald" aria-hidden="true"><div><b></b><span></span></div></div>
       <div class="objective" id="objective" hidden></div>
       <aside class="card left">
@@ -124,7 +125,20 @@ export class Hud {
       if (pref === 'quality') { on.quality(v as 'auto' | 'high' | 'low'); this.qualityPref = v; }
       this.paintPrefs();
     };
-    this.q<HTMLElement>('#shop').onclick = (e) => { const b = (e.target as Element).closest('button'); if (b) on.buy(b.dataset.item as Item); };
+    // The quartermaster explains each item on hover: what it does, its price, and why you cannot buy it yet.
+    const shop = this.q<HTMLElement>('#shop'), tip = this.q<HTMLElement>('#shopTip');
+    shop.addEventListener('pointerover', (e) => {
+      const b = (e.target as Element).closest<HTMLElement>('button[data-item]');
+      if (!b) return;
+      const id = b.dataset.item as Item, it = ITEMS[id];
+      tip.innerHTML = `<b>${it.name}</b><span class="cost">${it.price} doubloons · ${it.ap} AP</span><p>${esc(ITEM_HELP[id])}</p>${b.dataset.why ? `<p class="why">${esc(b.dataset.why)}</p>` : ''}`;
+      const r = b.getBoundingClientRect(), panel = shop.closest('.card')!.getBoundingClientRect();
+      tip.style.left = panel.right + 10 + 'px';
+      tip.style.top = Math.min(innerHeight - 220, r.top - 6) + 'px';
+      tip.hidden = false;
+    });
+    shop.addEventListener('pointerleave', () => { tip.hidden = true; });
+    this.q<HTMLElement>('#shop').onclick = (e) => { const b = (e.target as Element).closest('button'); if (b && !b.classList.contains('off')) on.buy(b.dataset.item as Item); };
     this.q<HTMLElement>('#belt').onclick = (e) => { const b = (e.target as Element).closest('button'); if (b) on.mode(b.dataset.tool as Mode); };
   }
 
@@ -266,7 +280,9 @@ export class Hud {
     this.q('#gold').textContent = String(me.doubloons);
     this.q('#shop').innerHTML = ITEM_IDS.map((id) => {
       const it = ITEMS[id];
-      return `<li><button data-item="${id}" title="${esc(it.blurb)}" ${c.canBuy(id) ? '' : 'disabled'}><span>${it.name}</span><em>${it.ap} AP</em><b>${it.price}</b></button></li>`;
+      const why = c.canBuy(id) ? '' : p.phase !== 'battle' ? 'The quartermaster opens once the battle begins.' : !mine ? 'Wait for your turn.'
+        : me.doubloons < it.price ? `You need ${it.price - me.doubloons} more doubloons.` : me.items.length >= MAX_ITEMS ? `Your hold is full: ${MAX_ITEMS} items at most. Use one first.` : 'Not now.';
+      return `<li><button data-item="${id}" data-why="${esc(why)}" aria-disabled="${!!why}" ${why ? 'class="off"' : ''}><span>${it.name}</span><em>${it.ap} AP</em><b>${it.price}</b></button></li>`;
     }).join('');
     this.q('#fleet').innerHTML = c.ships.map((s) => {
       const f = FLEETS[role].find((q) => q.kind === s.kind)!;

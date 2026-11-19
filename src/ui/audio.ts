@@ -1,6 +1,6 @@
 // Most sounds are synthesised with Web Audio; a few recorded ones (public/sfx/*.mp3) are loaded once sound wakes up.
-export type SfxName = 'roar' | 'thunder' | 'cannon' | 'splash' | 'hit' | 'clang' | 'sink' | 'coin' | 'glass' | 'click' | 'bell' | 'creak' | 'gull' | 'treasure';
-const SAMPLES = { rain: 'rain-heavy', thunder: 'thunder', cannon: 'cannon-fire-distant', gull: 'seagull-cry', treasure: 'treasure-reveal' } as const;
+export type SfxName = 'roar' | 'thunder' | 'cannon' | 'splash' | 'hit' | 'clang' | 'sink' | 'coin' | 'glass' | 'click' | 'bell' | 'creak' | 'gull' | 'treasure' | 'plunge';
+const SAMPLES = { deck: 'boat-deck-at-sea-loop', plunge: 'explosion-underwater', fire: 'fire-crackle-after-blast', rain: 'rain-heavy', thunder: 'thunder', cannon: 'cannon-fire-distant', gull: 'seagull-cry', treasure: 'treasure-reveal' } as const;
 type Sample = keyof typeof SAMPLES;
 
 export class Sfx {
@@ -11,6 +11,8 @@ export class Sfx {
   private buf: Partial<Record<Sample, AudioBuffer>> = {};
   private rainVoice: { src: AudioBufferSourceNode; g: GainNode } | null = null;
   private rainWanted = false;
+  private deckVoice: { src: AudioBufferSourceNode; g: GainNode } | null = null;
+  private deckWanted = false;
   private thunderVoice: GainNode | null = null;
 
   constructor() {
@@ -36,6 +38,7 @@ export class Sfx {
       void fetch(`/sfx/${f}.mp3`).then((r) => r.arrayBuffer()).then((a) => this.ctx!.decodeAudioData(a)).then((b) => {
         this.buf[k] = b;
         if (k === 'rain' && this.rainWanted) this.setRain(true);
+        if (k === 'deck' && this.deckWanted) this.setAmbience(true);
       }).catch(() => { /* fall back to the synthesised sound */ });
     }
   }
@@ -51,6 +54,26 @@ export class Sfx {
     src.connect(g).connect(this.out);
     src.start(t);
     return g;
+  }
+
+  /** A loop that fades in and out: the deck at sea under the whole battle. */
+  setAmbience(on: boolean) {
+    this.deckWanted = on;
+    if (!this.ctx) return;
+    const c = this.ctx, t = c.currentTime;
+    if (on && !this.deckVoice && this.buf.deck) {
+      const src = c.createBufferSource(), g = c.createGain();
+      src.buffer = this.buf.deck; src.loop = true;
+      // Skip the MP3's padding at both ends so the loop has no gap.
+      src.loopStart = 0.06; src.loopEnd = this.buf.deck.duration - 0.06;
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.4, t + 3);
+      src.connect(g).connect(this.out); src.start(t, 0.06);
+      this.deckVoice = { src, g };
+    } else if (!on && this.deckVoice) {
+      const v = this.deckVoice; this.deckVoice = null;
+      v.g.gain.cancelScheduledValues(t); v.g.gain.setValueAtTime(v.g.gain.value, t); v.g.gain.linearRampToValueAtTime(0, t + 2);
+      v.src.stop(t + 2.1);
+    }
   }
 
   /** Heavy rain: fades in and loops while a storm is over the charts, fades out when it clears. */
@@ -119,6 +142,9 @@ export class Sfx {
     if (name === 'cannon' && this.sample('cannon', 0.85, { rate: 0.94 + Math.random() * 0.12 })) return;
     if (name === 'gull') { this.sample('gull', 0.35, { rate: 0.9 + Math.random() * 0.2 }); return; }
     if (name === 'treasure' && this.sample('treasure', 0.8)) return;
+    // A ball that falls in the sea bursts under the water; one that strikes a ship booms and leaves her burning.
+    if (name === 'plunge') { if (this.sample('plunge', 0.9, { rate: 0.92 + Math.random() * 0.16 })) return; name = 'splash'; }
+    if (name === 'hit' && this.sample('fire', 0.55, { rate: 0.95 + Math.random() * 0.1 })) { this.tone(t, 110, 42, 0.4, 0.45, 'triangle'); return; }
     if (name === 'treasure') name = 'coin';
     switch (name) {
       case 'cannon': this.tone(t, 150, 38, 0.5, 0.9); this.noise(t, 0.45, 0.6, 'lowpass', 2400, 180); break;

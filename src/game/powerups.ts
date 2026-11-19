@@ -7,6 +7,14 @@ export const ITEMS: Record<Item, { name: string; price: number; ap: number; blur
   shipwright: { name: 'Shipwright', price: 60, ap: 2, blurb: 'Repair one damaged section' },
   winds: { name: 'Trade Winds', price: 40, ap: 0, blurb: 'One extra action point this turn' },
 };
+/** What each item does, told in full for the quartermaster's tooltip. */
+export const ITEM_HELP: Record<Item, string> = {
+  spyglass: 'Pick the centre of a 5×5 patch of enemy water: you learn how many ship sections lie inside it. A fog bank there answers only "?".',
+  fireship: 'Send a burning hulk into enemy water: it strikes five squares at once, the one you pick and the four around it in a cross.',
+  fog: 'Hide a 5×5 patch of your own water for two rounds: enemy spyglasses and the cutter\'s glass read only "?" there.',
+  shipwright: 'Pick a damaged section of one of your ships to patch it up. The merchantman\'s plundered cargo cannot be repaired.',
+  winds: 'Use it at once: one extra action point this turn, at no cost in action points. Once per turn.',
+};
 export const ITEM_IDS = Object.keys(ITEMS) as Item[];
 export const MAX_ITEMS = 3;
 export const START_DOUBLOONS = 30;

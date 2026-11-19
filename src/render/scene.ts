@@ -25,7 +25,7 @@ export interface View { pub: Pub; me: 0 | 1; ships: Ship[]; selectedId?: number 
 export interface Ghost { kind: Kind; len: number; x: number; y: number; dir: 'h' | 'v'; rev: boolean; from: [number, number]; pivot: [number, number]; state: 'hot' | 'idle' | 'bad';
   /** Draw the translucent ship itself (only for the turn being pointed at), not just its arrow. */
   ship: boolean }
-export type Sound = 'cannon' | 'splash' | 'hit' | 'clang' | 'sink' | 'coin' | 'glass' | 'roar' | 'thunder' | 'gull' | 'treasure';
+export type Sound = 'cannon' | 'splash' | 'hit' | 'clang' | 'sink' | 'coin' | 'glass' | 'roar' | 'thunder' | 'gull' | 'treasure' | 'plunge';
 
 const C = { ink: 0x0d0b08, amber: 0xd9a441, parch: 0xe8d5a3, brass: 0xb08d3c, wax: 0x8c2f1b };
 const HALF = N / 2;
@@ -208,6 +208,8 @@ export class SeaScene {
   sound: (s: Sound) => void = () => {};
   /** Set by the controller: heavy rain on or off while a storm is over the charts. */
   rain: (on: boolean) => void = () => {};
+  /** Set by the controller: the sea and the ship's timbers under the whole battle. */
+  ambience: (on: boolean) => void = () => {};
   private nextGull = 8;
   private renderer: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
@@ -450,6 +452,7 @@ export class SeaScene {
     this.seas.own.clear(); this.seas.enemy.clear();
     this.kraken.setZone(null);
     this.rain(false);
+    this.ambience(false);
     this.ghosts.clear(); this.ghostKey = '';
     this.last = null;
   }
@@ -770,9 +773,13 @@ export class SeaScene {
       const at = cellCenter({ side, x: sc.x, y: sc.y });
       const box = new THREE.LineSegments(G.zone, side === 'enemy' ? M.lineAmber : M.lineWax);
       box.position.set(at.x, 0.12, at.z);
-      const l = label(sc.count < 0 ? '?' : String(sc.count), side === 'enemy' ? '#d9a441' : '#c0563c');
-      l.position.set(at.x, 0.085, at.z);
-      this.marks.add(box, l);
+      this.marks.add(box);
+      // Only my own readings carry a number; where the enemy scanned me, the box alone says so.
+      if (side === 'enemy') {
+        const l = label(sc.count < 0 ? '?' : String(sc.count), '#d9a441');
+        l.position.set(at.x, 0.085, at.z);
+        this.marks.add(l);
+      }
     }
     p.fogs.forEach((f, fi) => {
       const at = cellCenter({ side, x: f.x, y: f.y });
@@ -854,6 +861,7 @@ export class SeaScene {
     this.weather.setCharts(origin.own, origin.enemy);
     this.weather.setStorm(this.stormy ? st!.row : null);
     this.rain(this.stormy);
+    this.ambience(v.pub.phase !== 'over');
     for (const side of ['own', 'enemy'] as Side[]) {
       this.seas[side].setStorm(st ? st.row : null);
       this.seas[side].setRing(v.pub.ring);
@@ -1034,7 +1042,7 @@ export class SeaScene {
   private impact(target: Cell, outcome: ShotOutcome) {
     const at = cellCenter(target).setY(0.25);
     this.seas[target.side].bump(target.x, target.y, 1);
-    if (outcome === 'miss' || outcome === 'wreck') { this.fx.water(at); this.sound('splash'); }
+    if (outcome === 'miss' || outcome === 'wreck') { this.fx.water(at); this.sound('plunge'); }
     else if (outcome === 'clang') { this.fx.clang(at.setY(0.5)); this.shake(0.12); this.sound('clang'); }
     else { this.fx.explosion(at.setY(0.45)); this.shake(outcome === 'sunk' ? 0.5 : 0.28); this.sound('hit'); }
   }
