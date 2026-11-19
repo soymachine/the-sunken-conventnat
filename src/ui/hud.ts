@@ -154,8 +154,6 @@ export class Hud {
     svg(g, 'stop', { offset: 0, 'stop-color': '#f0d489' }); svg(g, 'stop', { offset: 0.45, 'stop-color': '#b08d3c' }); svg(g, 'stop', { offset: 1, 'stop-color': '#5e4717' });
     const glow = svg(d, 'radialGradient', { id: 'sectorGlow', cx: 0.5, cy: 1, r: 1 });
     svg(glow, 'stop', { offset: 0.25, 'stop-color': '#ffcf6a', 'stop-opacity': 0.92 }); svg(glow, 'stop', { offset: 1, 'stop-color': '#c98a22', 'stop-opacity': 0.7 });
-    const iron = svg(d, 'radialGradient', { id: 'iron', cx: 0.35, cy: 0.3, r: 0.75 });
-    [[0, '#a29d93'], [0.3, '#3b3833'], [0.85, '#0c0b0a'], [1, '#3a2b12']].forEach(([o, c]) => svg(iron, 'stop', { offset: o, 'stop-color': c }));
     svg(s, 'image', { href: '/ui/console.webp', x: 0, y: 0, width: TG.w, height: TG.h });
     const labels: SVGTextElement[] = [];
     SECTORS.forEach((m, i) => {
@@ -173,8 +171,7 @@ export class Hud {
     });
     TG.cups.forEach(([x, y]) => {
       const b = svg(s, 'g', { class: 'ball spent' });
-      svg(b, 'circle', { cx: x, cy: y, r: TG.ball, fill: 'url(#iron)' });
-      svg(b, 'ellipse', { cx: x - TG.ball * 0.38, cy: y - TG.ball * 0.42, rx: TG.ball * 0.26, ry: TG.ball * 0.16, fill: '#fff', opacity: 0.25 });
+      svg(b, 'image', { href: '/ui/ap_ball.webp', x: x - TG.ball, y: y - TG.ball, width: TG.ball * 2, height: TG.ball * 2 });
       this.balls.push(b);
     });
     this.lever = svg(s, 'g', { class: 'lever' });

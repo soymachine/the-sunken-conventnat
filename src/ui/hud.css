@@ -31,7 +31,9 @@ button { font-family: inherit; }
 #foeFleet .pips i { background: var(--amber); width: 7px; height: 7px; }
 #foeFleet .pips.sunk i { background: var(--wax); opacity: .8; }
 
-.card { background: var(--parch); color: var(--ink); border: 1px solid var(--ink); outline: 1px solid rgba(13, 11, 8, .45); outline-offset: -6px; padding: 16px 18px; }
+.card { color: var(--ink); padding: 16px 18px; background: none; filter: drop-shadow(0 10px 18px rgba(0, 0, 0, .55));
+  /* Old parchment (public/ui/parchment.webp) in nine slices: the deckled corners keep their size, the rest stretches. */
+  border: 1px solid transparent; border-image: url('/ui/parchment.webp') 82 fill / 34px / 0 stretch; }
 .card h2 { font: 700 11px var(--label); letter-spacing: .16em; text-transform: uppercase; margin: 0 0 7px; padding-bottom: 5px; border-bottom: 1px solid var(--ink); display: flex; justify-content: space-between; gap: 8px; }
 .card h2 span { color: var(--wax); letter-spacing: .04em; white-space: nowrap; }
 #gold::before { content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--brass); border: 1px solid var(--ink); margin-right: 5px; }
