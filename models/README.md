@@ -1,0 +1,17 @@
+# Source ship models
+
+The models as they came out of Meshy, kept so the game's versions can be rebuilt. The game loads the
+prepared copies in `public/models/`, made with:
+
+```bash
+python tools/prepare_ship.py -- models/ship-of-the-line.glb public/models/line.glb --squares 5 --bow=-x
+python tools/refit_line.py -- public/models/line.glb public/models/line.glb
+python tools/prepare_ship.py -- models/frigate.glb public/models/frigate.glb --squares 4 --bow=-x --beam 0.64 --height 2.3
+python tools/prepare_ship.py -- models/ironclad.glb public/models/ironclad.glb --squares 3 --bow=+x --beam 0.72 --height 1.25 --deck=-0.068 --waterline 0.55
+python tools/prepare_ship.py -- models/schooner.glb public/models/schooner.glb --squares 3 --bow=-x --beam 0.52 --height 2.0
+python tools/prepare_ship.py -- models/cutter.glb public/models/cutter.glb --squares 2 --bow=-x --beam 0.5 --height 1.7
+python tools/prepare_ship.py -- models/merchantman.glb public/models/merchant.glb --squares 3 --bow=-x --beam 0.8 --height 1.9
+python tools/refit_merchant.py -- public/models/merchant.glb public/models/merchant.glb
+```
+
+These need Blender's Python module (`pip install bpy`, Python 3.13).

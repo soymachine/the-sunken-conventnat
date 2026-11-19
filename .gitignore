@@ -5,3 +5,4 @@ dist-emu
 .env.*.local
 *.log
 .firebase
+.DS_Store

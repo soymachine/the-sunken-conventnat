@@ -3,7 +3,7 @@ Prepare a ship model from an image-to-3D service (Meshy, Tripo...) for the game.
 
 Run with Blender's Python (the `bpy` package works):
 
-    python tools/prepare_ship.py -- IN.glb OUT.glb [--bow -x|+x] [--waterline 0.45]
+    python tools/prepare_ship.py -- IN.glb OUT.glb [--bow=-x|--bow=+x] [--waterline 0.45]
         [--beam 0.74] [--height 2.6] [--squares 5] [--texture 1024]
 
 What it does:
@@ -11,7 +11,7 @@ What it does:
   * turns the ship so the bow faces +X (the game's "ahead");
   * measures the hull (everything below the deck, ignoring masts and bowsprit), scales it so the hull is
     exactly 1.0 long, centres it, and puts the waterline at height 0;
-  * squeezes beam and height to the game's proportions so the ship fits its row of squares;
+  * narrows the beam and lowers the masts, if needed, so the ship fits its row of squares (never stretches);
   * shrinks the texture and saves it as JPEG;
   * records the deck height in the node's extras, which the game reads (src/render/ships.ts).
 """
@@ -20,7 +20,7 @@ import bpy, bmesh, sys, argparse, mathutils
 argv = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else sys.argv[1:]
 ap = argparse.ArgumentParser()
 ap.add_argument('src'); ap.add_argument('dst')
-ap.add_argument('--bow', default='-x', help='axis the bow points along in the source model (+x or -x)')
+ap.add_argument('--bow', default='-x', choices=['-x', '+x'], help='axis the bow points along in the source model; write it as --bow=-x')
 ap.add_argument('--waterline', type=float, default=0.45, help='waterline as a fraction of keel-to-deck height')
 ap.add_argument('--deck', type=float, default=None, help='deck height in source units (measured if omitted)')
 ap.add_argument('--squares', type=float, default=5, help='length of the ship on the chart, in squares')
@@ -78,8 +78,9 @@ print(f'hull: length {L:.3f}, beam {y1 - y0:.3f}, keel {keel:.3f}, deck {deck:.3
 # --- normalise: hull 1.0 long, centred, waterline at 0; beam and height to the game's proportions ---
 hull_sq = a.squares * 0.94                      # hull length on the chart, as in the procedural ships
 sx = 1 / L
-sy = (a.beam / hull_sq) / (y1 - y0)
-sz = (a.height / hull_sq) / (tops - wl)
+# Only ever narrow or lower a model to fit its row: never stretch it past its own proportions.
+sy = min(sx, (a.beam / hull_sq) / (y1 - y0))
+sz = min(sx, (a.height / hull_sq) / (tops - wl))
 m = mathutils.Matrix.Diagonal((sx, sy, sz, 1)) @ mathutils.Matrix.Translation((-(x0 + x1) / 2, -(y0 + y1) / 2, -wl))
 ob.data.transform(m)
 ob.data.update()

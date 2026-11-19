@@ -433,7 +433,9 @@ export class SeaScene {
     o.cells = cs;
   }
 
-  private decorate(o: ShipObj, hits: boolean[], chained: boolean) {
+  /** `hits` are in chart order (lowest square first); a ship facing west or north has her stern at the other end. */
+  private decorate(o: ShipObj, chartHits: boolean[], chained: boolean, rev = false) {
+    const hits = rev ? [...chartHits].reverse() : chartHits;
     const key = hits.map((h) => (h ? 1 : 0)).join('') + (chained ? 'c' : '');
     if (key === o.decorKey) return;
     o.decorKey = key;
@@ -545,7 +547,7 @@ export class SeaScene {
       // Damage from a blow still in the air waits for it to land.
       const cs = shipCells(s), hits = s.hits.map((h, i) => h && !this.hidden.has(`own:${cs[i][0]},${cs[i][1]}`));
       if (s.sunk && !veiled('own', s)) { wreck(o); this.decorate(o, [], false); continue; }
-      this.decorate(o, hits, !!s.chained);
+      this.decorate(o, hits, !!s.chained, !!s.rev);
       const sel = s.id === v.selectedId;
       o.lift = sel && v.lifted ? 0.45 : 0;
       for (const m of o.model.mats) { m.uniforms.uTint.value.setHex(v.invalid ? C.wax : C.amber); m.uniforms.uTintAmt.value = sel ? 0.5 : 0; }
@@ -562,7 +564,7 @@ export class SeaScene {
       const key = 'r' + s.id, o = this.ship(key, s.kind, s.len, 'enemy');
       seen.add(key);
       this.aim(o, s);
-      this.decorate(o, s.hits, false);
+      this.decorate(o, s.hits, false, !!s.rev);
     }
     for (const [key, o] of this.ships) if (!seen.has(key)) { this.shipsGroup.remove(o.root); this.ships.delete(key); }
 

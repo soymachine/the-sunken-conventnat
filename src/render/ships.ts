@@ -188,7 +188,10 @@ export function buildShip(kind: Kind, len: number): ShipModel {
     inner.add(o);
     const pivot = o.getObjectByName('cannon'), barrel = o.getObjectByName('barrel'), muzzle = o.getObjectByName('muzzle');
     const gun = pivot && barrel && muzzle ? { pivot, barrel, muzzle } : undefined;
-    return { body, sails, mats, crates: [], deckY, gun };
+    // Cargo the game can take away one crate at a time: nodes crate_0, crate_1… from stern to bow.
+    const crates: THREE.Object3D[] = [];
+    for (let i = 0; o.getObjectByName('crate_' + i); i++) crates.push(o.getObjectByName('crate_' + i)!);
+    return { body, sails, mats, crates, deckY, gun };
   }
 
   const h = loft(len, s);
