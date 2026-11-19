@@ -76,6 +76,7 @@ export class Hud {
         <div class="seg" data-pref="quality" role="radiogroup" aria-label="3D quality"><button data-v="auto" role="radio">Auto</button><button data-v="high" role="radio">High</button><button data-v="low" role="radio">Low</button></div>
         <p class="meta">Auto steps down by itself if the game runs slowly. Low drops shadows, glow and the print grade.</p>
       </div>
+      <div class="herald" id="herald" aria-hidden="true"><div><b></b><span></span></div></div>
       <div class="objective" id="objective" hidden></div>
       <aside class="card left">
         <h2>The covenant</h2><div class="seals" id="seals"></div>
@@ -214,6 +215,14 @@ export class Hud {
       const on = pref === 'sound' ? (v === 'off') === this.muted : v === this.qualityPref;
       b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on));
     });
+  }
+
+  /** A ribbon sweeps across the screen to announce whose turn it is. */
+  herald(title: string, sub: string, mine: boolean) {
+    const h = this.q<HTMLElement>('#herald');
+    h.querySelector('b')!.textContent = title; h.querySelector('span')!.textContent = sub;
+    h.classList.toggle('foe', !mine);
+    h.classList.remove('go'); void h.offsetWidth; h.classList.add('go');
   }
 
   setHint(text: string) { this.q('#hint').textContent = text; }

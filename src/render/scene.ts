@@ -229,15 +229,44 @@ export class SeaScene {
     loop();
   }
 
-  /** The charts lie on the captain's table: dark oak under a pool of lamplight, each sheet casting a soft shadow. */
+  /** Old sailcloth spread over the table: woven canvas in stitched panels, drawn once on a canvas and tiled. */
+  private sailcloth(): THREE.CanvasTexture {
+    const S = 512, cv = document.createElement('canvas'); cv.width = cv.height = S;
+    const g = cv.getContext('2d')!;
+    g.fillStyle = '#a39680'; g.fillRect(0, 0, S, S);
+    // Weave: fine warp and weft threads of slightly varying shade.
+    for (let i = 0; i < S; i += 2) {
+      g.fillStyle = `rgba(${Math.random() < 0.5 ? '255,240,210' : '60,45,25'},${0.04 + Math.random() * 0.05})`; g.fillRect(i, 0, 1, S);
+      g.fillStyle = `rgba(${Math.random() < 0.5 ? '255,240,210' : '60,45,25'},${0.04 + Math.random() * 0.05})`; g.fillRect(0, i, S, 1);
+    }
+    // Weathering: soft blotches of grime and sun-bleaching.
+    for (let i = 0; i < 26; i++) {
+      const x = Math.random() * S, y = Math.random() * S, r = 20 + Math.random() * 70;
+      for (const [ox, oy] of [[0, 0], [S, 0], [-S, 0], [0, S], [0, -S]]) {
+        const rg = g.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, r);
+        rg.addColorStop(0, Math.random() < 0.6 ? 'rgba(70,50,25,.13)' : 'rgba(255,245,220,.1)'); rg.addColorStop(1, 'rgba(0,0,0,0)');
+        g.fillStyle = rg; g.fillRect(x + ox - r, y + oy - r, 2 * r, 2 * r);
+      }
+    }
+    // Two panels per tile, joined by a lapped seam with a double row of stitches.
+    for (const x of [0, S / 2]) {
+      const sh = g.createLinearGradient(x - 10, 0, x + 14, 0);
+      sh.addColorStop(0, 'rgba(40,28,14,0)'); sh.addColorStop(0.42, 'rgba(40,28,14,.32)'); sh.addColorStop(0.5, 'rgba(255,240,210,.18)'); sh.addColorStop(1, 'rgba(40,28,14,0)');
+      g.fillStyle = sh; g.fillRect(x - 10, 0, 24, S);
+      g.fillStyle = 'rgba(50,36,20,.55)';
+      for (let y = 0; y < S; y += 9) { g.fillRect(x - 5, y, 1.4, 4.5); g.fillRect(x + 7, y + 4, 1.4, 4.5); }
+    }
+    const t = new THREE.CanvasTexture(cv);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+    return t;
+  }
+
+  /** The charts lie on a sail spread over the captain's table, under a pool of lamplight; each sheet casts a soft shadow. */
   private chartTable(): THREE.Group {
     const g = new THREE.Group();
-    const wood = new THREE.TextureLoader().load('/ui/wood.jpg');
-    wood.wrapS = wood.wrapT = THREE.RepeatWrapping;
-    wood.repeat.set(300 / 9, 300 / 9);
-    wood.colorSpace = THREE.SRGBColorSpace;
-    wood.anisotropy = 8;
-    const table = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), new THREE.MeshStandardMaterial({ map: wood, color: 0x8a7462, roughness: 0.82 }));
+    const cloth = this.sailcloth();
+    cloth.repeat.set(300 / 18, 300 / 18);
+    const table = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), new THREE.MeshStandardMaterial({ map: cloth, color: 0x6c6c6c, roughness: 0.95 }));
     table.rotation.x = -Math.PI / 2; table.position.y = -1.2;
     const canvasTex = (draw: (c: CanvasRenderingContext2D) => void) => {
       const cv = document.createElement('canvas'); cv.width = cv.height = 256;
@@ -247,12 +276,12 @@ export class SeaScene {
     // Lamplight falls off into darkness away from the charts.
     const dusk = canvasTex((c) => {
       const r = c.createRadialGradient(128, 128, 30, 128, 128, 128);
-      r.addColorStop(0, 'rgba(13,11,8,0)'); r.addColorStop(0.55, 'rgba(13,11,8,.35)'); r.addColorStop(1, 'rgba(13,11,8,1)');
+      r.addColorStop(0, 'rgba(13,11,8,0)'); r.addColorStop(0.32, 'rgba(13,11,8,.18)'); r.addColorStop(0.62, 'rgba(13,11,8,.7)'); r.addColorStop(1, 'rgba(13,11,8,1)');
       c.fillStyle = r; c.fillRect(0, 0, 256, 256);
     });
-    const pool = new THREE.Mesh(new THREE.PlaneGeometry(110, 110), new THREE.MeshBasicMaterial({ map: dusk, transparent: true, depthWrite: false }));
+    const pool = new THREE.Mesh(new THREE.PlaneGeometry(96, 96), new THREE.MeshBasicMaterial({ map: dusk, transparent: true, depthWrite: false }));
     pool.rotation.x = -Math.PI / 2; pool.position.y = -1.18;
-    const far = new THREE.Mesh(new THREE.RingGeometry(54, 200, 48), new THREE.MeshBasicMaterial({ color: C.ink }));
+    const far = new THREE.Mesh(new THREE.RingGeometry(47, 200, 48), new THREE.MeshBasicMaterial({ color: C.ink }));
     far.rotation.x = -Math.PI / 2; far.position.y = -1.17;
     const soft = canvasTex((c) => {
       c.filter = 'blur(14px)'; c.fillStyle = 'rgba(0,0,0,.85)'; c.fillRect(36, 36, 184, 184);
@@ -342,6 +371,8 @@ export class SeaScene {
     this.camera.aspect = w / h;
     const wide = w > 1000;
     const safe = { left: wide ? 268 : 6, right: wide ? 232 : 6, top: 74, bottom: wide ? 196 : 150 };
+    // Keep the charts' band in focus: the free space between the top bar and the helm.
+    this.post?.setFocus(1 - (safe.top + (h - safe.bottom)) / 2 / h, (h - safe.top - safe.bottom) / h * 0.42);
     const layout = wide && w / h > 1.25 ? ABREAST : STACKED;
     const changed = layout !== origin || !this.laid;
     this.laid = true;

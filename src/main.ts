@@ -306,6 +306,7 @@ function refreshHud() {
   hud.update(c, mode, foeOnline ? '' : 'lost at sea (disconnected)');
 }
 
+let lastTurnKey = '';
 function refresh() {
   if (!session) return;
   refreshHud();
@@ -313,6 +314,10 @@ function refresh() {
   const convoy = c.role === 'classic' ? undefined : { side: c.role === 'admiral' ? 'own' as const : 'enemy' as const, zone: c.role === 'admiral' && c.pub.phase === 'placement' };
   scene.sync({ pub: c.pub, me: c.me, ships: c.ships, selectedId: selected?.id ?? null, invalid, lifted: !!lifted, quiet, convoy, hide: flying, ghosts: turnGhosts() });
   scene.setTurn(c.pub.phase !== 'battle' || c.myTurn);
+  // Announce each new turn once, with a ribbon across the screen.
+  const turnKey = c.pub.phase === 'battle' ? `${c.pub.round}:${c.pub.current}` : '';
+  if (turnKey && turnKey !== lastTurnKey && !quiet) hud.herald(c.myTurn ? 'Your turn' : 'The enemy moves', `Round ${c.pub.round}`, c.myTurn);
+  lastTurnKey = turnKey;
   const hl: Highlight[] = [];
   // A lifted ship casts a pale shadow on the squares where she would be set down.
   if (lifted && selected) for (const [x, y] of shipCells(selected)) if (inBoard(x, y)) hl.push({ side: 'own', x, y, color: invalid ? WAX : 0xfff4d6, opacity: invalid ? 0.5 : 0.6 });
