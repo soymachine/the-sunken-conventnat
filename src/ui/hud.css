@@ -261,3 +261,6 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); out
 .status p:empty { display: none; }
 .status kbd { font: 700 11px var(--label); color: var(--ink); background: var(--parch); border: 1px solid var(--brass); border-radius: 3px; padding: 1px 6px; box-shadow: 0 2px 0 #5e4717; font-style: normal; }
 .placing { justify-content: center; }
+
+/* The game's version at the foot of the articles. */
+#lobby .version { margin: 14px 0 0; font: 600 9.5px var(--label); letter-spacing: .2em; text-transform: uppercase; color: rgba(13, 11, 8, .4); }

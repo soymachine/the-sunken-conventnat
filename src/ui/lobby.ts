@@ -54,6 +54,7 @@ export class Lobby {
         <div class="row"><input id="code" maxlength="4" placeholder="CODE" aria-label="Room code" autocomplete="off" /><button class="plaque dark" id="join">Join</button></div>
         <div class="drums" hidden></div>
         <p class="status" role="status"></p>
+        <p class="version">Version ${__APP_VERSION__}</p>
       </div>
       </div>`;
     const name = this.q<HTMLInputElement>('#capName');
