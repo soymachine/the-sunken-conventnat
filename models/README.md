@@ -12,6 +12,11 @@ python tools/prepare_ship.py -- models/schooner.glb public/models/schooner.glb -
 python tools/prepare_ship.py -- models/cutter.glb public/models/cutter.glb --squares 2 --bow=-x --beam 0.5 --height 1.7
 python tools/prepare_ship.py -- models/merchantman.glb public/models/merchant.glb --squares 3 --bow=-x --beam 0.8 --height 1.9
 python tools/refit_merchant.py -- public/models/merchant.glb public/models/merchant.glb
+python tools/grade_fleet.py -- public/models/line.glb public/models/frigate.glb public/models/ironclad.glb public/models/schooner.glb public/models/cutter.glb public/models/merchant.glb
 ```
+
+The last step brings every texture to one palette (brightness, saturation, wood hue and a light sepia),
+so ships generated one by one look like a set. Run it last, and again whenever a ship is replaced; it
+skips files it has already graded.
 
 These need Blender's Python module (`pip install bpy`, Python 3.13).

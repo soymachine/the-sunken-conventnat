@@ -12,6 +12,9 @@ Present now: all six. They were generated with Meshy (sources in `models/`, with
 - `merchant.glb` — `tools/refit_merchant.py`: the crates fused into the hull are replaced by three
   separate ones, `crate_0` to `crate_2` from stern to bow, which the game removes one per crate plundered.
 
+All six are colour-graded to one palette by `tools/grade_fleet.py`. A new model should go through it
+too, or it will stand out from the rest.
+
 ## A deck gun
 
 A model may carry a gun that turns to its target. The game looks for three nodes by name:
