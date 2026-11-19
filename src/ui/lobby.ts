@@ -12,7 +12,25 @@ export class Lobby {
   private q = <T extends Element>(s: string) => this.root.querySelector(s) as T;
 
   constructor(on: LobbyHandlers, online: boolean) {
+    // The crest (public/ui/crest.webp) carries the title on its banner and a monogram in the wax.
     this.root.innerHTML = `
+      <div class="port">
+      <svg class="crest" viewBox="0 0 1024 1024" role="img" aria-label="The Sunken Covenant">
+        <defs>
+          <path id="bannerLine" d="M200,428 C330,414 455,426 565,470 S760,514 832,478" />
+          <filter id="inkRough" x="-5%" y="-20%" width="110%" height="140%">
+            <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="7" />
+            <feDisplacementMap in="SourceGraphic" scale="2.5" />
+          </filter>
+        </defs>
+        <image href="/ui/crest.webp" width="1024" height="1024" />
+        <text class="bannerText" filter="url(#inkRough)"><textPath href="#bannerLine" startOffset="50%" text-anchor="middle" textLength="600" lengthAdjust="spacingAndGlyphs">The Sunken Covenant</textPath></text>
+        <g class="monogram" text-anchor="middle">
+          <text x="511" y="828" fill="#3d0f07" opacity=".8">SC</text>
+          <text x="517" y="834" fill="#e68a6c" opacity=".35">SC</text>
+          <text x="514" y="831" fill="#8e2a17">SC</text>
+        </g>
+      </svg>
       <div class="card">
         <h1>Articles of Engagement</h1>
         <p class="tag">Two captains. One sea. No quarter.</p>
@@ -27,6 +45,7 @@ export class Lobby {
         <div class="row"><input id="code" maxlength="4" placeholder="CODE" aria-label="Room code" autocomplete="off" /><button class="plaque dark" id="join">Join</button></div>
         <div class="drums" hidden></div>
         <p class="status" role="status"></p>
+      </div>
       </div>`;
     const name = this.q<HTMLInputElement>('#capName');
     try { name.value = localStorage.getItem('tsc:name') || ''; } catch { /* storage unavailable */ }

@@ -61,7 +61,7 @@ export class Hud {
     this.root.innerHTML = `
       <header class="rail top">
         <div class="turn"><svg class="compass" viewBox="0 0 100 100"></svg><div><b id="turnTitle"></b><i id="turnSub"></i></div><button id="mute" class="mini" aria-pressed="false">Sound on</button></div>
-        <h1>The Sunken Covenant</h1>
+        <h1 class="title"><span>The Sunken Covenant</span></h1>
         <div class="foe"><span id="foeNote"></span></div>
       </header>
       <div class="objective" id="objective" hidden></div>
