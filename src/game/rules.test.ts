@@ -435,13 +435,22 @@ describe('the covenant', () => {
     expect(a.pub.storm).toMatchObject({ until: 9 });
     expect(a.pub).toEqual(b.pub);
   });
-  it('the chart never shrinks: no ring is swallowed however long the battle runs', async () => {
-    const { a, b } = await duel();
-    for (let guard = 0; guard < 400 && a.pub.phase === 'battle' && a.pub.round < 30; guard++) (a.myTurn ? a : b).endTurn();
-    expect(a.pub.round).toBeGreaterThanOrEqual(30);
-    expect(a.pub.ring).toBe(0);
-    expect(a.ships.every((s) => !s.hits.some(Boolean))).toBe(true);
+  it('the maelstrom swallows the rim from round 20 and its toll is verified', async () => {
+    const { bus, a, b } = await duel();
+    for (let guard = 0; guard < 400 && a.pub.phase === 'battle' && a.pub.round < 23; guard++) (a.myTurn ? a : b).endTurn();
+    expect(a.pub.ring).toBe(2);
+    // a's line lies along the top rim and drowns whole at ring 1; the rest sit on column 0 and lose a section per ring.
+    expect(a.ships[0].sunk).toBe(true);
+    expect(a.ships.slice(1).map((s) => s.hits.slice(0, 2))).toEqual([[true, true], [true, true], [true, true], [true, true]]);
+    expect(a.ships[4].sunk).toBe(true);
+    expect(a.side.seals).toBe(2);
+    expect(b.ships.every((s) => !s.hits.some(Boolean))).toBe(true);
     expect(a.pub).toEqual(b.pub);
+    for (let guard = 0; guard < 400 && a.pub.phase === 'battle'; guard++) (a.myTurn ? a : b).endTurn();
+    expect(a.pub).toMatchObject({ phase: 'over', winner: 1, reason: 'fleet' });
+    expect(await verify(bus.log, 0, 'classic', 7)).toBeNull();
+    const forged: Msg[] = bus.log.map((m) => (m.t === 'drowned' && m.by === 0 && m.results.length ? { ...m, results: m.results.slice(1) } : m));
+    expect(await verify(forged, 0, 'classic', 7)).toMatch(/maelstrom/);
   });
   it('a sunk ship leaves open water: others sail through her squares and shots there fall in the sea', () => {
     const line = mk(0, 'line', 5, 0, 0, 'h'), cutter = mk(1, 'cutter', 2, 5, 0, 'h');

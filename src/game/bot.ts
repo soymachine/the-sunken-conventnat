@@ -3,7 +3,7 @@
 import { Client } from './engine';
 import { ITEMS, Item } from './powerups';
 import { SEASON, inStorm } from './engine';
-import { N, Rnd, Way, ZONE, ahead, headingOf, inBoard, inZone, safe, shipCells } from './rules';
+import { MAELSTROM_ROUND, N, Rnd, Ship, Way, ZONE, ahead, headingOf, inBoard, inZone, safe, shipCells, turned } from './rules';
 
 const WAYS: Way[] = ['right', 'left'];
 
@@ -91,6 +91,17 @@ export function botAct(c: Client, rnd: Rnd = Math.random): boolean {
   const lead = best.v >= 3.5;
   const clamp = (v: number) => Math.min(N - 2, Math.max(1, v));
   if (lead && c.canKraken()) return c.kraken(clamp(best.x), clamp(best.y));
+
+  // The maelstrom is coming: bring ships in from the rim before it takes them.
+  if (p.mode === 'classic' && p.round >= MAELSTROM_ROUND - 3 && p.ap >= 2) {
+    const risk = (s: Pick<Ship, 'x' | 'y' | 'dir' | 'len'>) => shipCells(s).filter(([x, y]) => !safe(p.ring + 1, x, y)).length;
+    for (const s of c.ships) {
+      if (s.sunk || !risk(s)) continue;
+      const n = c.reach(s.id);
+      if (n && risk(ahead(s, n)) < risk(s)) return c.sail(s.id, 1, n);
+      for (const w of WAYS) if (c.canTurn(s.id, w) && risk(turned(s, w)) < risk(s)) return c.turn(s.id, w);
+    }
+  }
 
   const want: Item = lead ? 'fireship' : wounded.length && me.doubloons >= ITEMS.shipwright.price ? 'shipwright' : 'spyglass';
   if (!c.has(want) && c.canBuy(want) && c.buy(want)) return true;

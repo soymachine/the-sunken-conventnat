@@ -2,7 +2,7 @@
 import './ui/hud.css';
 import { Client, Msg, Snapshot, roleOf } from './game/engine';
 import { ITEMS, Item } from './game/powerups';
-import { Dir, Ship, Way, ZONE, ahead, attackCells, bowCell, cellName, clampZone, fits, headingOf, inBoard, legalPlacement, pivotCell, randomFleet, shipAt, shipCells, turned } from './game/rules';
+import { Dir, Ship, Way, ZONE, ahead, attackCells, bowCell, cellName, clampZone, fits, headingOf, inBoard, legalPlacement, pivotCell, randomFleet, shipAt, shipCells, turned, MAELSTROM_ROUND } from './game/rules';
 import { verify } from './game/verify';
 import { createRoom, firebaseConfigured, joinRoom } from './net/firebase';
 import { LocalSession, Session } from './net/session';
@@ -235,7 +235,7 @@ function describe(m: Msg, mine: boolean) {
 }
 
 /** Announce storms, tides and the maelstrom once each as they arrive. */
-const seen = { storm: 0, tide: 0, ring: 0, seals: -1 };
+const seen = { storm: 0, tide: 0, ring: 0, seals: -1, warned: 0 };
 function weather() {
   const p = c.pub;
   if (p.storm && p.storm.until !== seen.storm) { seen.storm = p.storm.until; hud.log(`A storm front closes over rows ${p.storm.row + 1}–${p.storm.row + 3}: no guns or spyglasses there.`); }
@@ -246,6 +246,8 @@ function weather() {
     hud.log(n >= 3 ? 'Three covenant seals! The Kraken will answer: choose Summon the Kraken above the helm.' : `A covenant seal is yours: ${n} of 3. Three summon the Kraken.`, 'good');
   }
   seen.seals = n;
+  // Warn two rounds ahead that the sea will start to close in.
+  if (p.mode === 'classic' && p.phase === 'battle' && p.round === MAELSTROM_ROUND - 2 && seen.warned !== p.round) { seen.warned = p.round; hud.log(`The sea darkens at the edges: from round ${MAELSTROM_ROUND} the maelstrom swallows the outer ring every other round. Bring your ships in!`, 'bad'); }
   if (p.ring !== seen.ring) { seen.ring = p.ring; if (p.ring) hud.log('The maelstrom swallows another ring of the chart!', 'bad'); }
 }
 
@@ -471,7 +473,12 @@ hud.show(false);
 lobby.show(true);
 // A room code in the address takes you straight back to your seat.
 const wanted = location.hash.slice(1).toUpperCase();
-if (firebaseConfigured && /^[A-Z0-9]{4}$/.test(wanted)) {
+const invited = (new URLSearchParams(location.search).get('join') || '').toUpperCase();
+if (firebaseConfigured && /^[A-Z0-9]{4}$/.test(invited) && !/^[A-Z0-9]{4}$/.test(wanted)) {
+  // An invite link: fill in the code and let the guest sign before joining.
+  lobby.invited(invited);
+  history.replaceState(null, '', location.pathname);
+} else if (firebaseConfigured && /^[A-Z0-9]{4}$/.test(wanted)) {
   lobby.busy(true);
   lobby.status(`Returning to room ${wanted}…`);
   joinRoom(wanted).then((s) => start(s, localStorage.getItem('tsc:name') || 'Captain')).catch((e) => { lobby.busy(false); lobby.status(e.message, true); });

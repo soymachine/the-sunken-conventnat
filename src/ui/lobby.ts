@@ -51,8 +51,13 @@ export class Lobby {
         <div class="row"><button class="plaque" id="vsBot">Play the machine</button></div>
         <p class="or"><span>or sail against a friend</span></p>
         <div class="row"><button class="plaque dark" id="create">Create a room</button></div>
-        <div class="row"><input id="code" maxlength="4" placeholder="CODE" aria-label="Room code" autocomplete="off" /><button class="plaque dark" id="join">Join</button></div>
-        <div class="drums" hidden></div>
+        <div class="row joinRow"><input id="code" maxlength="4" placeholder="CODE" aria-label="Room code" autocomplete="off" /><button class="plaque dark" id="join">Join</button></div>
+        <div class="invite" hidden>
+          <p class="field">Your room</p>
+          <div class="drums" aria-label="Room code"></div>
+          <div class="row"><button class="plaque dark" id="copyCode" data-keep="1">Copy code</button><button class="plaque dark" id="copyLink" data-keep="1">Copy invite link</button></div>
+          <p class="link" id="inviteLink"></p>
+        </div>
         <p class="status" role="status"></p>
         <p class="version">Version ${__APP_VERSION__}</p>
       </div>
@@ -76,13 +81,32 @@ export class Lobby {
     }
   }
 
-  show(v: boolean) { this.root.hidden = !v; if (v) { this.q<HTMLElement>('.drums').hidden = true; this.busy(false); } }
-  busy(b: boolean) { this.root.querySelectorAll<HTMLButtonElement>('button').forEach((x) => { if (!x.dataset.off) x.disabled = b; }); }
+  show(v: boolean) { this.root.hidden = !v; if (v) { this.invite(false); this.busy(false); } }
+  private invite(on: boolean) { this.q<HTMLElement>('.invite').hidden = !on; this.q<HTMLElement>('.joinRow').hidden = on; }
+  busy(b: boolean) { this.root.querySelectorAll<HTMLButtonElement>('button').forEach((x) => { if (!x.dataset.off && !x.dataset.keep) x.disabled = b; }); }
   status(text: string, err = false) { const s = this.q<HTMLElement>('.status'); s.textContent = text; s.classList.toggle('err', err); }
+  /** The room is open: show its code in place of the join row, with ways to pass it on. */
   showCode(code: string) {
-    const d = this.q<HTMLElement>('.drums');
-    d.innerHTML = [...code].map((c) => `<span>${c}</span>`).join('');
-    d.hidden = false;
-    this.status('Send this code to your rival. Waiting for the second captain…');
+    this.q<HTMLElement>('.drums').innerHTML = [...code].map((c) => `<span>${c}</span>`).join('');
+    const link = `${location.origin}/?join=${code}`;
+    this.q<HTMLElement>('#inviteLink').textContent = link;
+    const copy = (id: string, text: string, done: string) => {
+      const b = this.q<HTMLButtonElement>(id), label = b.textContent;
+      b.onclick = () => navigator.clipboard.writeText(text).then(
+        () => { b.textContent = done; setTimeout(() => (b.textContent = label), 1600); },
+        () => { const r = document.createRange(); r.selectNodeContents(this.q('#inviteLink')); getSelection()?.removeAllRanges(); getSelection()?.addRange(r); },
+      );
+    };
+    copy('#copyCode', code, 'Copied');
+    copy('#copyLink', link, 'Link copied');
+    this.invite(true);
+    this.status('Send the code or the link to your rival. The battle begins as soon as they join…');
+  }
+
+  /** Opened from an invite link: the code is filled in, the guest only signs and joins. */
+  invited(code: string) {
+    this.q<HTMLInputElement>('#code').value = code;
+    this.status(`You are invited to room ${code}. Sign your name and press Join.`);
+    this.q<HTMLInputElement>('#capName').focus();
   }
 }

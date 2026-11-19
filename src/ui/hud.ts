@@ -27,6 +27,14 @@ export const TOOLS: Record<'broadside' | 'chain' | 'spy', { name: string; ap: nu
   spy: { name: 'Cutter’s glass', ap: 1 },
 };
 
+/** What each special action above the helm does, told in full for its tooltip. */
+const TOOL_HELP: Record<string, { ship?: string; text: string }> = {
+  broadside: { ship: 'Ship of the Line', text: 'Fire three squares in a row at once. Press R to swing the line between across and down.' },
+  chain: { ship: 'Frigate', text: 'A single shot of chained balls: a ship it hits is pinned and cannot sail or turn on her next turn.' },
+  spy: { ship: 'Cutter', text: 'Train the cutter\'s glass on a 5×5 patch of enemy water: you learn how many ship sections lie inside it.' },
+  kraken: { text: 'Break three covenant seals and wake the Kraken under a 3×3 patch of enemy water. It strikes now and again on their next turn, and the ships it finds cannot move meanwhile.' },
+};
+
 function svg<K extends keyof SVGElementTagNameMap>(p: Element, tag: K, a: Record<string, string | number>, text?: string) {
   const e = document.createElementNS(NS, tag);
   for (const k in a) e.setAttribute(k, String(a[k]));
@@ -134,7 +142,19 @@ export class Hud {
     });
     shop.addEventListener('pointerleave', () => { tip.hidden = true; });
     this.q<HTMLElement>('#shop').onclick = (e) => { const b = (e.target as Element).closest('button'); if (b && !b.classList.contains('off')) on.buy(b.dataset.item as Item); };
-    this.q<HTMLElement>('#belt').onclick = (e) => { const b = (e.target as Element).closest('button'); if (b) on.mode(b.dataset.tool as Mode); };
+    this.q<HTMLElement>('#belt').onclick = (e) => { const b = (e.target as Element).closest('button'); if (b && !b.classList.contains('off')) on.mode(b.dataset.tool as Mode); };
+    // The same tooltip explains the special actions above the helm, shown above the button.
+    const belt = this.q<HTMLElement>('#belt');
+    belt.addEventListener('pointerover', (e) => {
+      const b = (e.target as Element).closest<HTMLElement>('button[data-tool]');
+      if (!b) return;
+      tip.innerHTML = `<b>${esc(b.dataset.name!)}</b><span class="cost">${b.dataset.ap} AP</span><p>${esc(b.dataset.help!)}</p>${b.dataset.why ? `<p class="why">${esc(b.dataset.why)}</p>` : ''}`;
+      tip.hidden = false;
+      const r = b.getBoundingClientRect(), w = tip.offsetWidth;
+      tip.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left + r.width / 2 - w / 2)) + 'px';
+      tip.style.top = r.top - tip.offsetHeight - 10 + 'px';
+    });
+    belt.addEventListener('pointerleave', () => { tip.hidden = true; });
   }
 
   show(v: boolean) { this.root.hidden = !v; if (!v) this.q<HTMLElement>('.role').hidden = true; }
@@ -286,17 +306,21 @@ export class Hud {
 
     const belt: string[] = [];
     if (p.phase === 'battle') {
-      const tool = (id: Mode, name: string, ap: number, ok: boolean) =>
-        belt.push(`<button data-tool="${id}" class="${mode === id ? 'on' : ''}" ${ok ? '' : 'disabled'}>${name}<em>${ap} AP</em></button>`);
-      tool('broadside', TOOLS.broadside.name, 2, c.can(2) && c.alive('line'));
-      tool('chain', TOOLS.chain.name, 2, c.can(2) && c.alive('frigate'));
-      tool('spy', TOOLS.spy.name, 1, c.can(1) && c.alive('cutter'));
+      // Each action carries its own explanation and, when it cannot be used, the reason why.
+      const tool = (id: Mode, name: string, ap: number, ok: boolean, help: string, why = '') => {
+        if (!ok && !why) why = p.phase !== 'battle' || !mine ? 'Wait for your turn.' : p.ap < ap ? `Needs ${ap} action point${ap === 1 ? '' : 's'}; you have ${p.ap}.` : 'Not now.';
+        belt.push(`<button data-tool="${id}" data-name="${esc(name)}" data-ap="${ap}" data-help="${esc(help)}" data-why="${ok ? '' : esc(why)}" class="${mode === id ? 'on' : ''}${ok ? '' : ' off'}" aria-disabled="${!ok}">${name}<em>${ap} AP</em></button>`);
+      };
+      const sunk = (kind: 'line' | 'frigate' | 'cutter', cls: string) => (c.alive(kind) ? '' : `Your ${cls} has been sunk.`);
+      tool('broadside', TOOLS.broadside.name, 2, c.can(2) && c.alive('line'), `${TOOL_HELP.broadside.text} Needs your Ship of the Line afloat.`, sunk('line', 'Ship of the Line'));
+      tool('chain', TOOLS.chain.name, 2, c.can(2) && c.alive('frigate'), `${TOOL_HELP.chain.text} Needs your Frigate afloat.`, sunk('frigate', 'Frigate'));
+      tool('spy', TOOLS.spy.name, 1, c.can(1) && c.alive('cutter'), `${TOOL_HELP.spy.text} Needs your Cutter afloat.`, sunk('cutter', 'Cutter'));
       for (const id of [...new Set(me.items)]) {
         const n = me.items.filter((q) => q === id).length;
-        tool(id, ITEMS[id].name + (n > 1 ? ` ×${n}` : ''), ITEMS[id].ap, c.can(ITEMS[id].ap) && !(id === 'winds' && p.windsUsed));
+        tool(id, ITEMS[id].name + (n > 1 ? ` ×${n}` : ''), ITEMS[id].ap, c.can(ITEMS[id].ap) && !(id === 'winds' && p.windsUsed), `${ITEM_HELP[id]} Bought from the quartermaster; used up once played.`, id === 'winds' && p.windsUsed ? 'Trade Winds already blew this turn.' : '');
       }
-      if (me.seals >= KRAKEN_SEALS || mode === 'kraken') tool('kraken', 'Summon the Kraken', 3, c.canKraken());
-      if (role !== 'classic' && !p.power[c.me]) tool('power', CAPTAINS[role].power, 1, c.canPower());
+      if (me.seals >= KRAKEN_SEALS || mode === 'kraken') tool('kraken', 'Summon the Kraken', 3, c.canKraken(), TOOL_HELP.kraken.text, p.kraken ? 'The Kraken is already abroad.' : '');
+      if (role !== 'classic' && !p.power[c.me]) tool('power', CAPTAINS[role].power, 1, c.canPower(), `Your captain's power. ${CAPTAINS[role].powerText}`);
     }
     this.q('#belt').innerHTML = belt.join('');
 

@@ -23,10 +23,10 @@ button { font-family: inherit; }
 .top h1.title span { font: 400 25px var(--display); letter-spacing: .14em; background: linear-gradient(#fff3c8, #e9bf63 42%, #9a6d22 58%, #e2b357); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 -1px 0 rgba(0, 0, 0, .85)) drop-shadow(0 1px 0 rgba(255, 226, 160, .3)); }
 .turn { display: flex; align-items: center; gap: 14px; width: 280px; }
 /* Whose turn it is, centred under the name board. */
-.status { position: absolute; left: 50%; top: 94px; transform: translateX(-50%); text-align: center; white-space: nowrap; pointer-events: none; text-shadow: 0 2px 8px #000, 0 0 3px #000; }
-.status b { display: block; font: 700 15px var(--label); letter-spacing: .26em; text-transform: uppercase; color: var(--amber); }
-.status span { display: block; font: 500 11.5px var(--label); letter-spacing: .22em; text-transform: uppercase; color: var(--parch); margin-top: 3px; }
-.status span:empty { display: none; }
+#hud .status { position: absolute; left: 50%; top: 94px; transform: translateX(-50%); text-align: center; white-space: nowrap; pointer-events: none; text-shadow: 0 2px 8px #000, 0 0 3px #000; }
+#hud .status b { display: block; font: 700 15px var(--label); letter-spacing: .26em; text-transform: uppercase; color: var(--amber); }
+#hud .status span { display: block; font: 500 11.5px var(--label); letter-spacing: .22em; text-transform: uppercase; color: var(--parch); margin-top: 3px; }
+#hud .status span:empty { display: none; }
 /* Settings menu at the top left. */
 .menu { position: absolute; top: 56px; left: 18px; width: 250px; z-index: 5; pointer-events: auto; }
 .menu .opt { font: 700 10.5px var(--label); letter-spacing: .16em; text-transform: uppercase; color: var(--wax); margin: 12px 0 6px; }
@@ -128,8 +128,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); out
 #lobby #vsBot { padding: 16px 22px; font-size: 14px; }
 #lobby .row > * { flex: 1; min-width: 0; }
 #lobby #code { text-align: center; font: 700 22px var(--label); letter-spacing: .4em; text-transform: uppercase; margin: 0; border: 1px solid rgba(13, 11, 8, .6); padding: 8px 0 8px .4em; }
-#lobby .drums { display: flex; justify-content: center; gap: 10px; margin: 6px 0 12px; }
-#lobby .drums span { width: 56px; height: 76px; display: grid; place-items: center; border-radius: 8px; border: 5px solid var(--brass); background: var(--ink); color: var(--amber); font: 700 34px var(--label); }
+#lobby .invite { margin-top: 2px; }
+#lobby .drums { display: flex; justify-content: center; gap: 8px; margin: 2px 0 12px; user-select: all; }
+#lobby .drums span { width: 52px; height: 64px; display: grid; place-items: center; border-radius: 6px; border: 3px solid var(--brass); background: var(--ink); color: var(--amber); font: 700 32px var(--label); box-shadow: inset 0 2px 6px rgba(0, 0, 0, .6); }
+#lobby .invite .plaque { padding: 11px 10px; font-size: 11.5px; }
+#lobby .invite .link { margin: 2px 0 0; font: 13px ui-monospace, Menlo, monospace; color: #6b5233; word-break: break-all; user-select: all; }
 #lobby .status { font-style: italic; font-size: 16px; min-height: 1.4em; margin: 10px 0 0; }
 #lobby .status.err { color: var(--wax); }
 
@@ -257,10 +260,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); out
 .shopTip p.why { margin-top: 8px; padding-top: 7px; border-top: 1px solid rgba(176, 141, 60, .4); color: #e0795c; font-style: italic; }
 
 /* Placement: the instructions sit under "Deploy your fleet"; the Ready wheel is centred in the bar. */
-.status p { margin: 8px auto 0; max-width: 560px; white-space: normal; font: italic 16px/1.3 var(--body); color: var(--parch); }
-.status p:empty { display: none; }
-.status kbd { font: 700 11px var(--label); color: var(--ink); background: var(--parch); border: 1px solid var(--brass); border-radius: 3px; padding: 1px 6px; box-shadow: 0 2px 0 #5e4717; font-style: normal; }
+#hud .status p { margin: 8px auto 0; max-width: 560px; white-space: normal; font: italic 16px/1.3 var(--body); color: var(--parch); }
+#hud .status p:empty { display: none; }
+#hud .status kbd { font: 700 11px var(--label); color: var(--ink); background: var(--parch); border: 1px solid var(--brass); border-radius: 3px; padding: 1px 6px; box-shadow: 0 2px 0 #5e4717; font-style: normal; }
 .placing { justify-content: center; }
 
 /* The game's version at the foot of the articles. */
 #lobby .version { margin: 14px 0 0; font: 600 9.5px var(--label); letter-spacing: .2em; text-transform: uppercase; color: rgba(13, 11, 8, .4); }
+
+.belt button.off { opacity: .45; cursor: help; filter: grayscale(.6); }
