@@ -14,6 +14,8 @@ import { Lobby } from './ui/lobby';
 const AMBER = 0xd9a441, WAX = 0x8c2f1b, INK = 0x0d0b08, FOG = 0xcfc4a8;
 const canvas = document.getElementById('sea') as HTMLCanvasElement;
 const scene = new SeaScene(canvas);
+// ?debug exposes the scene to the console, to trigger weather by hand.
+if (new URLSearchParams(location.search).has('debug')) Object.assign(window, { scene });
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const sfx = new Sfx();
 scene.sound = (s) => sfx.play(s);
@@ -233,7 +235,7 @@ const seen = { storm: 0, tide: 0, ring: 0 };
 function weather() {
   const p = c.pub;
   if (p.storm && p.storm.until !== seen.storm) { seen.storm = p.storm.until; hud.log(`A storm front closes over rows ${p.storm.row + 1}–${p.storm.row + 3}: no guns or spyglasses there.`); }
-  if (p.tide && p.tide.round !== seen.tide) { seen.tide = p.tide.round; hud.log('The tide turns and carries the flotsam a square.'); }
+  if (p.tide && p.tide.round !== seen.tide) { seen.tide = p.tide.round; hud.log('High tide! The sea carries the flotsam a square.'); if (p.tide.round === p.round) scene.tide(p.tide.dx, p.tide.dy); }
   if (p.ring !== seen.ring) { seen.ring = p.ring; if (p.ring) hud.log('The maelstrom swallows another ring of the chart!', 'bad'); }
 }
 

@@ -51,13 +51,24 @@ function chartTexture(enemy: boolean): THREE.CanvasTexture {
   return t;
 }
 
+// A tide is a single wave crossing the chart: uTide = (dx, dy, start time, on).
+const TIDE = /* glsl */ `
+uniform vec4 uTide;
+uniform float uN;
+float tideAlong(vec2 p) { return uTide.x * p.x + uTide.y * p.y + (uTide.x + uTide.y < 0.0 ? uN : 0.0); }
+float tideFront() { return (uTime - uTide.z) * 3.2 - 2.5; }`;
+
 const VERT = /* glsl */ `
 uniform float uTime;
+${TIDE}
 varying vec2 vUv;
 varying float vShade;
 void main() {
   vUv = uv;
   vec4 w = modelMatrix * vec4(position, 1.0);
+  vec2 tp = vec2(uv.x, 1.0 - uv.y) * (uN + 1.0) - 0.5;
+  float td = tideAlong(tp) - tideFront();
+  w.y += uTide.w * (0.3 * exp(-td * td * 1.4) - 0.08 * exp(-(td - 1.1) * (td - 1.1) * 1.5));
   // The whole sheet bends in long swells, like parchment lifted by the sea beneath it.
   float a = w.x * 0.42 + uTime * 0.75, b = w.z * 0.55 - uTime * 0.6 + w.x * 0.22, c = (w.x + w.z) * 1.3 + uTime * 1.4;
   w.y += 0.17 * sin(a) + 0.1 * sin(b) + 0.03 * sin(c);
@@ -67,7 +78,8 @@ void main() {
 
 const FRAG = /* glsl */ `
 uniform sampler2D uMap, uEnergy;
-uniform float uTime, uEnemy, uN, uNight, uRing, uFlash;
+uniform float uTime, uEnemy, uNight, uRing, uFlash;
+${TIDE}
 uniform vec2 uStorm;
 varying vec2 vUv;
 varying float vShade;
@@ -109,9 +121,35 @@ void main() {
     col *= 0.97 + 2.6 * vShade;
     // Storm front: rows darken under slanting rain and flare with lightning.
     float st = uStorm.y * step(uStorm.x, p.y) * step(p.y, uStorm.x + 3.0);
-    float rain = step(0.78, fract(p.x * 3.0 + p.y * 9.0 + uTime * 3.5));
-    col = mix(col, INK, st * (0.5 + 0.22 * rain));
+    // Raindrops ring the wet paper where they land.
+    vec2 rp = p * 3.2, ri = floor(rp), rf = fract(rp) - 0.5;
+    float rh = hash(ri), rt = fract(uTime * 1.4 + rh);
+    vec2 off = (vec2(hash(ri + 3.1), hash(ri + 7.7)) - 0.5) * 0.45;
+    float drop = smoothstep(0.045, 0.0, abs(length(rf - off) - rt * 0.42)) * (1.0 - rt);
+    col = mix(col, INK, st * 0.55);
+    col = mix(col, vec3(0.93, 0.9, 0.8), st * drop * 0.55);
     col += st * uFlash * vec3(0.9, 0.8, 0.55);
+    // High tide: a crest of foam sweeps across, leaving the paper soaked behind it to dry.
+    if (uTide.w > 0.0) {
+      float along = tideAlong(p), perp = abs(uTide.x) > 0.5 ? p.y : p.x;
+      float d = along - tideFront() + 0.22 * sin(perp * 2.3 + uTime * 1.7) + 0.1 * sin(perp * 5.1 - uTime * 2.3);
+      float since = (tideFront() - along) / 3.2;
+      float wet = smoothstep(0.0, 1.5, -d) * clamp(1.0 - since * 0.1, 0.0, 1.0);
+      col = mix(col, col * 0.5, wet * 0.7);
+      col += wet * 0.1 * smoothstep(0.75, 1.0, sin(along * 6.0 + noise(p * 2.0) * 4.0)) * vec3(1.0, 0.95, 0.8);
+      // Foam just behind the crest, broken into lace.
+      float body = smoothstep(-1.1, -0.2, d) * smoothstep(0.35, 0.05, d);
+      float lace = smoothstep(0.35, 0.62, noise(p * 14.0 + vec2(uTime * 2.0, 0.0)));
+      col = mix(col, vec3(0.98, 0.95, 0.86), body * (0.5 + 0.42 * lace));
+      // Engraved breaker lines: the leading edge and two echoes behind it.
+      float lines = smoothstep(0.07, 0.0, abs(d - 0.32))
+        + 0.7 * smoothstep(0.05, 0.0, abs(d + 0.45 + 0.08 * sin(perp * 7.0)))
+        + 0.5 * smoothstep(0.045, 0.0, abs(d + 1.2 + 0.1 * sin(perp * 5.0 + 1.0)));
+      col = mix(col, INK, clamp(lines, 0.0, 1.0) * 0.75);
+      // Spray stippled ahead of it, and the trough it draws in front.
+      col = mix(col, INK, step(0.982, hash(floor(p * 40.0))) * smoothstep(1.3, 0.4, d) * step(0.35, d) * 0.65);
+      col *= 1.0 - 0.22 * exp(-(d - 1.0) * (d - 1.0) * 1.5);
+    }
     // Maelstrom: the drowned rim churns in ink.
     float rim = step(0.5, uRing) * step(min(edge.x, edge.y), uRing);
     vec2 c = p - uN * 0.5;
@@ -139,7 +177,7 @@ export class Sea {
     this.tex.magFilter = this.tex.minFilter = THREE.LinearFilter;
     this.mat = new THREE.ShaderMaterial({
       vertexShader: VERT, fragmentShader: FRAG,
-      uniforms: { uMap: { value: chartTexture(enemy) }, uEnergy: { value: this.tex }, uTime: { value: 0 }, uEnemy: { value: enemy ? 1 : 0 }, uN: { value: N }, uNight: { value: 0 }, uRing: { value: 0 }, uFlash: { value: 0 }, uStorm: { value: new THREE.Vector2(0, 0) } },
+      uniforms: { uMap: { value: chartTexture(enemy) }, uEnergy: { value: this.tex }, uTime: { value: 0 }, uEnemy: { value: enemy ? 1 : 0 }, uN: { value: N }, uNight: { value: 0 }, uRing: { value: 0 }, uFlash: { value: 0 }, uStorm: { value: new THREE.Vector2(0, 0) }, uTide: { value: new THREE.Vector4(1, 0, -99, 0) } },
     });
     const geo = new THREE.PlaneGeometry(N + 1, N + 1, 96, 96);
     geo.rotateX(-Math.PI / 2);
@@ -161,13 +199,15 @@ export class Sea {
     const i = y * N + x;
     if (this.energy[i] < v) this.energy[i] = Math.min(v, this.energy[i] + 0.04);
   }
-  clear() { this.energy.fill(0); this.night = 0; }
+  clear() { this.energy.fill(0); this.night = 0; (this.mat.uniforms.uTide.value as THREE.Vector4).w = 0; }
 
   /** Target darkness of this chart (1 while the Kraken holds it). */
   night = 0;
   setStorm(row: number | null) { (this.mat.uniforms.uStorm.value as THREE.Vector2).set(row ?? 0, row === null ? 0 : 1); }
   setRing(ring: number) { this.mat.uniforms.uRing.value = ring; }
   flash() { this.mat.uniforms.uFlash.value = 1; }
+  /** Send a tide wave across the chart in direction (dx, dy), starting at time t. */
+  tide(dx: number, dy: number, t: number) { (this.mat.uniforms.uTide.value as THREE.Vector4).set(dx, dy, t, 1); }
 
   update(dt: number, t: number) {
     const k = Math.exp(-dt * 0.8);
@@ -177,5 +217,7 @@ export class Sea {
     const u = this.mat.uniforms;
     u.uNight.value += (this.night - u.uNight.value) * Math.min(1, dt * 1.6);
     u.uFlash.value *= Math.exp(-dt * 9);
+    const td = u.uTide.value as THREE.Vector4;
+    if (td.w && t - td.z > 18) td.w = 0;
   }
 }

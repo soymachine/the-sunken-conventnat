@@ -5,6 +5,7 @@ import { Pub, SidePub } from '../game/engine';
 import { Kind, N, START_COLS, Ship, ShotOutcome, ZONE, headingOf, shipCells } from '../game/rules';
 import { Fx } from './fx';
 import { Kraken } from './kraken';
+import { Weather } from './weather';
 import { Post } from './post';
 import { Sea, waveH } from './sea';
 import { ShipModel, buildShip, loadShipModels, setShipTime } from './ships';
@@ -123,6 +124,7 @@ export class SeaScene {
   private pan: THREE.Vector3 | null = null;
   private fx = new Fx();
   private kraken = new Kraken();
+  private weather = new Weather();
   private stormy = false;
   private nextBolt = 3;
   private post: Post | null = null;
@@ -177,7 +179,7 @@ export class SeaScene {
       this.shadowPlanes.push(sh);
       this.scene.add(sh);
     }
-    this.scene.add(this.marks, this.shipsGroup, this.misc, this.hl, this.fx.group, this.kraken.group);
+    this.scene.add(this.marks, this.shipsGroup, this.misc, this.hl, this.fx.group, this.kraken.group, this.weather.group);
     if (this.quality === 'high') this.post = new Post(this.renderer, this.scene, this.camera);
     addEventListener('resize', () => this.resize());
     canvas.addEventListener('wheel', (e) => { e.preventDefault(); this.wheel(e); }, { passive: false });
@@ -233,6 +235,12 @@ export class SeaScene {
 
   /** Warm light on your turn, colder on the enemy's. */
   setTurn(mine: boolean) { this.post?.grade.set(mine ? 1.04 : 0.8, mine ? 1 : 0.86, mine ? 0.94 : 0.96); }
+
+  /** The tide turns: a wave crosses both charts in its direction. */
+  tide(dx: number, dy: number) {
+    this.seas.own.tide(dx, dy, this.time); this.seas.enemy.tide(dx, dy, this.time);
+    this.sound('splash'); setTimeout(() => this.sound('splash'), 900);
+  }
 
   /** Forget every ship and mark: a new battle is starting. */
   reset() {
@@ -396,9 +404,13 @@ export class SeaScene {
     if (this.stormy && (this.nextBolt -= dt) < 0) {
       this.nextBolt = 2.5 + Math.random() * 5;
       this.seas.own.flash(); this.seas.enemy.flash();
+      // The bolt comes down somewhere under the front, on either chart.
+      const st = this.last?.pub.storm, side: Side = Math.random() < 0.5 ? 'own' : 'enemy';
+      if (st) this.weather.strike(cellCenter({ side, x: Math.floor(Math.random() * N), y: st.row + Math.floor(Math.random() * 3) }));
       this.sound('thunder');
     }
     this.seas.own.update(dt, t); this.seas.enemy.update(dt, t);
+    this.weather.update(dt, t);
     this.fx.update(dt);
     this.shakeAmt *= Math.exp(-dt * 7);
     this.camera.position.copy(this.camPos);
@@ -579,6 +591,8 @@ export class SeaScene {
     if (k && kSide) this.strip(kSide, k.x - 1, k.y - 1, 3, 3, C.wax, 0.3);
     const st = v.pub.storm;
     this.stormy = !!st && v.pub.phase === 'battle';
+    this.weather.setCharts(origin.own, origin.enemy);
+    this.weather.setStorm(this.stormy ? st!.row : null);
     for (const side of ['own', 'enemy'] as Side[]) {
       this.seas[side].setStorm(st ? st.row : null);
       this.seas[side].setRing(v.pub.ring);
