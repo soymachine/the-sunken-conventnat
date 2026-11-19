@@ -4,7 +4,7 @@
 import { Order, pickOrder } from './orders';
 import { ITEMS, Item, MAX_ITEMS, START_DOUBLOONS } from './powerups';
 import {
-  AP_PER_TURN, CellResult, Dir, KRAKEN_SEALS, Kind, MAELSTROM_ROUND, N, Revealed, Rnd, Role, Ship, XY, attackCells, countScan, inBoard, inKraken, inZone, legalPlacement, randomFleet, zoneFits,
+  AP_PER_TURN, CellResult, Dir, KRAKEN_SEALS, Kind, N, Revealed, Rnd, Role, Ship, XY, attackCells, countScan, inBoard, inKraken, inZone, legalPlacement, randomFleet, zoneFits,
   repairShip, rimCells, resolveAttack, sailReach, sailShip, shipAt, shipCells, turnShip, canTurnShip, Way,
 } from './rules';
 
@@ -272,7 +272,6 @@ export function reduce(p: Pub, m: Msg): boolean {
         if (p.storm && p.round > p.storm.until) p.storm = undefined;
         if (p.round % 4 === 0) p.storm = { row: Math.floor(rand(p) * (N - 2)), until: p.round + 1 };
         if (p.round % 5 === 0) tide(p);
-        if (p.mode === 'classic' && p.round >= MAELSTROM_ROUND && p.round % 2 === 0 && p.ring < N / 2 - 2) p.ring++;
       }
       // As its victim's turn ends the Kraken strikes a second time, then lets go.
       if (p.kraken && p.kraken.side === m.by) { if (p.kraken.left > 0) strike(p); else p.kraken = undefined; }

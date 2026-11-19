@@ -13,6 +13,17 @@ const mk = (id: number, kind: Ship['kind'], len: number, x: number, y: number, d
   id, kind, cls: [...FLEET, ...FLEETS.admiral].find((f) => f.kind === kind)!.cls, len, x, y, dir, hits: new Array(len).fill(false), sunk: false, ...(kind === 'ironclad' ? { armour: true } : {}),
 });
 const tick = () => new Promise((r) => setTimeout(r, 0));
+/** `att` fires at every square of `def`'s fleet until the battle is over (with no maelstrom, games end only by sinking). */
+function sinkAll(def: Client, att: Client) {
+  const cells = def.ships.flatMap((s) => shipCells(s));
+  let k = 0;
+  for (let guard = 0; guard < 3000 && def.pub.phase === 'battle'; guard++) {
+    if (!att.myTurn) { def.endTurn(); continue; }
+    if (att.pub.ap <= 0) { att.endTurn(); continue; }
+    const [x, y] = cells[k++ % cells.length];
+    if (!att.attack('shot', x, y)) att.endTurn();
+  }
+}
 
 /** Two clients on a bus, both ready, with fixed fleets. */
 async function duel(seed = 7) {
@@ -424,22 +435,22 @@ describe('the covenant', () => {
     expect(a.pub.storm).toMatchObject({ until: 9 });
     expect(a.pub).toEqual(b.pub);
   });
-  it('the maelstrom swallows the rim from round 20 and its toll is verified', async () => {
-    const { bus, a, b } = await duel();
-    for (let guard = 0; guard < 400 && a.pub.phase === 'battle' && a.pub.round < 23; guard++) (a.myTurn ? a : b).endTurn();
-    expect(a.pub.ring).toBe(2);
-    // a's line lies along the top rim and drowns whole at ring 1; the rest sit on column 0 and lose a section per ring.
-    expect(a.ships[0].sunk).toBe(true);
-    expect(a.ships.slice(1).map((s) => s.hits.slice(0, 2))).toEqual([[true, true], [true, true], [true, true], [true, true]]);
-    expect(a.ships[4].sunk).toBe(true);
-    expect(a.side.seals).toBe(2);
-    expect(b.ships.every((s) => !s.hits.some(Boolean))).toBe(true);
+  it('the chart never shrinks: no ring is swallowed however long the battle runs', async () => {
+    const { a, b } = await duel();
+    for (let guard = 0; guard < 400 && a.pub.phase === 'battle' && a.pub.round < 30; guard++) (a.myTurn ? a : b).endTurn();
+    expect(a.pub.round).toBeGreaterThanOrEqual(30);
+    expect(a.pub.ring).toBe(0);
+    expect(a.ships.every((s) => !s.hits.some(Boolean))).toBe(true);
     expect(a.pub).toEqual(b.pub);
-    for (let guard = 0; guard < 400 && a.pub.phase === 'battle'; guard++) (a.myTurn ? a : b).endTurn();
-    expect(a.pub).toMatchObject({ phase: 'over', winner: 1, reason: 'fleet' });
-    expect(await verify(bus.log, 0, 'classic', 7)).toBeNull();
-    const forged: Msg[] = bus.log.map((m) => (m.t === 'drowned' && m.by === 0 && m.results.length ? { ...m, results: m.results.slice(1) } : m));
-    expect(await verify(forged, 0, 'classic', 7)).toMatch(/maelstrom/);
+  });
+  it('a sunk ship leaves open water: others sail through her squares and shots there fall in the sea', () => {
+    const line = mk(0, 'line', 5, 0, 0, 'h'), cutter = mk(1, 'cutter', 2, 5, 0, 'h');
+    cutter.sunk = true; cutter.hits = [true, true];
+    expect(fits([line, cutter], { x: 3, y: 0, dir: 'h', len: 5 }, 0)).toBe(true);
+    expect(sailReach([line, cutter], 0)).toBe(1);
+    expect(resolveAttack([line, cutter], [[6, 0]], false).results[0].r).toBe('miss');
+    cutter.sunk = false;
+    expect(fits([line, cutter], { x: 3, y: 0, dir: 'h', len: 5 }, 0)).toBe(false);
   });
   it('a ship that slips the Kraken\'s hold, or a false answer to its strike, is caught', async () => {
     const { bus, a, b } = await duel();
@@ -451,7 +462,8 @@ describe('the covenant', () => {
     expect(a.side.seals).toBe(3);
     expect(a.kraken(6, 6)).toBe(true);
     a.endTurn(); b.endTurn();
-    for (let guard = 0; guard < 400 && a.pub.phase === 'battle'; guard++) (a.myTurn ? a : b).endTurn();
+    sinkAll(b, a);
+    expect(a.pub.phase).toBe('over');
     const honest = await verify(bus.log, 1, 'classic', 7);
     expect(honest).toBeNull();
     const lied: Msg[] = bus.log.map((m) => (m.t === 'result' && m.kraken ? { ...m, results: m.results.map((r) => ({ x: r.x, y: r.y, r: 'miss' as const })) } : m));

@@ -34,14 +34,12 @@ function svg<K extends keyof SVGElementTagNameMap>(p: Element, tag: K, a: Record
   p.appendChild(e);
   return e;
 }
-const polar = (x: number, y: number, r: number, deg: number) => [x + r * Math.cos((deg * Math.PI) / 180), y - r * Math.sin((deg * Math.PI) / 180)];
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
 export interface HudHandlers {
   mode(m: Mode): void;
   mute(): boolean;
   quality(q: 'auto' | 'high' | 'low'): void;
-  water(n: number): void;
   buy(item: Item): void;
   endTurn(): void;
   shuffle(): void;
@@ -58,14 +56,13 @@ export class Hud {
   private capTurns = 0;
   private muted = false;
   private qualityPref = 'auto';
-  private waterPref = '2';
   private q = <T extends Element>(s: string) => this.root.querySelector(s) as T;
 
   constructor(private on: HudHandlers) {
     this.root = document.getElementById('hud')!;
     this.root.innerHTML = `
       <header class="rail top">
-        <div class="turn"><svg class="compass" viewBox="0 0 100 100"></svg><button id="menuBtn" class="mini" aria-expanded="false" aria-controls="menu">Settings</button></div>
+        <div class="turn"><button id="menuBtn" class="mini" aria-expanded="false" aria-controls="menu">Settings</button></div>
         <h1 class="title"><span>The Sunken Covenant</span></h1>
         <div class="foe"><span id="foeNote"></span></div>
         <div class="status" role="status"><b id="turnTitle"></b><span id="turnSub"></span></div>
@@ -76,14 +73,12 @@ export class Hud {
         <div class="seg" data-pref="sound" role="radiogroup" aria-label="Sound"><button data-v="on" role="radio">On</button><button data-v="off" role="radio">Off</button></div>
         <p class="opt">3D quality</p>
         <div class="seg" data-pref="quality" role="radiogroup" aria-label="3D quality"><button data-v="auto" role="radio">Auto</button><button data-v="high" role="radio">High</button><button data-v="low" role="radio">Low</button></div>
-        <p class="opt">Water around ships</p>
-        <div class="seg two" data-pref="water" role="radiogroup" aria-label="Water around ships"><button data-v="1" role="radio">Contours</button><button data-v="2" role="radio">Foam</button><button data-v="3" role="radio">Hatched</button><button data-v="4" role="radio">Ripples</button></div>
         <p class="meta">Auto steps down by itself if the game runs slowly. Low drops shadows, glow and the print grade.</p>
       </div>
       <div class="herald" id="herald" aria-hidden="true"><div><b></b><span></span></div></div>
       <div class="objective" id="objective" hidden></div>
       <aside class="card left">
-        <h2>The covenant</h2><div class="seals" id="seals"></div>
+        <h2>The covenant</h2><div class="seals" id="seals"></div><p class="howto" id="sealHow"></p>
         <h2>Admiralty orders</h2><p id="orderText"></p><p id="orderMeta" class="meta"></p>
         <h2>Quartermaster <span id="gold" title="Doubloons"></span></h2><ul id="shop"></ul>
         <h2>Your fleet</h2><ul id="fleet"></ul>
@@ -108,7 +103,6 @@ export class Hud {
       </footer>
       <div class="role" hidden><div class="card"><svg class="medal" viewBox="0 0 100 100"></svg><p class="meta" id="roleTitle"></p><h2 id="roleName"></h2><p id="roleMission"></p><p class="pw"><b id="rolePower"></b> <span id="rolePowerText"></span></p><button class="plaque" id="roleOk">To your station</button></div></div>
       <div class="over" hidden><div class="card"><h2 id="overTitle"></h2><p id="overText"></p><p id="overVerify" class="meta"></p><button class="plaque" id="leave">Back to port</button></div></div>`;
-    this.compass(this.q('.compass'));
     this.telegraph(this.q('.telegraph'));
     this.q<HTMLElement>('#endTurn').onclick = () => { this.spin('#endTurn'); on.endTurn(); };
     this.q<HTMLElement>('#ready').onclick = () => { this.spin('#ready'); on.ready(); };
@@ -116,7 +110,7 @@ export class Hud {
     this.q<HTMLElement>('#rotate').onclick = () => on.rotate();
     this.q<HTMLElement>('#leave').onclick = () => on.leave();
     this.q<HTMLElement>('#roleOk').onclick = () => { this.q<HTMLElement>('.role').hidden = true; };
-    // Settings: sound and 3D quality, in a small parchment menu under the compass.
+    // Settings: sound and 3D quality, in a small parchment menu at the top left.
     const menu = this.q<HTMLElement>('#menu'), menuBtn = this.q<HTMLElement>('#menuBtn');
     const show = (open: boolean) => { menu.hidden = !open; menuBtn.setAttribute('aria-expanded', String(open)); };
     menuBtn.onclick = (e) => { e.stopPropagation(); show(menu.hidden === true); };
@@ -128,7 +122,6 @@ export class Hud {
       const pref = b.parentElement!.dataset.pref, v = b.dataset.v!;
       if (pref === 'sound' && (v === 'off') !== this.muted) this.muted = on.mute();
       if (pref === 'quality') { on.quality(v as 'auto' | 'high' | 'low'); this.qualityPref = v; }
-      if (pref === 'water') { on.water(+v); this.waterPref = v; }
       this.paintPrefs();
     };
     this.q<HTMLElement>('#shop').onclick = (e) => { const b = (e.target as Element).closest('button'); if (b) on.buy(b.dataset.item as Item); };
@@ -157,22 +150,6 @@ export class Hud {
     this.q<HTMLElement>('.role').hidden = false;
   }
   private spin(sel: string) { this.q<HTMLElement>(sel + ' img').style.transform = `rotate(${++this.capTurns * 135}deg)`; }
-
-  private compass(s: SVGElement) {
-    svg(s, 'circle', { cx: 50, cy: 50, r: 48, fill: 'url(#brass)', stroke: '#0d0b08' });
-    svg(s, 'circle', { cx: 50, cy: 50, r: 41, fill: '#0d0b08' });
-    for (let i = 0; i < 32; i++) {
-      const a = polar(50, 50, i % 4 ? 37 : 34, i * 11.25), b = polar(50, 50, 40, i * 11.25);
-      svg(s, 'line', { x1: a[0], y1: a[1], x2: b[0], y2: b[1], stroke: '#d9a441', 'stroke-width': i % 4 ? 0.5 : 1 });
-    }
-    for (let k = 0; k < 4; k++) {
-      const t = polar(50, 50, 33, k * 90), a = polar(50, 50, 6, k * 90 + 45), b = polar(50, 50, 6, k * 90 - 45);
-      svg(s, 'polygon', { points: `${t} ${a} 50,50`, fill: '#e8d5a3' });
-      svg(s, 'polygon', { points: `${t} ${b} 50,50`, fill: '#8a6f2c' });
-    }
-    svg(s, 'polygon', { id: 'needle', points: '50,18 53,50 47,50', fill: '#8c2f1b' });
-    svg(s, 'circle', { cx: 50, cy: 50, r: 3.5, fill: '#b08d3c' });
-  }
 
   /* The helm console is public/ui/console.webp (dial with four shot cups on its crest) and
      public/ui/needle.webp. Everything here is in the source picture's pixels (see TG); the
@@ -213,11 +190,11 @@ export class Hud {
   }
 
   /** Show the saved settings in the menu. */
-  setPrefs(muted: boolean, quality: string, water: number) { this.muted = muted; this.qualityPref = quality; this.waterPref = String(water); this.paintPrefs(); }
+  setPrefs(muted: boolean, quality: string) { this.muted = muted; this.qualityPref = quality; this.paintPrefs(); }
   private paintPrefs() {
     this.root.querySelectorAll<HTMLElement>('#menu .seg button').forEach((b) => {
       const pref = b.parentElement!.dataset.pref, v = b.dataset.v;
-      const on = pref === 'sound' ? (v === 'off') === this.muted : pref === 'water' ? v === this.waterPref : v === this.qualityPref;
+      const on = pref === 'sound' ? (v === 'off') === this.muted : v === this.qualityPref;
       b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on));
     });
   }
@@ -243,8 +220,10 @@ export class Hud {
     this.q('#turnTitle').textContent = p.phase === 'placement' ? 'Deploy your fleet' : p.phase === 'over' ? 'Battle over' : mine ? 'Your turn' : 'Enemy turn';
     this.q('#turnSub').textContent = p.phase === 'battle' ? `Round ${p.round}` : '';
     this.q('#seals').innerHTML = Array.from({ length: KRAKEN_SEALS }, (_, i) => `<i class="${i < me.seals ? 'lit' : ''}"></i>`).join('') + `<span>${me.seals >= KRAKEN_SEALS ? 'The Kraken will answer.' : `${Math.min(me.seals, KRAKEN_SEALS)} of ${KRAKEN_SEALS} seals`}</span>`;
+    this.q('#sealHow').innerHTML = me.seals >= KRAKEN_SEALS
+      ? '<b>The Kraken will answer.</b> Choose <em>Summon the Kraken</em> above the helm (3 AP), then a 3×3 patch of enemy water. It strikes now and again on their next turn, and holds the ships it finds.'
+      : `Three seals summon the Kraken. A red wax seal surfaces in your waters every few rounds: <b>sail a ship onto it</b> to take it. Each ship you lose also pays one.${p.treasures.some((t) => t.side === c.me && t.kind === 'seal') ? ' <b>A seal is afloat in your waters now.</b>' : ''}`;
     this.q('#foeSeals').textContent = `${foe.seals} covenant seal${foe.seals === 1 ? '' : 's'} · ${foe.doubloons} doubloons`;
-    this.q<SVGElement>('#needle').style.transform = `rotate(${mine ? 20 : 200}deg)`;
     this.balls.forEach((b, k) => b.classList.toggle('spent', !(mine && k < p.ap)));
     this.q<HTMLButtonElement>('#endTurn').disabled = !c.can();
     this.q<HTMLButtonElement>('#ready').disabled = me.ready;

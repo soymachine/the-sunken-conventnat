@@ -52,7 +52,6 @@ const hud = new Hud({
   mode: (m) => { sfx.play('click'); setMode(m); },
   mute: () => sfx.toggle(),
   quality: (q) => scene.setQuality(q),
-  water: (n) => scene.setWake(n),
   buy: (item) => { if (c.buy(item)) setMode(item === 'winds' ? mode : item); },
   endTurn: () => { if (!busy) c.endTurn(); },
   shuffle: () => { if (canPlace()) { c.ships = randomFleet(Math.random, c.role); selected = lifted = null; refresh(); } },
@@ -60,7 +59,7 @@ const hud = new Hud({
   ready: () => { if (!canPlace() || lifted) return; if (!legalPlacement(c.ships)) hud.log('The merchantman must start in the Colony: columns A to C.', 'bad'); else void c.ready(); },
   leave,
 });
-hud.setPrefs(sfx.muted, scene.getQuality(), scene.getWake());
+hud.setPrefs(sfx.muted, scene.getQuality());
 const lobby = new Lobby({
   bot: (name, mode) => start(new LocalSession(mode), name),
   create: async (name, mode) => {
@@ -92,7 +91,7 @@ function start(s: Session, name: string) {
   if (snap) c.restore(snap);
   mode = 'fire'; selected = lifted = null; busy = false; queue.length = 0; foeOnline = true; flying.clear();
   scene.reset();
-  seen.storm = seen.tide = seen.ring = 0;
+  seen.storm = seen.tide = seen.ring = 0; seen.seals = -1;
   hud.clearLog();
   hud.log(s.code ? `Room ${s.code}. Arrange your fleet, then turn the capstan.` : 'Arrange your fleet, then turn the capstan.');
   c.onNote = (t) => hud.log(t, 'good');
@@ -234,11 +233,17 @@ function describe(m: Msg, mine: boolean) {
 }
 
 /** Announce storms, tides and the maelstrom once each as they arrive. */
-const seen = { storm: 0, tide: 0, ring: 0 };
+const seen = { storm: 0, tide: 0, ring: 0, seals: -1 };
 function weather() {
   const p = c.pub;
   if (p.storm && p.storm.until !== seen.storm) { seen.storm = p.storm.until; hud.log(`A storm front closes over rows ${p.storm.row + 1}–${p.storm.row + 3}: no guns or spyglasses there.`); }
   if (p.tide && p.tide.round !== seen.tide) { seen.tide = p.tide.round; hud.log('High tide! The sea carries the flotsam a square.'); if (p.tide.round === p.round) scene.tide(p.tide.dx, p.tide.dy); }
+  // Say plainly when a covenant seal comes in, and when three of them can wake the Kraken.
+  const n = c.side.seals;
+  if (seen.seals >= 0 && n > seen.seals && p.phase === 'battle') {
+    hud.log(n >= 3 ? 'Three covenant seals! The Kraken will answer: choose Summon the Kraken above the helm.' : `A covenant seal is yours: ${n} of 3. Three summon the Kraken.`, 'good');
+  }
+  seen.seals = n;
   if (p.ring !== seen.ring) { seen.ring = p.ring; if (p.ring) hud.log('The maelstrom swallows another ring of the chart!', 'bad'); }
 }
 

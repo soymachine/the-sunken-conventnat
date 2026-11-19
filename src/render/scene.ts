@@ -87,7 +87,7 @@ const puffTex = sprite((g) => {
 });
 
 const G = {
-  disc: new THREE.CircleGeometry(0.3, 20), ring: new THREE.RingGeometry(0.22, 0.3, 24), ring2: new THREE.RingGeometry(0.08, 0.13, 16),
+  glow: new THREE.PlaneGeometry(1.3, 1.3), disc: new THREE.CircleGeometry(0.3, 20), ring: new THREE.RingGeometry(0.22, 0.3, 24), ring2: new THREE.RingGeometry(0.08, 0.13, 16),
   flame: new THREE.ConeGeometry(0.13, 0.5, 8), cell: new THREE.PlaneGeometry(0.94, 0.94),
   plank: new THREE.BoxGeometry(0.34, 0.04, 0.08), ball: new THREE.SphereGeometry(0.16, 12, 8),
   chest: new THREE.BoxGeometry(0.5, 0.3, 0.36), lid: new THREE.BoxGeometry(0.54, 0.1, 0.4),
@@ -112,6 +112,95 @@ interface ShipObj {
   way?: number;
   /** Where the hull meets the water, in the ship's own frame: centre along her length, half length, half beam. */
   foot?: { cx: number; cz: number; half: number; beam: number };
+}
+
+/* ---------- treasure ---------- */
+const glowTex = sprite((g) => {
+  const r = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  r.addColorStop(0, 'rgba(255,255,255,1)'); r.addColorStop(0.4, 'rgba(255,255,255,.35)'); r.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = r; g.fillRect(0, 0, 128, 128);
+});
+/** The face of a covenant seal: red wax pressed with the kraken's mark. */
+const sealFace = (() => {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 256;
+  const g = cv.getContext('2d')!;
+  const wax = g.createRadialGradient(100, 90, 10, 128, 128, 128);
+  wax.addColorStop(0, '#d0573c'); wax.addColorStop(0.6, '#9a2a17'); wax.addColorStop(1, '#5a140a');
+  g.fillStyle = wax; g.fillRect(0, 0, 256, 256);
+  g.strokeStyle = 'rgba(40,6,2,.55)'; g.lineWidth = 7; g.beginPath(); g.arc(128, 128, 92, 0, 7); g.stroke();
+  g.strokeStyle = 'rgba(255,170,140,.35)'; g.lineWidth = 3; g.beginPath(); g.arc(126, 125, 92, 3.6, 5.6); g.stroke();
+  // The mark: a kraken's head with curling arms, pressed in (dark) and catching light on its upper edge.
+  const mark = (dx: number, dy: number, col: string) => {
+    g.strokeStyle = col; g.fillStyle = col; g.lineWidth = 9; g.lineCap = 'round';
+    g.beginPath(); g.ellipse(128 + dx, 104 + dy, 26, 30, 0, 0, 7); g.fill();
+    for (const s of [-1, 1]) for (const k of [0, 1]) {
+      g.beginPath(); g.moveTo(128 + dx + s * (8 + k * 12), 128 + dy);
+      g.quadraticCurveTo(128 + dx + s * (18 + k * 26), 170 + dy, 128 + dx + s * (44 + k * 6), 160 + dy - k * 22);
+      g.quadraticCurveTo(128 + dx + s * (52 + k * 4), 150 + dy - k * 22, 128 + dx + s * (42 + k * 4), 144 + dy - k * 22);
+      g.stroke();
+    }
+  };
+  mark(-2, -2, 'rgba(255,160,130,.45)'); mark(2, 2, 'rgba(45,6,2,.75)'); mark(0, 0, '#86200f');
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
+})();
+const TM = {
+  wood: new THREE.MeshStandardMaterial({ color: 0x6b4423, roughness: 0.85 }),
+  dark: new THREE.MeshStandardMaterial({ color: 0x3a2412, roughness: 0.9 }),
+  brass: new THREE.MeshStandardMaterial({ color: 0xc9a24a, metalness: 0.75, roughness: 0.35 }),
+  coin: new THREE.MeshBasicMaterial({ color: new THREE.Color(1.25, 0.82, 0.22) }),
+  wax: new THREE.MeshStandardMaterial({ color: 0x8e2412, roughness: 0.55 }),
+  face: new THREE.MeshStandardMaterial({ map: sealFace, roughness: 0.5 }),
+};
+const TG = {
+  body: new THREE.BoxGeometry(0.46, 0.24, 0.3),
+  groove: new THREE.BoxGeometry(0.462, 0.012, 0.302),
+  strap: new THREE.BoxGeometry(0.035, 0.25, 0.31),
+  lid: new THREE.CylinderGeometry(0.15, 0.15, 0.46, 16, 1, false, 0, Math.PI),
+  lidStrap: new THREE.CylinderGeometry(0.158, 0.158, 0.035, 16, 1, false, 0, Math.PI),
+  lock: new THREE.BoxGeometry(0.06, 0.07, 0.02),
+  hoard: new THREE.SphereGeometry(0.2, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+  coin: new THREE.CylinderGeometry(0.045, 0.045, 0.012, 12),
+  seal: new THREE.CylinderGeometry(0.27, 0.29, 0.07, 32),
+  sealRim: new THREE.TorusGeometry(0.29, 0.025, 6, 32),
+  ribbon: new THREE.BoxGeometry(0.07, 0.2, 0.012),
+};
+const protos = new Map<string, THREE.Group>();
+/** A treasure chest spilling gold, or a covenant seal; the enemy's are faded. Built once, then cloned. */
+function treasureModel(kind: 'gold' | 'seal', faded: boolean): THREE.Group {
+  const key = kind + (faded ? ':dim' : '');
+  let proto = protos.get(key);
+  if (!proto) {
+    proto = new THREE.Group();
+    const add = (geo: THREE.BufferGeometry, mat: THREE.Material | THREE.Material[], x = 0, y = 0, z = 0) => {
+      const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; proto!.add(m); return m;
+    };
+    if (kind === 'gold') {
+      add(TG.body, TM.wood, 0, 0.12, 0);
+      add(TG.groove, TM.dark, 0, 0.08, 0); add(TG.groove, TM.dark, 0, 0.16, 0);
+      for (const x of [-0.15, 0.15]) add(TG.strap, TM.brass, x, 0.12, 0);
+      // The lid stands open on its hinge at the back, showing the hoard.
+      const lid = new THREE.Group(); lid.position.set(0, 0.24, -0.15); lid.rotation.x = -1.15; proto.add(lid);
+      for (const [geo, mat, x] of [[TG.lid, TM.wood, 0], [TG.lidStrap, TM.brass, -0.15], [TG.lidStrap, TM.brass, 0.15]] as const) {
+        const m = new THREE.Mesh(geo, mat); m.rotation.z = Math.PI / 2; m.rotation.y = Math.PI / 2; m.position.set(x, 0, 0.15); m.castShadow = true; lid.add(m);
+      }
+      add(TG.lock, TM.brass, 0, 0.2, 0.16);
+      add(TG.hoard, TM.coin, 0, 0.22, 0.02).scale.set(1, 0.35, 0.68);
+      for (const [x, z, r] of [[0.28, 0.12, 0.4], [-0.3, 0.06, -0.3], [0.2, 0.24, 1.1], [-0.12, 0.25, 0.2]]) {
+        const c = add(TG.coin, TM.coin, x, 0.01, z); c.rotation.set(r * 0.4, r, r * 0.3);
+      }
+    } else {
+      // The seal stands tilted to the light on a short ribbon, like one cut from a covenant.
+      const disc = add(TG.seal, [TM.wax, TM.face, TM.wax], 0, 0.34, 0); disc.rotation.x = Math.PI / 2 - 0.55;
+      const rim = add(TG.sealRim, TM.brass, 0, 0.34, 0); rim.rotation.x = -0.55;
+      for (const s of [-1, 1]) { const r = add(TG.ribbon, TM.wax, s * 0.08, 0.1, 0.06); r.rotation.z = s * 0.35; }
+    }
+    if (faded) proto.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (m.isMesh) m.material = (Array.isArray(m.material) ? m.material : [m.material]).map((x) => { const c = x.clone(); c.transparent = true; c.opacity = 0.55; return c; }) as THREE.Material[];
+    });
+    protos.set(key, proto);
+  }
+  return proto.clone();
 }
 
 export class SeaScene {
@@ -309,8 +398,7 @@ export class SeaScene {
   }
   getQuality(): Quality { return this.qualityPref; }
   /** Choose how water is drawn around hulls (0 to 4); see Sea.wake. */
-  setWake(n: number) { Sea.wake = n; try { localStorage.setItem('tsc:water', String(n)); } catch { /* storage unavailable */ } }
-  getWake() { return Sea.wake; }
+  setWake(n: number) { Sea.wake = n; }
 
   private refreshMaterials() {
     this.scene.traverse((o) => {
@@ -492,21 +580,30 @@ export class SeaScene {
           this.fx.bubbles(p.clone().setY(0.1), dt);
           for (const [x, y] of o.cells) sea.hold(x, y, 0.9);
           if (o.sink > 0.45) o.model.sails.visible = false;
-          if (o.sink >= 1) o.state = 'wreck';
-        } else for (const [x, y] of o.cells) sea.hold(x, y, 0.28);
+          // Down she goes, through the paper, and the water closes over her: nothing is left to block the way.
+          if (o.sink >= 1) { o.state = 'wreck'; o.root.visible = false; }
+        }
         const e = o.sink * o.sink * (3 - 2 * o.sink);
-        o.tilt.position.y = waveH(p.x, p.z, t) * (calm ? 0 : 1) - 0.34 * e;
+        o.tilt.position.y = waveH(p.x, p.z, t) * (calm ? 0 : 1) - 1.25 * e;
         o.tilt.rotation.x = 0.55 * e;
         o.tilt.rotation.z = -0.16 * e;
         for (const m of o.model.mats) { m.uniforms.uTint.value.setHex(0x17120b); m.uniforms.uTintAmt.value = 0.55 * e; }
       }
-      for (const f of o.fires) this.embers.push(o.tilt.localToWorld(f.clone()));
+      if (o.state !== 'wreck') for (const f of o.fires) this.embers.push(o.tilt.localToWorld(f.clone()));
     }
     for (const e of this.embers0) this.embers.push(e);
     for (const e of this.embers) this.fx.ember(e, dt);
     this.flames.forEach((f, i) => { f.scale.y = 1 + 0.22 * Math.sin(t * 9 + i * 1.7); });
     for (const p of this.puffs) { p.s.position.set(p.base.x + 0.5 * Math.sin(t * 0.3 + p.ph), p.base.y + 0.12 * Math.sin(t * 0.5 + p.ph * 2), p.base.z + 0.4 * Math.cos(t * 0.24 + p.ph)); }
-    this.glints.forEach((g, i) => { g.scale.setScalar(1 + 0.12 * Math.sin(t * 3 + i)); g.rotation.y = t * 0.6 + i; });
+    this.glints.forEach((g, i) => {
+      const inner = g.userData.inner as THREE.Object3D | undefined;
+      if (!inner) return;
+      inner.position.y = 0.035 * Math.sin(t * 1.6 + i * 1.3);
+      inner.rotation.y = g.userData.spin * t + i;
+      inner.rotation.z = 0.06 * Math.sin(t * 1.1 + i);
+      const glow = g.userData.glow as THREE.Mesh | undefined;
+      if (glow) (glow.material as THREE.MeshBasicMaterial).opacity = 0.32 + 0.22 * Math.sin(t * 2.4 + i);
+    });
     this.kraken.update(dt, t);
     // Everything lying on the chart follows its swell.
     const swell = calm ? () => 0 : (x: number, z: number) => waveH(x, z, t);
@@ -533,6 +630,11 @@ export class SeaScene {
         const p = o.root.position, y = o.root.rotation.y, f = (o.foot ??= this.footprint(o));
         const cx = p.x + Math.cos(y) * f.cx + Math.sin(y) * f.cz, cz = p.z - Math.sin(y) * f.cx + Math.cos(y) * f.cz;
         list.push({ x: cx - origin[side].x, y: cz - origin[side].z, dir: -y, half: f.half, beam: f.beam, speed: o.state === 'afloat' ? o.way ?? 0 : 0 });
+      }
+      // Floating treasure sits in the water like a small hull.
+      for (const tr of this.last?.pub.treasures ?? []) {
+        if ((tr.side === this.last!.me) !== (side === 'own')) continue;
+        list.push({ x: tr.x + 0.5, y: tr.y + 0.5, dir: 0, half: 0.38, beam: 0.38, speed: 0 });
       }
       this.seas[side].setHulls(list);
     }
@@ -701,7 +803,7 @@ export class SeaScene {
     const foe = (1 - v.me) as 0 | 1, seen = new Set<string>();
     const wreck = (o: ShipObj) => {
       if (o.state !== 'afloat') return;
-      if (v.quiet) { o.state = 'wreck'; o.sink = 1; o.model.sails.visible = false; }
+      if (v.quiet) { o.state = 'wreck'; o.sink = 1; o.model.sails.visible = false; o.root.visible = false; }
       else { o.state = 'sinking'; this.sound('sink'); }
     };
     for (const s of v.ships) {
@@ -770,28 +872,19 @@ export class SeaScene {
     this.syncGhosts(v.ghosts || []);
     for (const t of v.pub.treasures) {
       // The enemy's flotsam is only a clue to where their ships will go: draw it smaller and duller.
-      const theirs = t.side !== v.me, k = theirs ? 0.7 : 1;
+      const theirs = t.side !== v.me;
       const at = cellCenter({ side: theirs ? 'enemy' : 'own', x: t.x, y: t.y });
-      if (t.kind === 'seal') {
-        // A covenant seal: a disc of sealing wax standing in the water.
-        const g = new THREE.Group(), disc = new THREE.Mesh(G.seal, theirs ? M.sealDim : M.seal), rim = new THREE.Mesh(G.sealRim, theirs ? M.goldDim : M.gold);
-        g.scale.setScalar(k);
-        disc.rotation.x = rim.rotation.x = Math.PI / 2;
-        disc.position.y = rim.position.y = 0.42;
-        disc.castShadow = true;
-        g.add(disc, rim);
-        g.position.set(at.x, 0.08, at.z);
-        this.marks.add(g);
-        this.glints.push(g);
-        continue;
+      const g = new THREE.Group(), inner = treasureModel(t.kind, theirs);
+      g.add(inner);
+      g.userData.inner = inner; g.userData.spin = t.kind === 'seal' ? 0.5 : 0.12;
+      if (t.kind === 'seal' && !theirs) {
+        // A covenant seal calls attention to itself: a slow red-gold glow on the water beneath it.
+        const glow = new THREE.Mesh(G.glow, new THREE.MeshBasicMaterial({ map: glowTex, color: 0xff7a40, transparent: true, opacity: 0.4, depthWrite: false, blending: THREE.AdditiveBlending }));
+        glow.rotation.x = -Math.PI / 2; glow.position.y = 0.01;
+        g.add(glow); g.userData.glow = glow;
       }
-      const g = new THREE.Group(), chest = new THREE.Mesh(G.chest, theirs ? M.chestDim : M.chest), lid = new THREE.Mesh(G.lid, theirs ? M.goldDim : M.gold);
-      g.scale.setScalar(k);
-      chest.position.y = 0.15; lid.position.y = 0.35; chest.castShadow = true;
-      const edge = new THREE.LineSegments(new THREE.EdgesGeometry(G.chest), M.line);
-      edge.position.y = 0.15;
-      g.add(chest, lid, edge);
-      g.position.set(at.x, 0.08, at.z);
+      g.scale.setScalar(theirs ? 1.05 : 1.4);
+      g.position.set(at.x, 0.06, at.z);
       this.marks.add(g);
       this.glints.push(g);
     }

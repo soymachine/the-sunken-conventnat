@@ -80,7 +80,7 @@ const FRAG = /* glsl */ `
 uniform sampler2D uMap, uEnergy;
 uniform float uTime, uEnemy, uNight, uRing, uFlash;
 // Hulls on this chart: uHull = (x, y, heading, half length), uHull2 = (half beam, speed 0..1, afloat, 0).
-#define MAXH 8
+#define MAXH 14
 uniform vec4 uHull[MAXH];
 uniform vec4 uHull2[MAXH];
 uniform int uHullN;
@@ -242,7 +242,7 @@ export class Sea {
     this.mat = new THREE.ShaderMaterial({
       vertexShader: VERT, fragmentShader: FRAG,
       uniforms: { uMap: { value: chartTexture(enemy) }, uEnergy: { value: this.tex }, uTime: { value: 0 }, uEnemy: { value: enemy ? 1 : 0 }, uN: { value: N }, uNight: { value: 0 }, uRing: { value: 0 }, uFlash: { value: 0 }, uStorm: { value: new THREE.Vector2(0, 0) }, uTide: { value: new THREE.Vector4(1, 0, -99, 0) },
-        uHull: { value: Array.from({ length: 8 }, () => new THREE.Vector4()) }, uHull2: { value: Array.from({ length: 8 }, () => new THREE.Vector4()) }, uHullN: { value: 0 }, uWake: { value: Sea.wake } },
+        uHull: { value: Array.from({ length: 14 }, () => new THREE.Vector4()) }, uHull2: { value: Array.from({ length: 14 }, () => new THREE.Vector4()) }, uHullN: { value: 0 }, uWake: { value: Sea.wake } },
     });
     const geo = new THREE.PlaneGeometry(N + 1, N + 1, 96, 96);
     geo.rotateX(-Math.PI / 2);
@@ -267,11 +267,11 @@ export class Sea {
   clear() { this.energy.fill(0); this.night = 0; (this.mat.uniforms.uTide.value as THREE.Vector4).w = 0; }
 
   /** How the water is drawn around hulls: 0 the old stirred rings, 1 contours, 2 foam, 3 hatching, 4 ripples. */
-  static wake = (() => { try { const n = Number(localStorage.getItem('tsc:water')); return n >= 1 && n <= 4 ? n : 2; } catch { return 2; } })();
+  static wake = 3;
   /** The hulls on this chart, in chart squares: centre, heading (radians, x towards y), half length, half beam, speed 0..1. */
   setHulls(list: { x: number; y: number; dir: number; half: number; beam: number; speed: number }[]) {
     const u = this.mat.uniforms, a = u.uHull.value as THREE.Vector4[], b = u.uHull2.value as THREE.Vector4[];
-    const n = Math.min(8, list.length);
+    const n = Math.min(14, list.length);
     for (let i = 0; i < n; i++) { const h = list[i]; a[i].set(h.x, h.y, h.dir, h.half); b[i].set(h.beam, h.speed, 1, 0); }
     u.uHullN.value = n;
     u.uWake.value = Sea.wake;

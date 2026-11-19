@@ -81,19 +81,21 @@ export function shipCells(s: Placed): XY[] {
   return out;
 }
 
-/** True when `cand` is inside the grid and overlaps no other ship (wrecks included). */
+/** True when `cand` is inside the grid and overlaps no other ship afloat (a sunk ship leaves open water). */
 export function fits(ships: Placed[] & { id?: number }[], cand: Placed, ignoreId?: number): boolean {
   const cs = shipCells(cand);
   for (const [x, y] of cs) if (!inBoard(x, y)) return false;
   for (const o of ships as (Placed & { id?: number })[]) {
-    if (o.id === ignoreId) continue;
+    if (o.id === ignoreId || (o as { sunk?: boolean }).sunk) continue;
     for (const [ox, oy] of shipCells(o)) for (const [x, y] of cs) if (ox === x && oy === y) return false;
   }
   return true;
 }
 
 export function shipAt(ships: Ship[], x: number, y: number): { ship: Ship; idx: number } | null {
+  // A sunk ship is gone from the chart: only ships afloat can be found, or struck, at a square.
   for (const ship of ships) {
+    if (ship.sunk) continue;
     const cs = shipCells(ship);
     for (let idx = 0; idx < cs.length; idx++) if (cs[idx][0] === x && cs[idx][1] === y) return { ship, idx };
   }

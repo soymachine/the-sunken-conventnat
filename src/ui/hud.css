@@ -27,8 +27,8 @@ button { font-family: inherit; }
 .status b { display: block; font: 700 15px var(--label); letter-spacing: .26em; text-transform: uppercase; color: var(--amber); }
 .status span { display: block; font: 500 11.5px var(--label); letter-spacing: .22em; text-transform: uppercase; color: var(--parch); margin-top: 3px; }
 .status span:empty { display: none; }
-/* Settings menu under the compass. */
-.menu { position: absolute; top: 116px; left: 22px; width: 250px; z-index: 5; pointer-events: auto; }
+/* Settings menu at the top left. */
+.menu { position: absolute; top: 56px; left: 18px; width: 250px; z-index: 5; pointer-events: auto; }
 .menu .opt { font: 700 10.5px var(--label); letter-spacing: .16em; text-transform: uppercase; color: var(--wax); margin: 12px 0 6px; }
 .menu .seg { display: flex; gap: 6px; }
 .menu .seg.two { display: grid; grid-template-columns: 1fr 1fr; }
@@ -36,8 +36,6 @@ button { font-family: inherit; }
 .menu .seg button:hover { border-color: rgba(13, 11, 8, .55); }
 .menu .seg button.on { background: rgba(122, 84, 30, .14); border-color: rgba(13, 11, 8, .75); color: var(--wax); box-shadow: inset 0 1px 3px rgba(13, 11, 8, .2); }
 .menu .meta { font-style: italic; font-size: 13.5px; line-height: 1.3; margin: 12px 0 0; color: #4a3720; }
-.compass { width: 84px; height: 84px; margin-top: 26px; flex: none; filter: drop-shadow(0 3px 6px #000); }
-#needle { transform-origin: 50px 50px; transition: transform 1s cubic-bezier(.3, 1.6, .5, 1); }
 .foe { width: 280px; text-align: right; font-style: italic; color: var(--muted); font-size: 14px; display: flex; flex-direction: column; gap: 5px; align-items: flex-end; }
 #foeFleet { display: flex; gap: 9px; }
 #foeFleet .pips i { background: var(--amber); width: 7px; height: 7px; }
@@ -50,7 +48,7 @@ button { font-family: inherit; }
 .card h2 span { color: var(--wax); letter-spacing: .04em; white-space: nowrap; }
 #gold::before { content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--brass); border: 1px solid var(--ink); margin-right: 5px; }
 .left, .right { position: absolute; top: 112px; width: 236px; }
-.left { left: 18px; } .right { right: 18px; bottom: 204px; overflow: hidden; }
+.left { left: 18px; max-height: calc(100vh - 112px - 168px); overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(13, 11, 8, .35) transparent; } .right { right: 18px; bottom: 204px; overflow: hidden; }
 .left p { margin: 0 0 4px; font-style: italic; font-size: 15px; line-height: 1.25; }
 .meta { font: 600 9.5px var(--label) !important; letter-spacing: .08em; color: var(--wax); text-transform: uppercase; margin-bottom: 14px !important; }
 .card ul, .card ol { list-style: none; margin: 0; padding: 0; }
@@ -167,7 +165,6 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); out
 .plaque:hover:not(:disabled), .belt button:hover:not(:disabled) { background-position: 75% 60%; }
 .sector.on { filter: drop-shadow(0 0 14px rgba(255, 196, 90, .6)); }
 @keyframes sway { 0%, 100% { rotate: -3deg; } 50% { rotate: 3deg; } }
-#needle { animation: sway 4s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { #log li, .belt button, #needle, #hud .rail, #hud .card, #lobby .card { animation: none !important; } }
 
 /* ---------- convoy ---------- */
@@ -243,3 +240,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); out
   100% { opacity: 0; transform: translateX(10%) scaleY(.9); }
 }
 @media (prefers-reduced-motion: reduce) { .herald.go { animation: none; opacity: 0; } }
+
+/* How the covenant works, under the seals. */
+.howto { font-size: 13.5px; line-height: 1.32; font-style: italic; color: #4a3720; margin: 6px 0 10px; }
+.howto b { font-style: normal; font-weight: 700; color: var(--wax); }
+.howto em { font-style: normal; font-family: var(--label); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
