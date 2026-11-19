@@ -80,20 +80,19 @@ export class Hud {
           <div class="helm">
             <svg class="telegraph" viewBox="${TG.view}" role="group" aria-label="Orders and action points"></svg>
           </div>
-          <button class="capstan" id="endTurn" aria-label="End turn"><svg viewBox="0 0 100 100"></svg><span>End turn</span></button>
+          <button class="capstan" id="endTurn" aria-label="End turn"><img src="/ui/wheel.webp" alt="" draggable="false"><span>End turn</span></button>
         </div>
         <div class="placing">
           <button class="plaque" id="shuffle">Shuffle</button>
           <button class="plaque" id="rotate">Rotate (R)</button>
           <p id="placeHint"></p>
-          <button class="capstan" id="ready" aria-label="Ready"><svg viewBox="0 0 100 100"></svg><span>Ready</span></button>
+          <button class="capstan" id="ready" aria-label="Ready"><img src="/ui/wheel.webp" alt="" draggable="false"><span>Ready</span></button>
         </div>
       </footer>
       <div class="role" hidden><div class="card"><svg class="medal" viewBox="0 0 100 100"></svg><p class="meta" id="roleTitle"></p><h2 id="roleName"></h2><p id="roleMission"></p><p class="pw"><b id="rolePower"></b> <span id="rolePowerText"></span></p><button class="plaque" id="roleOk">To your station</button></div></div>
       <div class="over" hidden><div class="card"><h2 id="overTitle"></h2><p id="overText"></p><p id="overVerify" class="meta"></p><button class="plaque" id="leave">Back to port</button></div></div>`;
     this.compass(this.q('.compass'));
     this.telegraph(this.q('.telegraph'));
-    this.root.querySelectorAll('.capstan svg').forEach((s) => this.capstan(s));
     this.q<HTMLElement>('#endTurn').onclick = () => { this.spin('#endTurn'); on.endTurn(); };
     this.q<HTMLElement>('#ready').onclick = () => { this.spin('#ready'); on.ready(); };
     this.q<HTMLElement>('#shuffle').onclick = () => on.shuffle();
@@ -126,7 +125,7 @@ export class Hud {
     this.q('#rolePowerText').textContent = cap.powerText;
     this.q<HTMLElement>('.role').hidden = false;
   }
-  private spin(sel: string) { this.q<SVGElement>(sel + ' svg').style.transform = `rotate(${++this.capTurns * 120}deg)`; }
+  private spin(sel: string) { this.q<HTMLElement>(sel + ' img').style.transform = `rotate(${++this.capTurns * 135}deg)`; }
 
   private compass(s: SVGElement) {
     svg(s, 'circle', { cx: 50, cy: 50, r: 48, fill: 'url(#brass)', stroke: '#0d0b08' });
@@ -183,13 +182,6 @@ export class Hud {
     const n = TG.needle;
     svg(this.lever, 'image', { href: '/ui/needle.webp', x: cx - n.capX * n.scale, y: cy - n.capY * n.scale, width: n.w * n.scale, height: n.h * n.scale });
     labels.forEach((t) => s.appendChild(t));
-  }
-
-  private capstan(s: Element) {
-    for (let k = 0; k < 6; k++) svg(s, 'rect', { x: 46.5, y: 4, width: 7, height: 34, rx: 3, fill: '#5a4026', stroke: '#0d0b08', transform: `rotate(${k * 60} 50 50)` });
-    svg(s, 'circle', { cx: 50, cy: 50, r: 25, fill: '#3b2a18', stroke: '#0d0b08', 'stroke-width': 1.5 });
-    svg(s, 'circle', { cx: 50, cy: 50, r: 14, fill: 'url(#brass)', stroke: '#0d0b08' });
-    svg(s, 'line', { x1: 41, y1: 50, x2: 59, y2: 50, stroke: '#0d0b08', 'stroke-width': 2 });
   }
 
   setHint(text: string) { this.q('#hint').textContent = text; }
