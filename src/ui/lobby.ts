@@ -17,14 +17,19 @@ export class Lobby {
       <div class="port">
       <svg class="crest" viewBox="0 0 1024 1024" role="img" aria-label="The Sunken Covenant">
         <defs>
-          <path id="bannerLine" d="M200,428 C330,414 455,426 565,470 S760,514 832,478" />
+          <path id="bannerLine" d="M232,443 C243,442 279,436 300,434 C321,432 340,428 360,429 C380,430 402,434 420,439 C438,444 452,450 470,456 C488,462 510,470 530,477 C550,484 570,491 590,497 C610,503 630,509 650,513 C670,517 690,521 710,520 C730,519 753,513 770,508 C787,503 803,493 810,490" />
           <filter id="inkRough" x="-5%" y="-20%" width="110%" height="140%">
             <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="7" />
-            <feDisplacementMap in="SourceGraphic" scale="2.5" />
+            <feDisplacementMap in="SourceGraphic" scale="2.5" result="ink" />
+            <feGaussianBlur in="ink" stdDeviation="2.4" result="soft" />
+            <feOffset in="soft" dx="2" dy="4" result="drop" />
+            <feFlood flood-color="#3a2410" flood-opacity=".42" />
+            <feComposite in2="drop" operator="in" result="shadow" />
+            <feMerge><feMergeNode in="shadow" /><feMergeNode in="ink" /></feMerge>
           </filter>
         </defs>
         <image href="/ui/crest.webp" width="1024" height="1024" />
-        <text class="bannerText" filter="url(#inkRough)"><textPath href="#bannerLine" startOffset="50%" text-anchor="middle" textLength="600" lengthAdjust="spacingAndGlyphs">The Sunken Covenant</textPath></text>
+        <text class="bannerText" filter="url(#inkRough)"><textPath href="#bannerLine" startOffset="50%" text-anchor="middle" textLength="548" lengthAdjust="spacingAndGlyphs">The Sunken Covenant</textPath></text>
         <g class="monogram" text-anchor="middle">
           <text x="511" y="828" fill="#3d0f07" opacity=".8">SC</text>
           <text x="517" y="834" fill="#e68a6c" opacity=".35">SC</text>
@@ -34,13 +39,16 @@ export class Lobby {
       <div class="card">
         <h1>Articles of Engagement</h1>
         <p class="tag">Two captains. One sea. No quarter.</p>
+        <div class="flourish" aria-hidden="true">&#10086;</div>
         <label for="capName">Captain's name</label>
-        <input id="capName" maxlength="20" autocomplete="off" />
-        <div class="modes" role="radiogroup" aria-label="Kind of battle">
+        <input id="capName" maxlength="20" autocomplete="off" placeholder="Sign your name" />
+        <p class="field" id="modeLbl">Kind of battle</p>
+        <div class="modes" role="radiogroup" aria-labelledby="modeLbl">
           <button class="mode on" data-mode="classic" role="radio" aria-checked="true"><b>Classic</b><span>Sink the whole enemy fleet.</span></button>
           <button class="mode" data-mode="convoy" role="radio" aria-checked="false"><b>Convoy</b><span>One escorts the cargo home, the other plunders it. Roles are drawn by lot.</span></button>
         </div>
         <div class="row"><button class="plaque" id="vsBot">Play the machine</button></div>
+        <p class="or"><span>or sail against a friend</span></p>
         <div class="row"><button class="plaque dark" id="create">Create a room</button></div>
         <div class="row"><input id="code" maxlength="4" placeholder="CODE" aria-label="Room code" autocomplete="off" /><button class="plaque dark" id="join">Join</button></div>
         <div class="drums" hidden></div>
