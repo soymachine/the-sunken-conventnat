@@ -11,7 +11,9 @@ export const setShipTime = (t: number) => { time.value = t; };
 const VERT = /* glsl */ `
 uniform float uTime, uFlutter;
 varying vec3 vN;
+varying vec2 vUv;
 void main() {
+  vUv = uv;
   vec3 p = position;
   if (uFlutter > 0.0) {
     float w = sin(uv.x * 3.1416) * (0.35 + 0.65 * sin(uv.y * 3.1416));
@@ -22,8 +24,10 @@ void main() {
 }`;
 const FRAG = /* glsl */ `
 uniform vec3 uColor, uTint, uLight;
-uniform float uTintAmt, uAlpha;
+uniform float uTintAmt, uAlpha, uUseMap;
+uniform sampler2D uMap;
 varying vec3 vN;
+varying vec2 vUv;
 void main() {
   vec3 n = normalize(vN);
   if (!gl_FrontFacing) n = -n;
@@ -33,16 +37,18 @@ void main() {
   float hatch = 1.0;
   if (d <= 0.6) hatch -= 0.24 * step(0.55, fract((f.x + f.y) / 5.0));
   if (d <= 0.38) hatch -= 0.22 * step(0.55, fract((f.x - f.y) / 5.0));
-  vec3 c = mix(uColor * band * hatch, uTint, uTintAmt);
+  // A model made elsewhere brings its colours as a texture; the procedural ships use one flat colour per part.
+  vec3 base = uUseMap > 0.5 ? texture2D(uMap, vUv).rgb * uColor : uColor;
+  vec3 c = mix(base * band * hatch, uTint, uTintAmt);
   gl_FragColor = vec4(c, uAlpha);
   #include <colorspace_fragment>
 }`;
 
-/** Banded light with cross-hatching in the shadows. */
-export function inkMaterial(color: number, flutter = 0): THREE.ShaderMaterial {
+/** Banded light with cross-hatching in the shadows. With `map`, the colour comes from that texture. */
+export function inkMaterial(color: number, flutter = 0, map: THREE.Texture | null = null): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     vertexShader: VERT, fragmentShader: FRAG, side: THREE.DoubleSide,
-    uniforms: { uColor: { value: new THREE.Color(color) }, uTint: { value: new THREE.Color(0xd9a441) }, uTintAmt: { value: 0 }, uAlpha: { value: 1 }, uLight: { value: LIGHT }, uTime: time, uFlutter: { value: flutter } },
+    uniforms: { uColor: { value: new THREE.Color(color) }, uTint: { value: new THREE.Color(0xd9a441) }, uTintAmt: { value: 0 }, uAlpha: { value: 1 }, uLight: { value: LIGHT }, uTime: time, uFlutter: { value: flutter }, uMap: { value: map }, uUseMap: { value: map ? 1 : 0 } },
   });
 }
 
@@ -141,7 +147,7 @@ export interface ShipModel {
 
 export function buildShip(kind: Kind, len: number): ShipModel {
   const s = SPECS[kind], body = new THREE.Group(), sails = new THREE.Group(), mats: THREE.ShaderMaterial[] = [];
-  const mat = (c: number, flutter = 0) => { const m = inkMaterial(c, flutter); mats.push(m); return m; };
+  const mat = (c: number, flutter = 0, map: THREE.Texture | null = null) => { const m = inkMaterial(c, flutter, map); mats.push(m); return m; };
   const add = (parent: THREE.Object3D, geo: THREE.BufferGeometry, m: THREE.Material) => { const o = new THREE.Mesh(geo, m); o.castShadow = true; parent.add(o); return o; };
   const inner = new THREE.Group();
   inner.position.x = -len / 2;
@@ -150,17 +156,35 @@ export function buildShip(kind: Kind, len: number): ShipModel {
   const external = models.get(kind);
   if (external) {
     const o = external.clone(true);
-    const box = new THREE.Box3().setFromObject(o), size = box.getSize(new THREE.Vector3());
-    // Lay the model's longest horizontal axis along the ship and scale it to the hull length.
-    if (size.z > size.x) { o.rotation.y = Math.PI / 2; box.setFromObject(o); box.getSize(size); }
-    const k = (len * 0.94) / size.x;
-    o.scale.multiplyScalar(k);
-    box.setFromObject(o);
-    const c = box.getCenter(new THREE.Vector3());
-    o.position.sub(new THREE.Vector3(c.x - len / 2, box.min.y, c.z));
-    o.traverse((n) => { const m = n as THREE.Mesh; if (m.isMesh) { const col = (m.material as THREE.MeshStandardMaterial).color; m.material = mat(col ? col.getHex() : s.hull); m.castShadow = true; } });
+    // Models prepared with tools/prepare_ship.py carry their measurements: hull exactly 1.0 long and
+    // centred, bow towards +X, waterline at height 0, and the deck height in `extras`.
+    let prepared: { hull?: number; deck?: number } | null = null;
+    o.traverse((n) => { if (n.userData?.hull) prepared = n.userData as { hull: number; deck: number }; });
+    let deckY = s.depth;
+    if (prepared) {
+      const k = len * 0.94;
+      o.scale.multiplyScalar(k);
+      o.position.set(len / 2, 0, 0);
+      deckY = ((prepared as { deck?: number }).deck ?? s.depth / k) * k;
+    } else {
+      const box = new THREE.Box3().setFromObject(o), size = box.getSize(new THREE.Vector3());
+      // Lay the model's longest horizontal axis along the ship and scale it to the hull length.
+      if (size.z > size.x) { o.rotation.y = Math.PI / 2; box.setFromObject(o); box.getSize(size); }
+      const k = (len * 0.94) / size.x;
+      o.scale.multiplyScalar(k);
+      box.setFromObject(o);
+      const c = box.getCenter(new THREE.Vector3());
+      o.position.sub(new THREE.Vector3(c.x - len / 2, box.min.y, c.z));
+    }
+    o.traverse((n) => {
+      const m = n as THREE.Mesh;
+      if (!m.isMesh) return;
+      const src = m.material as THREE.MeshStandardMaterial;
+      m.material = src.map ? mat(0xffffff, 0, src.map) : mat(src.color ? src.color.getHex() : s.hull);
+      m.castShadow = true;
+    });
     inner.add(o);
-    return { body, sails, mats, crates: [], deckY: s.depth };
+    return { body, sails, mats, crates: [], deckY };
   }
 
   const h = loft(len, s);

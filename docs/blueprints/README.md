@@ -34,13 +34,15 @@ node docs/blueprints/export.mjs
 
 ## What the game expects
 
-Export each model as `.glb` and put it in `public/models/` under the ship's name: `line.glb`,
+Then run it through `tools/prepare_ship.py` (see `public/models/README.md`), which turns, scales and
+lightens it. Put the result in `public/models/` under the ship's name: `line.glb`,
 `frigate.glb`, `ironclad.glb`, `schooner.glb`, `cutter.glb`, `merchant.glb`. The game then uses it in
 place of the procedural ship (see `public/models/README.md`).
 
 - Longest side along the hull; the game scales it to the hull length and sits it on the waterline.
 - Under about 15,000 triangles per ship.
-- Textures are ignored: the game keeps each part's base colour and applies its own engraving shader.
+- A base-colour texture is kept (shrunk to 1024 px); the game applies its own engraving shader over it.
+  Normal, roughness and other maps are not used.
 
 ## Text prompts
 
