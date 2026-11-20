@@ -64,6 +64,7 @@ export class Hud {
   private sectors: [SVGPathElement, SVGTextElement][] = [];
   private balls: SVGGElement[] = [];
   private capTurns = 0;
+  private sealHelp = '';
   private muted = false;
   private qualityPref = 'auto';
   private q = <T extends Element>(s: string) => this.root.querySelector(s) as T;
@@ -98,7 +99,7 @@ export class Hud {
       <div class="herald" id="herald" aria-hidden="true"><div><b></b><span></span></div></div>
       <div class="objective" id="objective" hidden></div>
       <aside class="card left">
-        <h2>The covenant</h2><div class="seals" id="seals"></div><p class="howto" id="sealHow"></p>
+        <h2>The covenant</h2><div class="seals" id="seals" tabindex="0" aria-describedby="shopTip"></div><p class="howto" id="sealHow"></p>
         <h2>Admiralty orders</h2><p id="orderText"></p><p id="orderMeta" class="meta"></p>
         <h2>Quartermaster <span id="gold" title="Doubloons"></span></h2><ul id="shop"></ul>
         <h2>Your fleet</h2><ul id="fleet"></ul>
@@ -152,6 +153,15 @@ export class Hud {
       tip.hidden = false;
     });
     shop.addEventListener('pointerleave', () => { tip.hidden = true; });
+    // The covenant's seals explain themselves on hover (or focus).
+    const seals = this.q<HTMLElement>('#seals');
+    const showSeals = () => {
+      tip.innerHTML = `<b>The covenant</b><span class="cost">Seals summon the Kraken</span><p>${esc(this.sealHelp)}</p>`;
+      const r = seals.getBoundingClientRect(), panel = seals.closest('.card')!.getBoundingClientRect();
+      tip.style.left = panel.right + 10 + 'px'; tip.style.top = r.top - 6 + 'px'; tip.hidden = false;
+    };
+    seals.addEventListener('pointerenter', showSeals); seals.addEventListener('focus', showSeals);
+    seals.addEventListener('pointerleave', () => { tip.hidden = true; }); seals.addEventListener('blur', () => { tip.hidden = true; });
     this.q<HTMLElement>('#shop').onclick = (e) => { const b = (e.target as Element).closest('button'); if (b && !b.classList.contains('off')) on.buy(b.dataset.item as Item); };
     // The message in a bottle: a small sheet to write on, sealed and cast with one button.
     const compose = this.q<HTMLFormElement>('#compose'), noteBtn = this.q<HTMLElement>('#noteBtn'), noteText = this.q<HTMLTextAreaElement>('#noteText');
@@ -315,9 +325,11 @@ export class Hud {
     this.q('#turnTitle').textContent = p.phase === 'placement' ? 'Deploy your fleet' : p.phase === 'over' ? 'Battle over' : mine ? 'Your turn' : 'Enemy turn';
     this.q('#turnSub').textContent = p.phase === 'battle' ? `Round ${p.round}` : '';
     this.q('#seals').innerHTML = Array.from({ length: KRAKEN_SEALS }, (_, i) => `<i class="${i < me.seals ? 'lit' : ''}"></i>`).join('') + `<span>${me.seals >= KRAKEN_SEALS ? 'The Kraken will answer.' : `${Math.min(me.seals, KRAKEN_SEALS)} of ${KRAKEN_SEALS} seals`}</span>`;
-    this.q('#sealHow').innerHTML = me.seals >= KRAKEN_SEALS
-      ? '<b>The Kraken will answer.</b> Choose <em>Summon the Kraken</em> above the helm (3 AP), then a 3×3 patch of enemy water. It strikes now and again on their next turn, and holds the ships it finds.'
-      : `Three seals summon the Kraken. A red wax seal surfaces in your waters every few rounds: <b>sail a ship onto it</b> to take it. Each ship you lose also pays one.${p.treasures.some((t) => t.side === c.me && t.kind === 'seal') ? ' <b>A seal is afloat in your waters now.</b>' : ''}`;
+    // The full explanation lives in the seals' tooltip; the panel keeps only what needs doing now.
+    this.sealHelp = me.seals >= KRAKEN_SEALS
+      ? 'Choose Summon the Kraken above the helm (3 AP), then a 3×3 patch of enemy water. It strikes now and again on their next turn, and holds the ships it finds.'
+      : 'Three seals summon the Kraken. A red wax seal surfaces in your waters every few rounds: sail a ship onto it to take it. Each ship you lose also pays one.';
+    this.q('#sealHow').innerHTML = me.seals >= KRAKEN_SEALS ? '<b>The Kraken will answer.</b>' : p.treasures.some((t) => t.side === c.me && t.kind === 'seal') ? '<b>A seal is afloat in your waters now.</b>' : '';
     this.q('#foeSeals').textContent = `${foe.seals} covenant seal${foe.seals === 1 ? '' : 's'} · ${foe.doubloons} doubloons`;
     this.balls.forEach((b, k) => b.classList.toggle('spent', !(mine && k < p.ap)));
     this.q<HTMLButtonElement>('#endTurn').disabled = !c.can();

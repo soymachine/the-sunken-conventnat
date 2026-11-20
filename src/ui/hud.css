@@ -203,6 +203,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); out
 .seals i { width: 20px; height: 20px; border-radius: 50%; border: 1.5px dashed rgba(13, 11, 8, .5); display: block; transition: all .4s; }
 .seals i.lit { background: radial-gradient(circle at 35% 30%, #c0563c, var(--wax) 60%, #4a160c); border: 1.5px solid var(--ink); box-shadow: 0 1px 3px rgba(0, 0, 0, .5); }
 .seals span { margin-left: 4px; }
+.seals { cursor: help; }
+.seals span::after { content: '?'; display: inline-grid; place-items: center; width: 15px; height: 15px; margin-left: 7px; border-radius: 50%; border: 1px solid rgba(13, 11, 8, .45); font: 700 10px var(--label); font-style: normal; color: #6b5233; vertical-align: 1px; }
+.seals:focus-visible { outline: 2px solid var(--wax); outline-offset: 3px; }
+#sealHow:empty { display: none; }
 .belt button[data-tool="kraken"] { background: radial-gradient(circle at 35% 20%, #c0563c, var(--wax) 60%, #4a160c); color: var(--parch); border-color: var(--amber); }
 
 /* ---------- layout: controls centred, no log panel ---------- */
