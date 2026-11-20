@@ -160,6 +160,22 @@ export class Hud {
       if (open) { const r = noteBtn.getBoundingClientRect(); compose.style.left = Math.max(12, r.left) + 'px'; compose.style.bottom = innerHeight - r.top + 12 + 'px'; noteText.focus(); }
     };
     noteBtn.onclick = () => showCompose(compose.hidden === true);
+    // The bottle bobs on a sine wave while the pointer rests on it: the swell builds up gently to
+    // 20 px each way and holds there; on leaving it dies away just as gently until the bottle is still.
+    const bottle = noteBtn.querySelector('img')!, calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let amp = 0, phase = 0, over = false, last = 0, running = false;
+    const swell = (now: number) => {
+      const dt = Math.min(0.05, (now - last) / 1000); last = now;
+      const want = over && !(noteBtn as HTMLButtonElement).disabled ? 20 : 0;
+      amp += (want - amp) * (1 - Math.exp(-dt * 1.8));
+      phase += dt * Math.PI * 2 / 1.7;
+      if (want === 0 && amp < 0.15) { amp = 0; bottle.style.transform = ''; running = false; return; }
+      bottle.style.transform = `translateY(${(-amp * Math.sin(phase)).toFixed(2)}px)`;
+      requestAnimationFrame(swell);
+    };
+    const wake = () => { if (!running && !calm) { running = true; last = performance.now(); requestAnimationFrame(swell); } };
+    noteBtn.addEventListener('pointerenter', () => { over = true; wake(); });
+    noteBtn.addEventListener('pointerleave', () => { over = false; wake(); });
     noteText.oninput = () => { this.q('#noteCount').textContent = `${noteText.value.length} / 80`; };
     noteText.onkeydown = (e) => { e.stopPropagation(); if (e.key === 'Escape') showCompose(false); };
     this.q<HTMLElement>('#noteCancel').onclick = () => showCompose(false);
