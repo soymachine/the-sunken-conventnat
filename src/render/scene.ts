@@ -140,7 +140,7 @@ function bottleModel(): THREE.Group {
   inner.rotation.z = Math.PI / 2; // lying on its side in the water
   for (const m of [body, cork, wax, scroll]) m.castShadow = true;
   g.add(inner);
-  g.scale.setScalar(2.1);
+  g.scale.setScalar(1.365);
   return g;
 }
 

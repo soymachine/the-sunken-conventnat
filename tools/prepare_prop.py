@@ -14,6 +14,19 @@ TEX = 512
 bpy.ops.wm.read_factory_settings(use_empty=True)
 bpy.ops.import_scene.gltf(filepath=src)
 scene = bpy.context.scene
+# Meshy sometimes leaves a stray helper sphere in the file: drop it.
+for o in list(scene.objects):
+    if o.type == 'MESH' and o.name.lower().startswith(('icosphere', 'sphere')):
+        print('removed stray', o.name); bpy.data.objects.remove(o, do_unlink=True)
+# A rig from Meshy is dropped: the game bends the wings itself, and a rig would fight the rescaling.
+for o in list(scene.objects):
+    if o.type == 'MESH':
+        for m in list(o.modifiers):
+            if m.type == 'ARMATURE': o.modifiers.remove(m)
+        o.parent = None
+        o.vertex_groups.clear()
+for o in list(scene.objects):
+    if o.type in ('ARMATURE', 'EMPTY'): bpy.data.objects.remove(o, do_unlink=True)
 meshes = [o for o in scene.objects if o.type == 'MESH']
 for o in meshes:
     o.data.transform(o.matrix_world); o.matrix_world = mathutils.Matrix.Identity(4)

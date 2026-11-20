@@ -35,4 +35,8 @@ texture:
 ```bash
 python tools/prepare_prop.py -- models/treasure.glb public/models/treasure.glb
 python tools/prepare_prop.py -- models/seal.glb public/models/seal.glb
+python tools/prepare_prop.py -- models/gull.glb public/models/gull.glb
 ```
+
+The gull comes rigged from Meshy; the script drops the rig (and a stray helper sphere) and the game
+bends the wings itself.
