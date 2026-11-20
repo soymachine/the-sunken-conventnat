@@ -330,10 +330,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); out
 .belt .ocard:hover, .belt .ocard:focus-visible { transform: translateY(-62px) rotate(0deg) scale(1.06); z-index: 40 !important; box-shadow: 0 14px 22px rgba(0, 0, 0, .7); outline: none; }
 .belt .ocard.on { transform: translateY(-62px) rotate(0deg); box-shadow: 0 0 0 2px var(--wax), 0 0 22px rgba(255, 190, 110, .6), 0 12px 20px rgba(0, 0, 0, .7); z-index: 39 !important; }
 .belt .ocard.off { filter: grayscale(.85) brightness(.55); cursor: help; }
-.ocard .art { position: absolute; left: 15.3%; top: 12.9%; width: 69.7%; height: 35.4%; background: #1d140b center / cover no-repeat; }
+.ocard .art { position: absolute; left: 9%; top: 6.5%; width: 82%; height: 64%; border-radius: 2px; background: #1d140b center / cover no-repeat; box-shadow: inset 0 0 0 1px rgba(201, 162, 77, .9), 0 0 0 2px #e9dcb8, 0 0 0 3px rgba(107, 82, 51, .6); }
 .ocard.noart .art { background: radial-gradient(circle, #4a3420, #1d140b); }
-.ocard .nm { position: absolute; left: 10%; right: 10%; top: 52%; font: 700 8.5px var(--label); letter-spacing: .06em; text-transform: uppercase; color: #3a2412; text-align: center; line-height: 1.15; }
-.ocard .many { position: absolute; left: 0; right: 0; top: 64%; font: italic 12px var(--body); color: var(--wax); text-align: center; }
+.ocard .nm { position: absolute; left: 8%; right: 8%; top: 76%; font: 700 8.5px var(--label); letter-spacing: .06em; text-transform: uppercase; color: #3a2412; text-align: center; line-height: 1.15; }
+.ocard .many { position: absolute; left: 0; right: 0; top: 86%; font: italic 12px var(--body); color: var(--wax); text-align: center; }
 .ocard .cost { position: absolute; top: -8px; right: -8px; width: 24px; height: 24px; display: grid; place-items: center; font: 700 11px var(--label); color: #f3e6c4; background: url('/ui/ap_seal.webp') center / contain no-repeat; text-shadow: 0 1px 2px #000; }
 .toast { bottom: 168px; }
 @media (prefers-reduced-motion: reduce) { .belt .ocard, .glass img { transition: none; } }
