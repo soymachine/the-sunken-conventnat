@@ -3,7 +3,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { N } from '../game/rules';
-import { inkMaterial } from './ships';
 
 /* ---------- rain ---------- */
 const RAIN_VERT = /* glsl */ `
@@ -227,6 +226,21 @@ class Gull {
     // Gone once it is far beyond the charts.
     if (this.leaving && this.pos.distanceTo(this.area) > 55) { this.active = false; this.obj.visible = false; }
   }
+  /** Vertex normals averaged over every copy of a point, so the UV seams leave no crease in the light. */
+  private twins: Int32Array | null = null;
+  private smoothNormals(g: THREE.BufferGeometry) {
+    const pos = g.attributes.position.array as Float32Array, nv = pos.length / 3;
+    if (!this.twins) {
+      const key = new Map<string, number>(); this.twins = new Int32Array(nv);
+      for (let i = 0; i < nv; i++) { const k = `${pos[i * 3].toFixed(4)},${pos[i * 3 + 1].toFixed(4)},${pos[i * 3 + 2].toFixed(4)}`; if (!key.has(k)) key.set(k, i); this.twins[i] = key.get(k)!; }
+    }
+    g.computeVertexNormals();
+    const n = g.attributes.normal.array as Float32Array, acc = new Float32Array(n.length);
+    for (let i = 0; i < nv; i++) { const r = this.twins[i] * 3; acc[r] += n[i * 3]; acc[r + 1] += n[i * 3 + 1]; acc[r + 2] += n[i * 3 + 2]; }
+    for (let i = 0; i < nv; i++) { const r = this.twins[i] * 3, l = Math.hypot(acc[r], acc[r + 1], acc[r + 2]) || 1; n[i * 3] = acc[r] / l; n[i * 3 + 1] = acc[r + 1] / l; n[i * 3 + 2] = acc[r + 2] / l; }
+    g.attributes.normal.needsUpdate = true;
+  }
+
   /** Raise or lower both wings about the shoulders, the outer wing a little more than the inner. */
   private bend(a: number) {
     if (!this.base) return;
@@ -240,7 +254,7 @@ class Gull {
       pos[i] = s * (sh + r * Math.cos(ang)); pos[i + 1] = b[i + 1] + r * Math.sin(ang); pos[i + 2] = b[i + 2];
     }
     g.attributes.position.needsUpdate = true;
-    g.computeVertexNormals();
+    this.smoothNormals(g);
   }
 }
 
@@ -257,7 +271,8 @@ class Gulls {
         if (!m.isMesh) return;
         const map = (m.material as THREE.MeshStandardMaterial).map ?? null;
         if (map) map.colorSpace = THREE.SRGBColorSpace;
-        m.material = inkMaterial(0xffffff, 0, map);
+        // Soft, smooth light: the ships' banded engraving shader drew every facet of the flexing wings as a line.
+        m.material = new THREE.MeshLambertMaterial({ map, side: THREE.DoubleSide });
       });
       for (let i = 0; i < 3; i++) { const g = new Gull(gltf.scene); this.birds.push(g); this.group.add(g.obj); }
     }).catch(() => { /* no gulls without the model */ });
