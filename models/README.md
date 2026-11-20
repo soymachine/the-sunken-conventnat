@@ -25,3 +25,14 @@ so ships generated one by one look like a set. Run it last, and again whenever a
 skips files it has already graded.
 
 These need Blender's Python module (`pip install bpy`, Python 3.13).
+
+## Treasure props
+
+`treasure.glb` (the open chest of gold) and `seal.glb` (the covenant seal with the kraken) come from
+Meshy too. The game loads light copies, centred, standing on their base, scaled to 1 and with a 512 px
+texture:
+
+```bash
+python tools/prepare_prop.py -- models/treasure.glb public/models/treasure.glb
+python tools/prepare_prop.py -- models/seal.glb public/models/seal.glb
+```

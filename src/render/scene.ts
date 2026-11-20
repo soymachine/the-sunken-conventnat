@@ -8,7 +8,7 @@ import { Kraken } from './kraken';
 import { Weather } from './weather';
 import { Post } from './post';
 import { Sea, waveH } from './sea';
-import { ShipModel, buildShip, loadShipModels, setShipTime } from './ships';
+import { ShipModel, buildShip, loadPropModels, loadShipModels, propModel, setShipTime } from './ships';
 
 export type Side = 'own' | 'enemy';
 export interface Cell { side: Side; x: number; y: number }
@@ -195,6 +195,16 @@ const TG = {
 const protos = new Map<string, THREE.Group>();
 /** A treasure chest spilling gold, or a covenant seal; the enemy's are faded. Built once, then cloned. */
 function treasureModel(kind: 'gold' | 'seal', faded: boolean): THREE.Group {
+  // The Meshy models, once loaded: the chest a little over half a square across, the seal standing
+  // on its ribbons and leaning back so its kraken looks up at the captain.
+  const prop = propModel(kind, faded);
+  if (prop) {
+    const g = new THREE.Group();
+    if (kind === 'gold') { prop.scale.setScalar(0.56); prop.position.y = -0.02; }
+    else { prop.scale.setScalar(0.66); prop.rotation.x = -0.95; prop.position.set(0, 0.03, 0.16); }
+    g.add(prop);
+    return g;
+  }
   const key = kind + (faded ? ':dim' : '');
   let proto = protos.get(key);
   if (!proto) {
@@ -340,6 +350,7 @@ export class SeaScene {
     canvas.addEventListener('mousedown', (e) => { if (e.button === 1) e.preventDefault(); });
     this.scene.add(this.ghosts);
     this.resize();
+    void loadPropModels().then((n) => { if (n && this.last) this.sync(this.last); });
     void loadShipModels().then((n) => { if (n) { for (const o of this.ships.values()) this.shipsGroup.remove(o.root); this.ships.clear(); if (this.last) this.sync(this.last); } });
     let prev = performance.now();
     const loop = () => {

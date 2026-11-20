@@ -126,6 +126,41 @@ function foreAft(c: [number, number][], bulge: number): THREE.BufferGeometry {
 
 const models = new Map<Kind, THREE.Object3D>();
 /** Look for hand-made models; resolves once every kind has been tried. */
+/** Treasure props made in Meshy (public/models/treasure.glb, seal.glb), shaded like the ships. */
+const props = new Map<'gold' | 'seal', THREE.Object3D>();
+export async function loadPropModels(): Promise<number> {
+  const loader = new GLTFLoader();
+  await Promise.all((['gold', 'seal'] as const).map(async (kind) => {
+    try {
+      const g = (await loader.loadAsync(`${import.meta.env.BASE_URL}models/${kind === 'gold' ? 'treasure' : 'seal'}.glb`)).scene;
+      g.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (!m.isMesh) return;
+        const map = (m.material as THREE.MeshStandardMaterial).map ?? null;
+        if (map) map.colorSpace = THREE.SRGBColorSpace;
+        m.material = inkMaterial(0xffffff, 0, map);
+        m.castShadow = true;
+      });
+      props.set(kind, g);
+    } catch { /* keep the procedural treasure */ }
+  }));
+  return props.size;
+}
+/** A fresh copy of a treasure prop with its own materials (so the enemy's can be faded), or null if not loaded. */
+export function propModel(kind: 'gold' | 'seal', faded: boolean): THREE.Object3D | null {
+  const src = props.get(kind);
+  if (!src) return null;
+  const g = src.clone(true);
+  g.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    const mat = (m.material as THREE.ShaderMaterial).clone();
+    if (faded) { mat.uniforms.uAlpha.value = 0.55; mat.transparent = true; mat.depthWrite = false; }
+    m.material = mat;
+  });
+  return g;
+}
+
 export async function loadShipModels(): Promise<number> {
   const loader = new GLTFLoader();
   await Promise.all((Object.keys(SPECS) as Kind[]).map(async (kind) => {
