@@ -2,7 +2,7 @@
 import './ui/hud.css';
 import { Client, Msg, Snapshot, roleOf } from './game/engine';
 import { ITEMS, Item } from './game/powerups';
-import { Dir, Ship, Way, ZONE, ahead, attackCells, bowCell, cellName, clampZone, fits, headingOf, inBoard, legalPlacement, pivotCell, randomFleet, shipAt, shipCells, turned, MAELSTROM_ROUND, N } from './game/rules';
+import { Dir, Ship, Way, ZONE, ahead, attackCells, bowCell, cellName, clampZone, fits, headingOf, inBoard, legalPlacement, pivotCell, randomFleet, shipAt, shipCells, turned, MAELSTROM_ROUND, N, becalmed } from './game/rules';
 import { verify } from './game/verify';
 import { createRoom, firebaseConfigured, joinRoom } from './net/firebase';
 import { LocalSession, Session } from './net/session';
@@ -47,6 +47,8 @@ const HINTS: Record<string, string> = {
   fog: 'Fog bank — pick the centre of a 5×5 patch of your own water.',
   kraken: 'Summon the Kraken — pick the centre of a 3×3 patch of enemy water. It strikes now and again next turn, and holds the ships it finds.',
   shipwright: 'Shipwright — pick a damaged section of one of your ships.',
+  pact: 'Blood Pact — pick one of your damaged ships to give to the deep for two seals.',
+  current: 'Sea Current — click towards the side of your chart the fleet should drift to.',
 };
 
 const hud = new Hud({
@@ -200,6 +202,7 @@ function describe(m: Msg, mine: boolean) {
         if (!mine) { // my shot, answered by the enemy
           if (r.r === 'miss') hud.log(`Your shot at ${at} — only water.`);
           else if (r.r === 'wreck') hud.log(`Your shot at ${at} — wreckage, no new damage.`);
+          else if (r.r === 'flood') hud.log(`Your shot at ${at} holes her below the waterline — she is taking water!`, 'good');
           else if (r.r === 'clang') hud.log(c.role === 'corsair' ? `Your shot at ${at} is turned aside — iron plate, or an escort.` : `Your shot at ${at} rings off iron plate — an Ironclad!`, 'good');
           else if (r.cargo && r.r !== 'sunk') hud.log(`Your shot at ${at} strikes the merchantman — a crate is yours!`, 'good');
           else if (r.r === 'hit') hud.log(`Your shot at ${at} — a hit!`, 'good');
@@ -207,6 +210,7 @@ function describe(m: Msg, mine: boolean) {
         } else {
           if (r.r === 'miss') hud.log(`Enemy shot at ${at} — only water.`);
           else if (r.r === 'wreck') hud.log(`Enemy shot at ${at} — wreckage.`);
+          else if (r.r === 'flood') hud.log(`Enemy shot at ${at} holes a ship below the waterline — she is taking water and slows.`, 'bad');
           else if (r.r === 'clang') hud.log(`Enemy shot at ${at} glances off your Ironclad.`, 'bad');
           else if (r.cargo && r.r !== 'sunk') hud.log(`Enemy shot at ${at} — the merchantman is hit and a crate is lost.`, 'bad');
           else if (r.r === 'hit') hud.log(`Enemy shot at ${at} — a hit on your fleet.`, 'bad');
@@ -221,6 +225,8 @@ function describe(m: Msg, mine: boolean) {
       if (m.wake !== undefined) hud.log(mine ? `Under full sail your merchantman is sighted in row ${m.wake + 1}.` : `A laden ship is sighted under full sail in row ${m.wake + 1}.`, mine ? 'bad' : 'good');
       if (m.treasure) hud.log(mine ? 'Treasure hauled aboard — but your ship was sighted.' : `${foe} lifts a treasure at ${cellName(...m.treasure)} — a ship is there.`, 'good');
       break;
+    case 'pact': if (!mine) hud.log(`${foe} gives the ${m.ship.cls} to the deep in a blood pact, and two seals rise.`, 'bad'); break;
+    case 'current': hud.log(mine ? `A current carries your fleet ${['east', 'south', 'west', 'north'][m.dir]}.` : `${foe} rides a sea current — their whole fleet drifts ${['east', 'south', 'west', 'north'][m.dir]}.`, mine ? '' : 'good'); break;
     case 'note': if (mine) hud.log('Your bottle is cast. It drifts towards the other captain.'); break;
     case 'peek': if (!mine) hud.log(`${foe} levels a long glass at ${cellName(m.x, m.y)}: they see that water plainly this turn.`, 'bad'); break;
     case 'peekResult': if (!mine) hud.log(m.fog ? `The long glass meets only fog at ${cellName(m.x, m.y)}.` : m.ships?.length ? `Through the long glass: ${m.ships.map((s) => s.cls).join(' and ')} at ${cellName(m.x, m.y)}!` : `Through the long glass: open water at ${cellName(m.x, m.y)}.`, m.ships?.length ? 'good' : ''); break;
@@ -285,6 +291,9 @@ function sailTargets(s: Ship): { cell: Cell; delta: 1 | -1; steps: number }[] {
 
 const WAYS: Way[] = ['left', 'right'];
 const whyNot = (s: Ship) => (c.held(s.id) ? 'the Kraken holds her' : s.chained ? 'she is pinned by chain shot' : s.hits.filter(Boolean).length >= 2 ? 'she is too badly damaged' : 'there is no sea room');
+/** Which way the current would carry the fleet: from the chart's centre towards the pointer. */
+const currentDir = (x: number, y: number) => { const dx = x - (N - 1) / 2, dy = y - (N - 1) / 2; return Math.abs(dx) >= Math.abs(dy) ? (dx >= 0 ? 0 : 2) : (dy >= 0 ? 1 : 3); };
+const STEP: [number, number][] = [[1, 0], [0, 1], [-1, 0], [0, -1]];
 /**
  * Which turn the pointer is asking for. Port and starboard put her on the same line of squares and differ
  * only in which end the bow takes, so the choice is the side of her present line the pointer is on: anywhere
@@ -338,7 +347,7 @@ function refresh() {
   scene.setTurn(c.pub.phase !== 'battle' || c.myTurn);
   // Announce each new turn once, with a ribbon across the screen.
   const turnKey = c.pub.phase === 'battle' ? `${c.pub.round}:${c.pub.current}` : '';
-  if (turnKey && turnKey !== lastTurnKey && !quiet) hud.herald(c.myTurn ? 'Your turn' : 'The enemy moves', `Round ${c.pub.round}`, c.myTurn);
+  if (turnKey && turnKey !== lastTurnKey && !quiet) hud.herald(c.myTurn ? 'Your turn' : 'The enemy moves', `Round ${c.pub.round} · wind ${['east', 'south', 'west', 'north'][c.pub.wind ?? 0]}`, c.myTurn);
   if (turnKey && turnKey !== lastTurnKey) hud.setHint(c.myTurn ? HINTS[mode] || '' : 'The enemy is at the helm. Watch your waters…');
   lastTurnKey = turnKey;
   const hl: Highlight[] = [];
@@ -354,6 +363,8 @@ function refresh() {
       if (mode === 'kraken') for (let b = y - 1; b <= y + 1; b++) for (let a = x - 1; a <= x + 1; a++) if (inBoard(a, b)) hl.push({ side, x: a, y: b, color: WAX, opacity: 0.5 });
     } else {
       if (mode === 'fog') hl.push(...zone(side, x, y, FOG, 0.45));
+      if (mode === 'current') { const [fx, fy] = STEP[currentDir(x, y)]; for (const s of c.ships) if (!s.sunk) for (const [a, b] of shipCells(s)) if (inBoard(a + fx, b + fy)) hl.push({ side, x: a + fx, y: b + fy, color: AMBER, opacity: 0.4 }); }
+      if (mode === 'pact') { const at = shipAt(c.ships, x, y); if (at) for (const [a, b] of shipCells(at.ship)) hl.push({ side, x: a, y: b, color: c.canPact(at.ship.id) ? WAX : INK, opacity: 0.5 }); }
       if ((mode === 'sail' && !selected) || (mode === 'turn' && !selected) || mode === 'shipwright') {
         const at = shipAt(c.ships, x, y);
         if (at && !at.ship.sunk) {
@@ -413,6 +424,13 @@ function battleClick(cell: Cell) {
     return;
   }
   if (mode === 'fog') { c.fog(x, y); return; }
+  if (mode === 'current') { c.current(currentDir(x, y)); return; }
+  if (mode === 'pact') {
+    const at = shipAt(c.ships, x, y);
+    if (at && c.pact(at.ship.id)) { hud.log(`You give the ${at.ship.cls} to the deep. Two seals rise in her place.`, 'good'); return; }
+    hud.log('Pick one of your damaged ships (not the merchantman, nor your last).', 'bad');
+    return;
+  }
   if (mode === 'shipwright') { if (!c.repair(x, y)) hud.log('Nothing to repair there.'); return; }
   const at = shipAt(c.ships, x, y);
   if (mode === 'turn') {
@@ -431,6 +449,7 @@ function battleClick(cell: Cell) {
   }
   selected = at && !at.ship.sunk ? at.ship : null;
   if (selected?.chained) hud.log(`The ${selected.cls} is pinned by chain shot this turn.`);
+  else if (selected && !c.held(selected.id)) { const why = becalmed(selected, c.pub.wind); if (why) hud.log(`The ${selected.cls} cannot make way — ${why}.`, 'bad'); }
   refresh();
 }
 

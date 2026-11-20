@@ -1,7 +1,7 @@
 // After the battle each captain reveals their placement and hidden moves.
 // Replaying them against the public log shows whether every answer was honest.
 import { Act, Mode, Msg, Placement, commitHash, newPub, reduce } from './engine';
-import { CellResult, FLEETS, N, Revealed, Role, Ship, XY, countScan, inZone, peekShips, fits, inKraken, legalPlacement, repairShip, resolveAttack, rimCells, sailShip, shipCells, turnShip } from './rules';
+import { CellResult, FLEETS, N, Revealed, driftFleet, Role, Ship, XY, countScan, inZone, peekShips, fits, inKraken, legalPlacement, repairShip, resolveAttack, rimCells, sailShip, shipCells, turnShip } from './rules';
 
 // Compare by value: a database may hand objects back with their keys in another order.
 const sig = (rs: CellResult[]) => rs.map((r) => [r.x, r.y, r.r, r.ship ? [r.ship.kind, r.ship.x, r.ship.y, r.ship.dir] : 0, r.cargo ? 1 : 0].join()).join('|');
@@ -40,7 +40,7 @@ export async function verify(log: Msg[], who: 0 | 1, role: Role = 'classic', see
         const moving = ships.find((s) => s.id === a.id), k = p.kraken;
         if (k && k.side === who && moving && shipCells(moving).some(([x, y]) => inKraken(k.x, k.y, x, y))) return 'a ship held by the Kraken moved';
         if (a.k === 'sail') {
-          const debris = sailShip(ships, a.id, a.delta, a.steps);
+          const debris = sailShip(ships, a.id, a.delta, a.steps, p.wind);
           if (!debris || cells(debris) !== cells(m.debris || [])) return 'a ship sailed where it could not, or hid its wreckage';
         } else if (a.k !== 'turn' || !turnShip(ships, a.id, a.way)) return 'an impossible turn';
         if (moving?.kind === 'merchant') {
@@ -48,6 +48,15 @@ export async function verify(log: Msg[], who: 0 | 1, role: Role = 'classic', see
           if (!!m.home !== shipCells(moving).some(([x]) => x === N - 1)) return 'the merchantman did not truly reach home';
         } else if (m.home) return 'a ship that is not the merchantman claimed the cargo';
       }
+    }
+    if (m.by === who && m.t === 'pact') {
+      const s = ships.find((q) => !q.sunk && q.kind === m.ship.kind && q.x === m.ship.x && q.y === m.ship.y && q.dir === m.ship.dir);
+      if (!s || !s.hits.some(Boolean) || s.kind === 'merchant') return 'a blood pact was sworn on a ship that was not there, or not damaged';
+      s.sunk = true; s.chained = false;
+    }
+    if (m.by === who && m.t === 'current') {
+      const k = p.kraken;
+      driftFleet(ships, m.dir, (s) => !!k && k.side === who && shipCells(s).some(([x, y]) => inKraken(k.x, k.y, x, y)));
     }
     if (m.by === who && m.t === 'power' && role === 'admiral') shield = true;
     if (m.by !== who && m.t === 'endTurn') shield = false;

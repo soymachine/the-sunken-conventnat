@@ -5,7 +5,7 @@ import { Order, pickOrder } from './orders';
 import { ITEMS, Item, MAX_ITEMS, START_DOUBLOONS } from './powerups';
 import {
   AP_PER_TURN, CellResult, Dir, KRAKEN_SEALS, Kind, MAELSTROM_ROUND, N, Revealed, Rnd, Role, Ship, XY, attackCells, countScan, inBoard, inKraken, inZone, legalPlacement, peekFits, peekShips, randomFleet, zoneFits,
-  repairShip, rimCells, resolveAttack, sailReach, sailShip, shipAt, shipCells, turnShip, canTurnShip, Way,
+  repairShip, rimCells, resolveAttack, driftFleet, sailReach, sailShip, shipAt, shipCells, turnShip, canTurnShip, Way,
 } from './rules';
 
 export type Mode = 'classic' | 'convoy';
@@ -32,6 +32,8 @@ export type Body =
   | { t: 'scanResult'; x: number; y: number; count: number }
   | { t: 'peek'; x: number; y: number }
   | { t: 'note'; text: string }
+  | { t: 'pact'; ship: Revealed }
+  | { t: 'current'; dir: number }
   | { t: 'peekResult'; x: number; y: number; ships: Revealed[]; fog: boolean }
   | { t: 'buy'; item: Item }
   | { t: 'fog'; x: number; y: number }
@@ -73,6 +75,10 @@ export interface Pub {
   /** An attack or scan is waiting for the defender's answer. */
   pending: boolean;
   windsUsed: boolean;
+  /** Where the wind blows this round (a heading: 0 east, 1 south, 2 west, 3 north). */
+  wind?: number;
+  /** Each captain may seal one blood pact a battle. */
+  pacts?: [boolean, boolean];
   /** A message in a bottle was already cast this turn. */
   noteSent?: boolean;
   /** Every note cast so far, oldest first. */
@@ -111,7 +117,7 @@ export const attackCost = (src: AttackSrc) => COST[src];
 export function newPub(seed: number, mode: Mode = 'classic'): Pub {
   const side = (): SidePub => ({ name: '', ready: false, hash: '', shots: [], debris: [], sunk: [], spotted: [], scans: [], fogs: [], wakes: [], doubloons: START_DOUBLOONS, seals: 0, items: [] });
   return { phase: 'placement', current: 0, ap: AP_PER_TURN, round: 1, winner: null, pending: false, windsUsed: false, rng: seed >>> 0 || 1, sides: [side(), side()], treasures: [],
-    mode, admiral: mode === 'convoy' ? ((((seed >>> 0) >> 3) & 1) as 0 | 1) : null, cargo: CRATES, power: [false, false], ring: 0 };
+    mode, admiral: mode === 'convoy' ? ((((seed >>> 0) >> 3) & 1) as 0 | 1) : null, cargo: CRATES, power: [false, false], ring: 0, wind: ((seed >>> 0) >> 5) & 3, pacts: [false, false] };
 }
 
 function rand(p: Pub): number {
@@ -238,6 +244,17 @@ export function reduce(p: Pub, m: Msg): boolean {
       if (!zoneFits(m.x, m.y) || inStorm(p, m.y) || !spend(1, m.src === 'spyglass' ? 'spyglass' : undefined)) return false;
       p.pending = true;
       return true;
+    case 'pact': {
+      // A blood pact: a damaged ship is given to the deep, and the deep pays two seals (its toll and the pact).
+      if ((p.pacts ??= [false, false])[m.by] || !m.ship || !spend(1)) return false;
+      p.pacts[m.by] = true;
+      mine.seals += 2;
+      mine.sunk.push(m.ship);
+      return true;
+    }
+    case 'current':
+      if (!(m.dir >= 0 && m.dir <= 3) || !spend(ITEMS.current.ap, 'current')) return false;
+      return true;
     case 'move': {
       if (!spend(1)) return false;
       for (const [x, y] of m.debris || []) {
@@ -292,6 +309,8 @@ export function reduce(p: Pub, m: Msg): boolean {
       p.noteSent = false;
       if (p.current === 0) {
         p.round++;
+        // The wind veers each round.
+        p.wind = Math.floor(rand(p) * 4);
         for (const s of p.sides) { s.fogs = s.fogs.filter((f) => f.until >= p.round); s.wakes = s.wakes.filter((w) => p.round - w.round <= 2); }
         if (p.mode === 'convoy' && p.round > SEASON) { p.phase = 'over'; p.winner = (1 - p.admiral!) as 0 | 1; p.reason = 'season'; return true; }
         if (p.round % 3 === 1) { spawnTreasure(p, 0); spawnTreasure(p, 1); }
@@ -506,10 +525,10 @@ export class Client {
     const k = this.pub.kraken, s = this.ships.find((q) => q.id === id);
     return !!k && k.side === this.me && !!s && !s.sunk && shipCells(s).some(([x, y]) => inKraken(k.x, k.y, x, y));
   }
-  reach(id: number, delta: 1 | -1 = 1) { return this.can(1) && !this.held(id) ? sailReach(this.ships, id, delta) : 0; }
+  reach(id: number, delta: 1 | -1 = 1) { return this.can(1) && !this.held(id) ? sailReach(this.ships, id, delta, this.pub.wind) : 0; }
   sail(id: number, delta: 1 | -1, steps = this.reach(id, delta)): boolean {
     if (!this.can(1) || this.held(id)) return false;
-    const from = this.middle(id), debris = sailShip(this.ships, id, delta, steps);
+    const from = this.middle(id), debris = sailShip(this.ships, id, delta, steps, this.pub.wind);
     if (!debris) return false;
     this.acts.push({ k: 'sail', id, delta, steps });
     this.moved(id, 'sail', debris, from);
@@ -522,6 +541,29 @@ export class Client {
     if (!this.can(1) || this.held(id) || !turnShip(this.ships, id, way)) return false;
     this.acts.push({ k: 'turn', id, way });
     this.moved(id, 'turn', [], from);
+    return true;
+  }
+
+  /** A blood pact needs a damaged ship that is not the merchantman nor the last afloat, once a battle. */
+  canPact(id?: number): boolean {
+    if (!this.can(1) || this.pub.pacts?.[this.me]) return false;
+    const afloat = this.ships.filter((s) => !s.sunk);
+    const ok = (s: Ship) => !s.sunk && s.kind !== 'merchant' && s.hits.some(Boolean) && afloat.length > 1;
+    return id === undefined ? afloat.some(ok) : afloat.some((s) => s.id === id && ok(s));
+  }
+  pact(id: number): boolean {
+    if (!this.canPact(id)) return false;
+    const s = this.ships.find((q) => q.id === id)!;
+    s.sunk = true; s.chained = false;
+    this.send({ t: 'pact', ship: { kind: s.kind, cls: s.cls, len: s.len, x: s.x, y: s.y, dir: s.dir, rev: !!s.rev } });
+    return true;
+  }
+
+  /** Ride a sea current: the whole fleet drifts one square towards `dir`. */
+  current(dir: number): boolean {
+    if (!this.can(ITEMS.current.ap) || !this.has('current') || !(dir >= 0 && dir <= 3)) return false;
+    driftFleet(this.ships, dir, (s) => this.held(s.id));
+    this.send({ t: 'current', dir });
     return true;
   }
 

@@ -20,7 +20,8 @@ function scoreGrid(c: Client, rnd: Rnd): number[][] {
   const live = (x: number, y: number) => foe.shots.some((s) => s.x === x && s.y === y && s.result !== 'miss' && !s.sunk && round - s.round <= 3);
   for (const s of foe.shots) {
     const age = round - s.round;
-    if (s.sunk) { bump(s.x, s.y, -100); continue; }
+    // A sunk ship is gone and another may sail over her grave: the penalty fades like any other.
+    if (s.sunk) { if (age <= 4) bump(s.x, s.y, -100 + age * 20); continue; }
     if (s.result === 'clang' && age <= 1) bump(s.x, s.y, 9); // armour is gone: strike the same plate again
     else if (age <= 4) bump(s.x, s.y, s.result === 'miss' ? -10 : -6);
     if (s.result !== 'miss' && age <= 3) for (const [dx, dy] of NEIGH) {
@@ -47,7 +48,6 @@ function scoreGrid(c: Client, rnd: Rnd): number[][] {
     const rk = c.pub.reckon;
     if (rk) { const age = round - rk.round; if (age <= 2) for (let y = 0; y < N; y++) for (let x = rk.col - 1; x <= rk.col + 1 + age * 2; x++) bump(x, y, 3 - age); }
   }
-  for (const s of foe.sunk) for (const [x, y] of shipCells(s)) bump(x, y, -100);
   // No gun can be laid under the storm, and nothing floats in the drowned rim.
   for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (inStorm(c.pub, y) || !safe(c.pub.ring, x, y)) score[y][x] = -1000;
   return score;

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { botAct, driveBot } from './bot';
 import { Client, Msg } from './engine';
 import { verify } from './verify';
-import { FLEET, FLEETS, N, Ship, attackCells, countScan, fits, randomFleet, resolveAttack, sailReach, sailShip, shipCells, turnShip } from './rules';
+import { FLEET, FLEETS, N, Ship, attackCells, becalmed, countScan, driftFleet, fits, flooded, randomFleet, repairShip, resolveAttack, sailMax, sailReach, sailShip, shipCells, turnShip } from './rules';
 import { Bus } from '../net/session';
 
 function seeded(seed: number) {
@@ -69,6 +69,8 @@ describe('resolution', () => {
     const ships = [mk(0, 'cutter', 2, 2, 2, 'h')];
     expect(resolveAttack(ships, [[0, 0]], false).results[0].r).toBe('miss');
     expect(resolveAttack(ships, [[2, 2]], false).results[0].r).toBe('hit');
+    // A second ball in the same section holes her; a third finds only wreckage.
+    expect(resolveAttack(ships, [[2, 2]], false).results[0].r).toBe('flood');
     expect(resolveAttack(ships, [[2, 2]], false).results[0].r).toBe('wreck');
     const r = resolveAttack(ships, [[3, 2]], false);
     expect(r.results[0]).toMatchObject({ r: 'sunk', ship: { len: 2, x: 2, y: 2 } });
@@ -154,7 +156,42 @@ describe('headings', () => {
     turnShip(s, 0, 'right'); turnShip(s, 0, 'right'); // now heading west, bow at the low end
     expect(s[0]).toMatchObject({ dir: 'h', rev: true });
     expect(s[0].hits).toEqual([true, false, false, false]);
-    expect(resolveAttack(s, [shipCells(s[0])[0]], false).results[0].r).toBe('wreck');
+    expect(resolveAttack(s, [shipCells(s[0])[0]], false).results[0].r).toBe('flood');
+    expect(s[0].floods).toEqual([true, false, false, false]);
+  });
+  it('a holed ship is slowed, two holes sink her, and the shipwright pumps her out first', () => {
+    const s = [mk(0, 'schooner', 3, 2, 2, 'h')];
+    expect(sailMax(s[0])).toBe(2);
+    resolveAttack(s, [[2, 2]], false); resolveAttack(s, [[2, 2]], false);
+    expect(flooded(s[0])).toBe(1);
+    expect(sailMax(s[0])).toBe(1);
+    expect(repairShip(s, 0, 0)).toBe(true);
+    expect([s[0].floods![0], s[0].hits[0]]).toEqual([false, true]);
+    expect(repairShip(s, 0, 0)).toBe(true);
+    expect(s[0].hits[0]).toBe(false);
+    resolveAttack(s, [[3, 2], [3, 2], [4, 2]], false);
+    const r = resolveAttack(s, [[4, 2]], false);
+    expect(r.results[0].r).toBe('sunk');
+    expect(s[0].sunk).toBe(true);
+    // The merchantman takes no water: her cargo is what is plundered.
+    const m = [mk(1, 'merchant', 3, 0, 5, 'h')];
+    resolveAttack(m, [[0, 5]], false);
+    expect(resolveAttack(m, [[0, 5]], false).results[0].r).toBe('wreck');
+  });
+  it('the wind: a fair wind adds a square, square rigs cannot sail into it, gaff rigs and steam can', () => {
+    const line = mk(0, 'line', 5, 0, 0, 'h'), schooner = mk(1, 'schooner', 3, 0, 4, 'h'), iron = mk(2, 'ironclad', 3, 0, 8, 'h');
+    // All three head east (heading 0).
+    expect([sailMax(line, 0), sailMax(schooner, 0), sailMax(iron, 0)]).toEqual([2, 3, 1]);
+    expect([sailMax(line, 2), sailMax(schooner, 2), sailMax(iron, 2)]).toEqual([0, 1, 1]);
+    expect([sailMax(line, 1), sailMax(schooner, 1), sailMax(iron, 1)]).toEqual([1, 2, 1]);
+    expect(becalmed(line, 2)).toMatch(/into the wind/);
+  });
+  it('a sea current carries the fleet one square; the edge and other ships stop those in the way', () => {
+    const a = mk(0, 'cutter', 2, 14, 0, 'h'), b = mk(1, 'cutter', 2, 12, 0, 'h'), c = mk(2, 'cutter', 2, 3, 3, 'h');
+    expect(driftFleet([a, b, c], 0)).toBe(1);
+    expect([a.x, b.x, c.x]).toEqual([14, 12, 4]);
+    expect(driftFleet([a, b, c], 1)).toBe(3);
+    expect([a.y, b.y, c.y]).toEqual([1, 1, 4]);
   });
 });
 
@@ -482,6 +519,42 @@ describe('the covenant', () => {
     expect(a.pub).toEqual(b.pub);
     sinkAll(b, a);
     expect(await verify(bus.log, 1, 'classic', 7)).toBeNull();
+  });
+  it('the wind veers each round the same for both, and the ship of the line obeys it', async () => {
+    const { a, b } = await duel();
+    const winds = new Set<number>();
+    for (let i = 0; i < 16; i++) { winds.add(a.pub.wind!); (a.myTurn ? a : b).endTurn(); }
+    expect(winds.size).toBeGreaterThan(1);
+    expect(a.pub).toEqual(b.pub);
+  });
+  it('a blood pact sinks a damaged ship for two seals, once a battle, and a false pact is caught', async () => {
+    const { bus, a, b } = await duel();
+    // b damages a's schooner, then a swears the pact on it.
+    a.endTurn();
+    b.attack('shot', 0, 6); b.endTurn();
+    expect(a.canPact(3)).toBe(true);
+    expect(a.canPact(0)).toBe(false);
+    expect(a.pact(3)).toBe(true);
+    expect(a.side.seals).toBe(2);
+    expect(a.pub.sides[0].sunk.map((s) => s.kind)).toEqual(['schooner']);
+    expect(a.canPact()).toBe(false);
+    expect(a.pub).toEqual(b.pub);
+    sinkAll(a, b);
+    expect(await verify(bus.log, 0, 'classic', 7)).toBeNull();
+    const forged: Msg[] = bus.log.map((m) => (m.t === 'pact' ? { ...m, ship: { ...m.ship, kind: 'line' as const, x: 0, y: 0 } } : m));
+    expect(await verify(forged, 0, 'classic', 7)).toMatch(/blood pact/);
+  });
+  it('a sea current moves the hidden fleet and the end-of-battle check follows it', async () => {
+    const { bus, a, b } = await duel();
+    a.pub.sides[0].doubloons = b.pub.sides[0].doubloons = 200;
+    expect(a.buy('current')).toBe(true);
+    expect(a.current(1)).toBe(true);
+    expect(a.ships.map((s) => s.y)).toEqual([1, 3, 5, 7, 9]);
+    expect(a.pub).toEqual(b.pub);
+    sinkAll(a, b);
+    expect(await verify(bus.log, 0, 'classic', 7)).toBeNull();
+    const forged: Msg[] = bus.log.map((m) => (m.t === 'current' ? { ...m, dir: 3 } : m));
+    expect(await verify(forged, 0, 'classic', 7)).not.toBeNull();
   });
   it('a sunk ship leaves open water: others sail through her squares and shots there fall in the sea', () => {
     const line = mk(0, 'line', 5, 0, 0, 'h'), cutter = mk(1, 'cutter', 2, 5, 0, 'h');
