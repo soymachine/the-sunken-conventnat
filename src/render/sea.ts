@@ -4,7 +4,20 @@ import { N, cellName } from '../game/rules';
 
 /** Swell height at a world position. The ships ride the same function the shader draws. */
 export const waveH = (x: number, z: number, t: number) =>
-  0.17 * Math.sin(x * 0.42 + t * 0.75) + 0.1 * Math.sin(z * 0.55 - t * 0.6 + x * 0.22) + 0.03 * Math.sin((x + z) * 1.3 + t * 1.4);
+  0.17 * Math.sin(x * 0.42 + t * 0.75) + 0.1 * Math.sin(z * 0.55 - t * 0.6 + x * 0.22) + 0.03 * Math.sin((x + z) * 1.3 + t * 1.4) + choppy(x, z, t);
+
+/** A few patches of rough water wander slowly over the charts; inside them the sea heaves much harder.
+ *  The shader below draws exactly the same function. */
+export function choppy(x: number, z: number, t: number) {
+  let h = 0;
+  for (let k = 0; k < 3; k++) {
+    const cx = 14 * Math.sin(t * 0.045 + k * 2.1), cz = 6.5 * Math.cos(t * 0.037 + k * 1.7);
+    const env = Math.pow(0.5 + 0.5 * Math.sin(t * 0.19 + k * 2.6), 2);
+    const d2 = ((x - cx) ** 2 + (z - cz) ** 2) / (1.7 * 1.7);
+    h += 0.36 * env * Math.exp(-d2) * Math.sin(t * 1.9 + k * 1.3 + (x + z) * 0.9);
+  }
+  return h;
+}
 
 function chartTexture(enemy: boolean): THREE.CanvasTexture {
   const u = 64, m = 32, S = N * u + 2 * m;
@@ -72,7 +85,19 @@ void main() {
   // The whole sheet bends in long swells, like parchment lifted by the sea beneath it.
   float a = w.x * 0.42 + uTime * 0.75, b = w.z * 0.55 - uTime * 0.6 + w.x * 0.22, c = (w.x + w.z) * 1.3 + uTime * 1.4;
   w.y += 0.17 * sin(a) + 0.1 * sin(b) + 0.03 * sin(c);
-  vShade = 0.17 * 0.42 * cos(a) + 0.1 * (0.22 - 0.55) * cos(b) + 0.03 * 1.3 * cos(c) * 0.5;
+  // Patches of rough water (see choppy() in sea.ts): the paper heaves hard there and shades with it.
+  float rough = 0.0;
+  for (int k = 0; k < 3; k++) {
+    float fk = float(k);
+    vec2 cc = vec2(14.0 * sin(uTime * 0.045 + fk * 2.1), 6.5 * cos(uTime * 0.037 + fk * 1.7));
+    float env = pow(0.5 + 0.5 * sin(uTime * 0.19 + fk * 2.6), 2.0);
+    vec2 dd = (w.xz - cc) / 1.7;
+    float g = 0.36 * env * exp(-dot(dd, dd));
+    float ph = uTime * 1.9 + fk * 1.3 + (w.x + w.z) * 0.9;
+    w.y += g * sin(ph);
+    rough += g * 0.9 * cos(ph);
+  }
+  vShade = 0.17 * 0.42 * cos(a) + 0.1 * (0.22 - 0.55) * cos(b) + 0.03 * 1.3 * cos(c) * 0.5 + rough * 0.35;
   gl_Position = projectionMatrix * viewMatrix * w;
 }`;
 
@@ -81,6 +106,12 @@ uniform sampler2D uMap, uEnergy;
 uniform float uTime, uEnemy, uNight, uRing, uFlash;
 // The Long Glass: uPeek = (left, top, start time, strength 0..1) of a 2×2 patch, in chart squares.
 uniform vec4 uPeek;
+// Squares tinted on the chart (aim, spyglass patch, placement shadow) and outlined boxes (scans), drawn
+// in the sea itself so they always follow the swell.
+uniform sampler2D uHl;
+uniform vec4 uBox[8];
+uniform vec4 uBoxCol[8];
+uniform int uBoxN;
 // Hulls on this chart: uHull = (x, y, heading, half length), uHull2 = (half beam, speed 0..1, afloat, 0).
 #define MAXH 14
 uniform vec4 uHull[MAXH];
@@ -236,6 +267,19 @@ void main() {
     float swirl = 0.5 + 0.5 * sin(atan(c.y, c.x) * 9.0 + length(c) * 2.4 - uTime * 2.2);
     col = mix(col, INK * 3.0, rim * (0.74 + 0.2 * swirl));
     col = mix(col, vec3(0.6, 0.42, 0.14), rim * smoothstep(0.9, 1.0, swirl) * 0.35);
+    vec2 cell = floor(p), inCell = fract(p);
+    vec4 hl = texture2D(uHl, (cell + 0.5) / uN);
+    if (hl.a > 0.0) {
+      float rim = smoothstep(0.0, 0.06, min(min(inCell.x, inCell.y), min(1.0 - inCell.x, 1.0 - inCell.y)));
+      col = mix(col, hl.rgb, hl.a * (0.75 + 0.25 * (1.0 - rim)));
+    }
+    for (int i = 0; i < 8; i++) {
+      if (i >= uBoxN) break;
+      vec4 bx = uBox[i];
+      vec2 bc = (bx.xy + bx.zw) * 0.5, bh = (bx.zw - bx.xy) * 0.5;
+      float d = max(abs(p.x - bc.x) - bh.x, abs(p.y - bc.y) - bh.y);
+      col = mix(col, uBoxCol[i].rgb, uBoxCol[i].a * smoothstep(0.06, 0.0, abs(d)));
+    }
     // The Kraken turns the chart to night: paper goes dark, ink glows amber.
     float lum = dot(col, vec3(0.3, 0.59, 0.11));
     vec3 night = mix(vec3(0.4, 0.24, 0.05), vec3(0.012, 0.01, 0.008), smoothstep(0.0, 0.07, lum));
@@ -251,13 +295,35 @@ export class Sea {
   private energy = new Float32Array(N * N);
   private bytes = new Uint8Array(N * N);
   private tex: THREE.DataTexture;
+  private hlBytes = new Uint8Array(N * N * 4);
+  private hlTex = new THREE.DataTexture(this.hlBytes, N, N, THREE.RGBAFormat, THREE.UnsignedByteType);
+
+  /** Tint squares of this chart. Colours are sRGB hex. */
+  setHighlights(list: { x: number; y: number; color: number; opacity: number }[]) {
+    this.hlBytes.fill(0);
+    const c = new THREE.Color();
+    for (const h of list) {
+      if (h.x < 0 || h.y < 0 || h.x >= N || h.y >= N) continue;
+      c.setHex(h.color);
+      const i = (h.y * N + h.x) * 4; // same layout as the energy texture: row y, sampled at p / N
+      this.hlBytes.set([c.r * 255, c.g * 255, c.b * 255, Math.min(1, h.opacity) * 255], i);
+    }
+    this.hlTex.needsUpdate = true;
+  }
+  /** Outline boxes on this chart, in squares: [left, top, right, bottom], colour and opacity. */
+  setBoxes(list: { x0: number; y0: number; x1: number; y1: number; color: number; opacity: number }[]) {
+    const u = this.mat.uniforms, b = u.uBox.value as THREE.Vector4[], bc = u.uBoxCol.value as THREE.Vector4[], c = new THREE.Color();
+    const n = Math.min(8, list.length);
+    for (let i = 0; i < n; i++) { const q = list[i]; b[i].set(q.x0, q.y0, q.x1, q.y1); c.setHex(q.color); bc[i].set(c.r, c.g, c.b, q.opacity); }
+    u.uBoxN.value = n;
+  }
 
   constructor(enemy: boolean) {
     this.tex = new THREE.DataTexture(this.bytes, N, N, THREE.RedFormat, THREE.UnsignedByteType);
     this.tex.magFilter = this.tex.minFilter = THREE.LinearFilter;
     this.mat = new THREE.ShaderMaterial({
       vertexShader: VERT, fragmentShader: FRAG,
-      uniforms: { uMap: { value: chartTexture(enemy) }, uEnergy: { value: this.tex }, uTime: { value: 0 }, uEnemy: { value: enemy ? 1 : 0 }, uN: { value: N }, uNight: { value: 0 }, uRing: { value: 0 }, uFlash: { value: 0 }, uStorm: { value: new THREE.Vector2(0, 0) }, uTide: { value: new THREE.Vector4(1, 0, -99, 0) }, uPeek: { value: new THREE.Vector4(0, 0, 0, 0) },
+      uniforms: { uMap: { value: chartTexture(enemy) }, uEnergy: { value: this.tex }, uTime: { value: 0 }, uEnemy: { value: enemy ? 1 : 0 }, uN: { value: N }, uNight: { value: 0 }, uRing: { value: 0 }, uFlash: { value: 0 }, uStorm: { value: new THREE.Vector2(0, 0) }, uTide: { value: new THREE.Vector4(1, 0, -99, 0) }, uPeek: { value: new THREE.Vector4(0, 0, 0, 0) }, uHl: { value: this.hlTex }, uBox: { value: Array.from({ length: 8 }, () => new THREE.Vector4()) }, uBoxCol: { value: Array.from({ length: 8 }, () => new THREE.Vector4()) }, uBoxN: { value: 0 },
         uHull: { value: Array.from({ length: 14 }, () => new THREE.Vector4()) }, uHull2: { value: Array.from({ length: 14 }, () => new THREE.Vector4()) }, uHullN: { value: 0 }, uWake: { value: Sea.wake } },
     });
     const geo = new THREE.PlaneGeometry(N + 1, N + 1, 96, 96);

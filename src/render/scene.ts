@@ -110,6 +110,8 @@ interface ShipObj {
   state: 'afloat' | 'sinking' | 'wreck'; sink: number; lift: number; fires: THREE.Vector3[]; cells: [number, number][]; fresh: boolean;
   /** Smoothed speed over the water, for the wake. */
   way?: number;
+  /** The deck gun is being laid on a target: leave it be. */
+  laying?: boolean;
   /** Seen only through the Long Glass: drawn inside its patch and nowhere else. */
   peek?: boolean;
   /** Where the hull meets the water, in the ship's own frame: centre along her length, half length, half beam. */
@@ -250,7 +252,7 @@ export class SeaScene {
   ambience: (on: boolean) => void = () => {};
   private nextGull = 8;
   /** Messages in bottles crossing between the charts; `stay` ones bob where they land until read. */
-  private bottles: { g: THREE.Group; from: THREE.Vector3; to: THREE.Vector3; t0: number; dur: number; stay: boolean; done?: () => void }[] = [];
+  private bottles: { g: THREE.Group; from: THREE.Vector3; to: THREE.Vector3; t0: number; dur: number; peak: number; yaw: number; spin: number; stay: boolean; landed?: number; fade?: number; done?: () => void }[] = [];
   private renderer: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
   private camera = new THREE.PerspectiveCamera(38, 1, 0.1, 400);
@@ -483,13 +485,17 @@ export class SeaScene {
   /** A message in a bottle crosses from one chart to the other. Resolves when it lands. */
   bottle(to: Side, stay: boolean): Promise<void> {
     const from: Side = to === 'own' ? 'enemy' : 'own';
-    const a = cellCenter({ side: from, x: N / 2, y: N / 2 }), c = cellCenter({ side: to, x: N / 2, y: N / 2 });
-    // Land a little inside the receiving chart, on the edge that faces the sender.
-    const dir = a.clone().sub(c).setY(0).normalize(), land = c.clone().add(dir.multiplyScalar(N / 2 - 2.2));
+    // From a square near the middle of the thrower's chart to one near the middle of the other.
+    const mid = () => 5 + Math.floor(Math.random() * 6);
+    const a = cellCenter({ side: from, x: mid(), y: mid() }).setY(0.6), land = cellCenter({ side: to, x: mid(), y: mid() }).setY(0.1);
+    const dist = a.distanceTo(land);
     const g = bottleModel();
     this.misc.add(g);
     this.sound('splash');
-    return new Promise((res) => this.bottles.push({ g, from: a, to: land, t0: this.time, dur: 3.2, stay, done: () => { this.sound('glass'); res(); } }));
+    return new Promise((res) => this.bottles.push({
+      g, from: a, to: land, t0: this.time, dur: 1.2 + dist * 0.045, peak: 2.2 + dist * 0.22,
+      yaw: Math.atan2(-(land.z - a.z), land.x - a.x), spin: 2 + Math.floor(Math.random() * 2), stay, done: res,
+    }));
   }
   /** The bottle that washed up has been read: it sinks away. */
   clearBottles() { for (const b of this.bottles) b.stay = false; }
@@ -635,6 +641,16 @@ export class SeaScene {
         const want = Math.min(1, speed / 1.2), was = o.way ?? 0;
         o.way = was + (want - was) * Math.min(1, dt * (want > was ? 6 : 0.7));
         if (!Sea.wake) for (const [x, y] of o.cells) sea.hold(x, y, 0.55);
+        // At rest, a deck gun keeps its muzzle trained on the enemy's chart, whichever way the hull lies.
+        const gun = o.model.gun;
+        if (gun && o.side === 'own' && !o.laying) {
+          const to = cellCenter({ side: 'enemy', x: N / 2, y: N / 2 });
+          o.tilt.updateMatrixWorld(true);
+          const local = gun.pivot.parent!.worldToLocal(to);
+          const want = Math.atan2(-(local.z - gun.pivot.position.z), local.x - gun.pivot.position.x);
+          const d = Math.atan2(Math.sin(want - gun.pivot.rotation.y), Math.cos(want - gun.pivot.rotation.y));
+          gun.pivot.rotation.y += d * Math.min(1, dt * 3);
+        }
         if (o.model.funnel && !o.peek) this.fx.funnel(o.root.localToWorld(o.model.funnel.clone().setY(o.model.funnel.y + o.tilt.position.y)), dt);
       } else {
         if (o.state === 'sinking') {
@@ -661,8 +677,9 @@ export class SeaScene {
       const inner = g.userData.inner as THREE.Object3D | undefined;
       if (!inner) return;
       inner.position.y = 0.035 * Math.sin(t * 1.6 + i * 1.3);
-      inner.rotation.y = g.userData.spin * t + i;
-      inner.rotation.z = 0.06 * Math.sin(t * 1.1 + i);
+      // Chests turn slowly; a seal keeps its kraken facing the captain.
+      inner.rotation.y = g.userData.spin ? g.userData.spin * t + i : 0;
+      inner.rotation.z = g.userData.spin ? 0.06 * Math.sin(t * 1.1 + i) : 0;
       const glow = g.userData.glow as THREE.Mesh | undefined;
       if (glow) (glow.material as THREE.MeshBasicMaterial).opacity = 0.32 + 0.22 * Math.sin(t * 2.4 + i);
     });
@@ -701,19 +718,31 @@ export class SeaScene {
       this.seas[side].setHulls(list);
     }
     this.seas.own.update(dt, t); this.seas.enemy.update(dt, t);
-    this.weather.update(dt, t);
+    this.weather.update(dt, t, this.camera);
     for (const b of [...this.bottles]) {
-      const k = Math.min(1, (t - b.t0) / b.dur), e = k * k * (3 - 2 * k);
-      const p = b.from.clone().lerp(b.to, e);
-      // It drifts over the gap between the charts in a low arc, then rides the swell.
-      p.y = 0.12 + Math.sin(k * Math.PI) * 1.1 + (calm ? 0 : waveH(p.x, p.z, t)) + 0.04 * Math.sin(t * 2.4);
-      b.g.position.copy(p);
-      b.g.rotation.set(0.25 * Math.sin(t * 1.7), Math.atan2(b.to.x - b.from.x, b.to.z - b.from.z) + Math.PI / 2 + 0.3 * Math.sin(t * 0.8), 0.18 * Math.sin(t * 2.1));
-      if (k >= 1 && b.done) { const d = b.done; b.done = undefined; d(); }
-      if (k >= 1 && !b.stay) { b.g.scale.multiplyScalar(0.94); if (b.g.scale.x < 0.05) { this.misc.remove(b.g); this.bottles.splice(this.bottles.indexOf(b), 1); } }
+      const k = Math.min(1, (t - b.t0) / b.dur);
+      if (k < 1) {
+        // Thrown: a ballistic arc (constant speed across, parabola up and down), tumbling end over end.
+        const p = b.from.clone().lerp(b.to, k);
+        p.y = b.from.y + (b.to.y - b.from.y) * k + 4 * b.peak * k * (1 - k);
+        b.g.position.copy(p);
+        b.g.rotation.set(0, b.yaw, -b.spin * k * Math.PI * 2);
+      } else {
+        if (!b.landed) { b.landed = t; this.fx.water(b.to.clone().setY(0.1)); this.sound('plunge'); if (b.done) { const d = b.done; b.done = undefined; d(); } }
+        // Afloat where it fell: it rides the swell, lying on its side.
+        const s = t - b.landed;
+        b.g.position.set(b.to.x, (calm ? 0 : waveH(b.to.x, b.to.z, t)) + 0.1 + 0.04 * Math.sin(t * 2.4) - (b.stay ? 0 : s * 0.25), b.to.z);
+        b.g.rotation.set(0.25 * Math.sin(t * 1.7), b.yaw, 0.18 * Math.sin(t * 2.1));
+        if (!b.stay) {
+          // The sender only sees it splash down and slip under.
+          b.fade = Math.max(0, (b.fade ?? 1) - dt * 0.9);
+          b.g.traverse((o) => { const m = (o as THREE.Mesh).material as THREE.Material & { opacity: number } | undefined; if (m) { m.transparent = true; m.opacity = Math.min(m.opacity, b.fade!); } });
+          if (b.fade <= 0) { this.misc.remove(b.g); this.bottles.splice(this.bottles.indexOf(b), 1); }
+        }
+      }
     }
     // Now and then a gull cries overhead (they keep away from storms).
-    if ((this.nextGull -= dt) < 0) { this.nextGull = 14 + Math.random() * 26; if (!this.stormy && this.last?.pub.phase === 'battle') this.sound('gull'); }
+    if ((this.nextGull -= dt) < 0) { this.nextGull = 14 + Math.random() * 26; if (this.weather.gullsHere && this.last?.pub.phase === 'battle') this.sound('gull'); }
     this.fx.update(dt);
     this.shakeAmt *= Math.exp(-dt * 7);
     this.camera.position.copy(this.camPos);
@@ -804,6 +833,7 @@ export class SeaScene {
   }
 
   private drawSide(p: SidePub, side: Side, round: number) {
+    const boxes: { x0: number; y0: number; x1: number; y1: number; color: number; opacity: number }[] = [];
     for (const s of p.shots) {
       if (this.hidden.has(`${side}:${s.x},${s.y}`)) continue;
       const age = round - s.round, fade = Math.max(0.3, 1 - age * 0.14), at = cellCenter({ side, x: s.x, y: s.y });
@@ -836,9 +866,8 @@ export class SeaScene {
     for (const sc of p.scans) {
       if (round - sc.round > 4) continue;
       const at = cellCenter({ side, x: sc.x, y: sc.y });
-      const box = new THREE.LineSegments(G.zone, side === 'enemy' ? M.lineAmber : M.lineWax);
-      box.position.set(at.x, 0.12, at.z);
-      this.marks.add(box);
+      // The patch's outline is drawn into the sea, so the swell cannot hide it.
+      boxes.push({ x0: sc.x - ZONE, y0: sc.y - ZONE, x1: sc.x + ZONE + 1, y1: sc.y + ZONE + 1, color: side === 'enemy' ? C.amber : C.wax, opacity: 0.9 });
       // Only my own readings carry a number; where the enemy scanned me, the box alone says so.
       if (side === 'enemy') {
         const l = label(sc.count < 0 ? '?' : String(sc.count), '#d9a441');
@@ -846,6 +875,7 @@ export class SeaScene {
         this.marks.add(l);
       }
     }
+    this.seas[side].setBoxes(boxes);
     p.fogs.forEach((f, fi) => {
       const at = cellCenter({ side, x: f.x, y: f.y });
       for (let i = 0; i < 14; i++) {
@@ -974,7 +1004,7 @@ export class SeaScene {
       const at = cellCenter({ side: theirs ? 'enemy' : 'own', x: t.x, y: t.y });
       const g = new THREE.Group(), inner = treasureModel(t.kind, theirs);
       g.add(inner);
-      g.userData.inner = inner; g.userData.spin = t.kind === 'seal' ? 0.5 : 0.12;
+      g.userData.inner = inner; g.userData.spin = t.kind === 'seal' ? 0 : 0.12;
       if (t.kind === 'seal' && !theirs) {
         // A covenant seal calls attention to itself: a slow red-gold glow on the water beneath it.
         const glow = new THREE.Mesh(G.glow, new THREE.MeshBasicMaterial({ map: glowTex, color: 0xff7a40, transparent: true, opacity: 0.4, depthWrite: false, blending: THREE.AdditiveBlending }));
@@ -1036,14 +1066,9 @@ export class SeaScene {
     }
   }
 
+  /** Tint squares: drawn by the sea shader itself, so they ride the swell and are never hidden by it. */
   setHighlights(list: Highlight[]) {
-    this.hl.clear();
-    for (const h of list) {
-      const m = new THREE.Mesh(G.cell, new THREE.MeshBasicMaterial({ color: h.color, transparent: true, opacity: h.opacity ?? 0.45, depthWrite: false }));
-      const at = cellCenter(h);
-      m.position.set(at.x, 0.13, at.z);
-      this.hl.add(m);
-    }
+    for (const side of ['own', 'enemy'] as Side[]) this.seas[side].setHighlights(list.filter((h) => h.side === side).map((h) => ({ x: h.x, y: h.y, color: h.color, opacity: h.opacity ?? 0.45 })));
   }
 
   /* ---------- effects ---------- */
@@ -1056,7 +1081,7 @@ export class SeaScene {
     if (target.side === 'enemy' && armed.length) {
       // One of the armed ships swings her deck gun onto the target and fires from its muzzle.
       const g = armed[Math.floor(Math.random() * armed.length)];
-      return this.layGun(g, to).then(() => this.fly(g.model.gun!.muzzle.getWorldPosition(new THREE.Vector3()), to, target, outcome, g));
+      return this.layGun(g, to).then(() => this.fly(g.model.gun!.muzzle.getWorldPosition(new THREE.Vector3()), to, target, outcome, g)).finally(() => { g.laying = false; });
     }
     if (target.side === 'enemy' && guns.length) {
       const g = guns[Math.floor(Math.random() * guns.length)];
@@ -1074,6 +1099,7 @@ export class SeaScene {
   /** Turn a ship's deck gun towards a point; resolves once it is laid. */
   private layGun(o: ShipObj, to: THREE.Vector3): Promise<void> {
     const { pivot } = o.model.gun!;
+    o.laying = true;
     o.tilt.updateMatrixWorld(true);
     const local = pivot.parent!.worldToLocal(to.clone());
     const want = Math.atan2(-(local.z - pivot.position.z), local.x - pivot.position.x);
