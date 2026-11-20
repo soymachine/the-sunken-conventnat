@@ -28,6 +28,8 @@ export const TOOLS: Record<'broadside' | 'chain' | 'spy', { name: string; ap: nu
 };
 
 /** What each special action above the helm does, told in full for its tooltip. */
+/** Cards that have their own picture in public/ui/cards/. */
+const CARD_ART = new Set(['broadside', 'chain', 'spy', 'spyglass', 'longglass', 'fireship', 'fog', 'shipwright', 'winds', 'current', 'pact', 'kraken']);
 const TOOL_HELP: Record<string, { ship?: string; text: string }> = {
   broadside: { ship: 'Ship of the Line', text: 'Fire three squares in a row at once. Press R to swing the line between across and down.' },
   chain: { ship: 'Frigate', text: 'A single shot of chained balls: a ship it hits is pinned and cannot sail or turn on her next turn.' },
@@ -65,6 +67,7 @@ export class Hud {
   private sectors: [SVGPathElement, SVGTextElement][] = [];
   private balls: SVGGElement[] = [];
   private capTurns = 0;
+  private glassTurns = 0;
   private sealHelp = '';
   private muted = false;
   private qualityPref = 'auto';
@@ -110,11 +113,20 @@ export class Hud {
       <div class="belt" id="belt"></div>
       <footer class="rail bottom">
         <div class="battle">
-          <div class="say"><p id="hint"></p><button class="bottleBtn" id="noteBtn" aria-expanded="false" aria-controls="compose"><img src="/ui/bottle.webp" alt="" draggable="false"><span>Cast a bottle</span></button></div>
+          <div class="say"><p id="hint"></p>
+            <div class="orders" role="group" aria-label="Orders">
+              <button class="order" data-order="fire"><img src="/ui/tool_fire.webp" alt="" draggable="false"><span>Fire</span></button>
+              <button class="order" data-order="sail"><img src="/ui/tool_sail.webp" alt="" draggable="false"><span>Sail</span></button>
+              <button class="order" data-order="turn"><img src="/ui/tool_turn.webp" alt="" draggable="false"><span>Turn</span></button>
+            </div>
+            <button class="bottleBtn" id="noteBtn" aria-expanded="false" aria-controls="compose"><img src="/ui/bottle.webp" alt="" draggable="false"><span>Cast a bottle</span></button></div>
           <div class="helm">
             <svg class="telegraph" viewBox="${TG.view}" role="group" aria-label="Orders and action points"></svg>
           </div>
-          <button class="capstan" id="endTurn" aria-label="End turn"><img src="/ui/wheel.webp" alt="" draggable="false"><span>End turn</span></button>
+          <div class="watch">
+            <button class="glass" id="endTurn" aria-label="End turn"><img src="/ui/hourglass.webp" alt="" draggable="false"><span>End turn</span></button>
+            <div class="apSeals" id="apSeals" aria-label="Action points"></div>
+          </div>
         </div>
         <div class="placing">
           <button class="capstan" id="ready" aria-label="Ready"><img src="/ui/wheel.webp" alt="" draggable="false"><span>Ready</span></button>
@@ -123,7 +135,9 @@ export class Hud {
       <div class="role" hidden><div class="card"><svg class="medal" viewBox="0 0 100 100"></svg><p class="meta" id="roleTitle"></p><h2 id="roleName"></h2><p id="roleMission"></p><p class="pw"><b id="rolePower"></b> <span id="rolePowerText"></span></p><button class="plaque" id="roleOk">To your station</button></div></div>
       <div class="over" hidden><div class="card"><h2 id="overTitle"></h2><p id="overText"></p><p id="overVerify" class="meta"></p><button class="plaque" id="leave">Back to port</button></div></div>`;
     this.telegraph(this.q('.telegraph'));
-    this.q<HTMLElement>('#endTurn').onclick = () => { this.spin('#endTurn'); on.endTurn(); };
+    // Turning the glass ends the turn: it flips over before the turn passes.
+    this.q<HTMLElement>('#endTurn').onclick = () => { const g = this.q<HTMLElement>('#endTurn img'); g.style.transform = `rotate(${++this.glassTurns * 180}deg)`; on.endTurn(); };
+    this.root.querySelectorAll<HTMLElement>('.order').forEach((b) => (b.onclick = () => on.mode(b.dataset.order as Mode)));
     this.q<HTMLElement>('#ready').onclick = () => { this.spin('#ready'); on.ready(); };
     this.q<HTMLElement>('#leave').onclick = () => on.leave();
     this.q<HTMLElement>('#roleOk').onclick = () => { this.q<HTMLElement>('.role').hidden = true; };
@@ -200,9 +214,10 @@ export class Hud {
       if (!b) return;
       tip.innerHTML = `<b>${esc(b.dataset.name!)}</b><span class="cost">${b.dataset.ap} AP</span><p>${esc(b.dataset.help!)}</p>${b.dataset.why ? `<p class="why">${esc(b.dataset.why)}</p>` : ''}`;
       tip.hidden = false;
-      const r = b.getBoundingClientRect(), w = tip.offsetWidth;
+      // Above the card once it has risen out of the hand.
+      const r = b.getBoundingClientRect(), w = tip.offsetWidth, risen = innerHeight + 58 - 151 - 62;
       tip.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left + r.width / 2 - w / 2)) + 'px';
-      tip.style.top = r.top - tip.offsetHeight - 10 + 'px';
+      tip.style.top = risen - tip.offsetHeight - 14 + 'px';
     });
     belt.addEventListener('pointerleave', () => { tip.hidden = true; });
   }
@@ -330,7 +345,7 @@ export class Hud {
     this.sealHelp = me.seals >= KRAKEN_SEALS
       ? 'Choose Summon the Kraken above the helm (3 AP), then a 3×3 patch of enemy water. It strikes now and again on their next turn, and holds the ships it finds.'
       : 'Three seals summon the Kraken. A red wax seal surfaces in your waters every few rounds: sail a ship onto it to take it. Each ship you lose also pays one.';
-    this.q('#sealHow').innerHTML = me.seals >= KRAKEN_SEALS ? '<b>The Kraken will answer.</b>' : p.treasures.some((t) => t.side === c.me && t.kind === 'seal') ? '<b>A seal is afloat in your waters now.</b>' : '';
+    this.q('#sealHow').innerHTML = me.seals >= KRAKEN_SEALS ? '' : p.treasures.some((t) => t.side === c.me && t.kind === 'seal') ? '<b>A seal is afloat in your waters now.</b>' : '';
     this.q('#foeSeals').textContent = `${foe.seals} covenant seal${foe.seals === 1 ? '' : 's'} · ${foe.doubloons} doubloons`;
     this.balls.forEach((b, k) => b.classList.toggle('spent', !(mine && k < p.ap)));
     this.q<HTMLButtonElement>('#endTurn').disabled = !c.can();
@@ -373,7 +388,9 @@ export class Hud {
       // Each action carries its own explanation and, when it cannot be used, the reason why.
       const tool = (id: Mode, name: string, ap: number, ok: boolean, help: string, why = '') => {
         if (!ok && !why) why = p.phase !== 'battle' || !mine ? 'Wait for your turn.' : p.ap < ap ? `Needs ${ap} action point${ap === 1 ? '' : 's'}; you have ${p.ap}.` : 'Not now.';
-        belt.push(`<button data-tool="${id}" data-name="${esc(name)}" data-ap="${ap}" data-help="${esc(help)}" data-why="${ok ? '' : esc(why)}" class="${mode === id ? 'on' : ''}${ok ? '' : ' off'}" aria-disabled="${!ok}">${name}<em>${ap} AP</em></button>`);
+        // An order card: the frame and its picture, the name and the cost in a wax seal.
+        const art = CARD_ART.has(id) ? `background-image:url(/ui/cards/${id}.webp)` : '';
+        belt.push(`<button data-tool="${id}" data-name="${esc(name)}" data-ap="${ap}" data-help="${esc(help)}" data-why="${ok ? '' : esc(why)}" class="ocard${mode === id ? ' on' : ''}${ok ? '' : ' off'}${art ? '' : ' noart'}" aria-disabled="${!ok}" aria-label="${esc(name)}, ${ap} AP"><span class="art" style="${art}"></span><span class="nm">${name.replace(/ ×\d+$/, '')}</span>${/×\d+$/.test(name) ? `<span class="many">${name.match(/×\d+$/)![0]}</span>` : ''}<span class="cost">${ap}</span></button>`);
       };
       const sunk = (kind: 'line' | 'frigate' | 'cutter', cls: string) => (c.alive(kind) ? '' : `Your ${cls} has been sunk.`);
       tool('broadside', TOOLS.broadside.name, 2, c.can(2) && c.alive('line'), `${TOOL_HELP.broadside.text} Needs your Ship of the Line afloat.`, sunk('line', 'Ship of the Line'));
@@ -388,6 +405,12 @@ export class Hud {
       if (role !== 'classic' && !p.power[c.me]) tool('power', CAPTAINS[role].power, 1, c.canPower(), `Your captain's power. ${CAPTAINS[role].powerText}`);
     }
     this.q('#belt').innerHTML = belt.join('');
+    // Fan the hand: each card turns a little about a point below the table.
+    const cards = [...this.root.querySelectorAll<HTMLElement>('#belt .ocard')], n = cards.length;
+    cards.forEach((el, i) => { const k = i - (n - 1) / 2; el.style.setProperty('--r', `${k * 4}deg`); el.style.setProperty('--y', `${Math.abs(k) * 4}px`); el.style.zIndex = String(10 + i); });
+    this.root.querySelectorAll<HTMLElement>('.order').forEach((b) => b.classList.toggle('on', b.dataset.order === mode));
+    const shownAp = Math.max(3, mine ? p.ap : 0);
+    this.q('#apSeals').innerHTML = Array.from({ length: shownAp }, (_, k) => `<i class="${mine && k < p.ap ? '' : 'spent'}"></i>`).join('');
 
     const obj = this.q<HTMLElement>('#objective'), parts: string[] = [];
     if (role !== 'classic') {
