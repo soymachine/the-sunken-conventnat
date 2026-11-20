@@ -108,7 +108,7 @@ export class Hud {
       <div class="belt" id="belt"></div>
       <footer class="rail bottom">
         <div class="battle">
-          <div class="say"><p id="hint"></p><button class="bottleBtn" id="noteBtn" aria-expanded="false" aria-controls="compose"><svg viewBox="0 0 40 16" aria-hidden="true"><path d="M2 5h20l6-3h7v12h-7l-6-3H2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><rect x="35" y="4" width="3" height="8" rx="1" fill="currentColor"/><path d="M6 8h12" stroke="currentColor" stroke-width="1.2" stroke-dasharray="2 2"/></svg>Cast a bottle</button></div>
+          <div class="say"><p id="hint"></p><button class="bottleBtn" id="noteBtn" aria-expanded="false" aria-controls="compose"><img src="/ui/bottle.webp" alt="" draggable="false"><span>Cast a bottle</span></button></div>
           <div class="helm">
             <svg class="telegraph" viewBox="${TG.view}" role="group" aria-label="Orders and action points"></svg>
           </div>
