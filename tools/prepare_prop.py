@@ -10,7 +10,7 @@ import bpy, sys, mathutils
 
 argv = sys.argv[sys.argv.index('--') + 1:]
 src, dst = argv[0], argv[1]
-TEX = 512
+TEX = 1024
 bpy.ops.wm.read_factory_settings(use_empty=True)
 bpy.ops.import_scene.gltf(filepath=src)
 scene = bpy.context.scene
@@ -38,8 +38,50 @@ shift = mathutils.Vector(((lo.x + hi.x) / 2, (lo.y + hi.y) / 2, lo.z))
 for o in meshes:
     o.data.transform(mathutils.Matrix.Scale(k, 4) @ mathutils.Matrix.Translation(-shift))
     o.data.update()
+import numpy as np
+
+def bleed(img, meshes):
+    """Meshy packs its texture as small islands on a black background. Seen from afar the GPU blends
+    each island's edge with that black, drawing grey lines along every seam. Spread each island's colours
+    outwards over the background so the edges only ever blend with their own colour."""
+    w, h = img.size
+    px = np.array(img.pixels[:], dtype=np.float32).reshape(h, w, 4)
+    cover = np.zeros((h, w), bool)
+    for o in meshes:
+        uv = o.data.uv_layers.active.data
+        for poly in o.data.polygons:
+            pts = [(uv[li].uv[0] * w, uv[li].uv[1] * h) for li in poly.loop_indices]
+            for k in range(1, len(pts) - 1):
+                (ax, ay), (bx, by), (cx, cy) = pts[0], pts[k], pts[k + 1]
+                x0, x1 = int(max(0, min(ax, bx, cx) - 1)), int(min(w - 1, max(ax, bx, cx) + 1))
+                y0, y1 = int(max(0, min(ay, by, cy) - 1)), int(min(h - 1, max(ay, by, cy) + 1))
+                if x1 < x0 or y1 < y0: continue
+                X, Y = np.meshgrid(np.arange(x0, x1 + 1) + 0.5, np.arange(y0, y1 + 1) + 0.5)
+                d = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy)
+                if abs(d) < 1e-9: continue
+                l1 = ((by - cy) * (X - cx) + (cx - bx) * (Y - cy)) / d
+                l2 = ((cy - ay) * (X - cx) + (ax - cx) * (Y - cy)) / d
+                e = 1.5 / max(1.0, min(w, h) * 0.02)
+                inside = (l1 >= -e) & (l2 >= -e) & (1 - l1 - l2 >= -e)
+                cover[y0:y1 + 1, x0:x1 + 1] |= inside
+    col = px[..., :3] * cover[..., None]
+    have = cover.astype(np.float32)
+    for _ in range(48):
+        free = ~cover
+        if not free.any(): break
+        acc = np.zeros_like(col); n = np.zeros_like(have)
+        for dy, dx in ((0, 1), (0, -1), (1, 0), (-1, 0), (1, 1), (-1, -1), (1, -1), (-1, 1)):
+            acc += np.roll(np.roll(col, dy, 0), dx, 1); n += np.roll(np.roll(have, dy, 0), dx, 1)
+        grow = free & (n > 0)
+        col[grow] = acc[grow] / n[grow][:, None]; cover |= grow; have = cover.astype(np.float32)
+    if (~cover).any(): col[~cover] = col[cover].mean(0)
+    px[..., :3] = col
+    img.pixels[:] = px.ravel()
+    print('bled texture', img.name, w, 'x', h)
+
 for img in bpy.data.images:
     if max(img.size) > TEX: img.scale(TEX, TEX)
+    bleed(img, meshes)
 for o in scene.objects: o.select_set(True)
 bpy.ops.export_scene.gltf(filepath=dst, export_format='GLB', export_image_format='JPEG', export_jpeg_quality=85, export_apply=True, use_selection=False)
 tris = sum(sum(len(p.vertices) - 2 for p in o.data.polygons) for o in meshes)
