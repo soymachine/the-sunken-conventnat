@@ -8,7 +8,7 @@ import { Kraken } from './kraken';
 import { Weather } from './weather';
 import { Post } from './post';
 import { Sea, waveH } from './sea';
-import { ShipModel, buildShip, loadShipModels, setShipTime } from './ships';
+import { ShipModel, buildShip, loadPropModels, loadShipModels, propModel, setShipTime } from './ships';
 
 export type Side = 'own' | 'enemy';
 export interface Cell { side: Side; x: number; y: number }
@@ -25,11 +25,12 @@ export interface View { pub: Pub; me: 0 | 1; ships: Ship[]; selectedId?: number 
 export interface Ghost { kind: Kind; len: number; x: number; y: number; dir: 'h' | 'v'; rev: boolean; from: [number, number]; pivot: [number, number]; state: 'hot' | 'idle' | 'bad';
   /** Draw the translucent ship itself (only for the turn being pointed at), not just its arrow. */
   ship: boolean }
-export type Sound = 'cannon' | 'splash' | 'hit' | 'clang' | 'sink' | 'coin' | 'glass' | 'roar' | 'thunder';
+export type Sound = 'cannon' | 'splash' | 'hit' | 'clang' | 'sink' | 'coin' | 'glass' | 'roar' | 'thunder' | 'gull' | 'treasure' | 'plunge';
 
 const C = { ink: 0x0d0b08, amber: 0xd9a441, parch: 0xe8d5a3, brass: 0xb08d3c, wax: 0x8c2f1b };
 const HALF = N / 2;
 /** World position of each chart's (0,0) corner. Stacked on tall screens, side by side on wide ones. */
+export type Quality = 'auto' | 'high' | 'low';
 const STACKED: Record<Side, { x: number; z: number }> = { enemy: { x: -HALF, z: -(N + 0.5) }, own: { x: -HALF, z: 0.5 } };
 const ABREAST: Record<Side, { x: number; z: number }> = { own: { x: -(N + 0.75), z: -HALF }, enemy: { x: 0.75, z: -HALF } };
 let origin = STACKED;
@@ -86,7 +87,7 @@ const puffTex = sprite((g) => {
 });
 
 const G = {
-  disc: new THREE.CircleGeometry(0.3, 20), ring: new THREE.RingGeometry(0.22, 0.3, 24), ring2: new THREE.RingGeometry(0.08, 0.13, 16),
+  glow: new THREE.PlaneGeometry(1.3, 1.3), disc: new THREE.CircleGeometry(0.3, 20), ring: new THREE.RingGeometry(0.22, 0.3, 24), ring2: new THREE.RingGeometry(0.08, 0.13, 16),
   flame: new THREE.ConeGeometry(0.13, 0.5, 8), cell: new THREE.PlaneGeometry(0.94, 0.94),
   plank: new THREE.BoxGeometry(0.34, 0.04, 0.08), ball: new THREE.SphereGeometry(0.16, 12, 8),
   chest: new THREE.BoxGeometry(0.5, 0.3, 0.36), lid: new THREE.BoxGeometry(0.54, 0.1, 0.4),
@@ -107,11 +108,151 @@ interface ShipObj {
   root: THREE.Group; tilt: THREE.Group; model: ShipModel; decor: THREE.Group; decorKey: string;
   kind: Kind; len: number; side: Side; pos: THREE.Vector3; yaw: number; phase: number;
   state: 'afloat' | 'sinking' | 'wreck'; sink: number; lift: number; fires: THREE.Vector3[]; cells: [number, number][]; fresh: boolean;
+  /** Smoothed speed over the water, for the wake. */
+  way?: number;
+  /** The deck gun is being laid on a target: leave it be. */
+  laying?: boolean;
+  /** Seen only through the Long Glass: drawn inside its patch and nowhere else. */
+  peek?: boolean;
+  /** Where the hull meets the water, in the ship's own frame: centre along her length, half length, half beam. */
+  foot?: { cx: number; cz: number; half: number; beam: number };
+}
+
+/* ---------- message in a bottle ---------- */
+function bottleModel(): THREE.Group {
+  const g = new THREE.Group();
+  const glass = new THREE.MeshStandardMaterial({ color: 0x5f7a4a, roughness: 0.15, metalness: 0.1, transparent: true, opacity: 0.55 });
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.52, 16), glass);
+  const shoulder = new THREE.Mesh(new THREE.SphereGeometry(0.13, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), glass);
+  shoulder.position.y = 0.26;
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.2, 12), glass);
+  neck.position.y = 0.44;
+  const cork = new THREE.Mesh(new THREE.CylinderGeometry(0.052, 0.046, 0.09, 10), new THREE.MeshStandardMaterial({ color: 0x8a6a42, roughness: 0.9 }));
+  cork.position.y = 0.56;
+  const wax = new THREE.Mesh(new THREE.SphereGeometry(0.065, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x8e2412, roughness: 0.5 }));
+  wax.position.y = 0.6;
+  // The rolled letter inside, tied with a thread.
+  const scroll = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.42, 12), new THREE.MeshStandardMaterial({ color: 0xe8d5a3, roughness: 0.9 }));
+  const tie = new THREE.Mesh(new THREE.TorusGeometry(0.058, 0.008, 6, 16), new THREE.MeshStandardMaterial({ color: 0x8c2f1b }));
+  tie.rotation.x = Math.PI / 2;
+  const inner = new THREE.Group();
+  inner.add(body, shoulder, neck, cork, wax, scroll, tie);
+  inner.rotation.z = Math.PI / 2; // lying on its side in the water
+  for (const m of [body, cork, wax, scroll]) m.castShadow = true;
+  g.add(inner);
+  g.scale.setScalar(1.365);
+  return g;
+}
+
+/* ---------- treasure ---------- */
+const glowTex = sprite((g) => {
+  const r = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  r.addColorStop(0, 'rgba(255,255,255,1)'); r.addColorStop(0.4, 'rgba(255,255,255,.35)'); r.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = r; g.fillRect(0, 0, 128, 128);
+});
+/** The face of a covenant seal: red wax pressed with the kraken's mark. */
+const sealFace = (() => {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 256;
+  const g = cv.getContext('2d')!;
+  const wax = g.createRadialGradient(100, 90, 10, 128, 128, 128);
+  wax.addColorStop(0, '#d0573c'); wax.addColorStop(0.6, '#9a2a17'); wax.addColorStop(1, '#5a140a');
+  g.fillStyle = wax; g.fillRect(0, 0, 256, 256);
+  g.strokeStyle = 'rgba(40,6,2,.55)'; g.lineWidth = 7; g.beginPath(); g.arc(128, 128, 92, 0, 7); g.stroke();
+  g.strokeStyle = 'rgba(255,170,140,.35)'; g.lineWidth = 3; g.beginPath(); g.arc(126, 125, 92, 3.6, 5.6); g.stroke();
+  // The mark: a kraken's head with curling arms, pressed in (dark) and catching light on its upper edge.
+  const mark = (dx: number, dy: number, col: string) => {
+    g.strokeStyle = col; g.fillStyle = col; g.lineWidth = 9; g.lineCap = 'round';
+    g.beginPath(); g.ellipse(128 + dx, 104 + dy, 26, 30, 0, 0, 7); g.fill();
+    for (const s of [-1, 1]) for (const k of [0, 1]) {
+      g.beginPath(); g.moveTo(128 + dx + s * (8 + k * 12), 128 + dy);
+      g.quadraticCurveTo(128 + dx + s * (18 + k * 26), 170 + dy, 128 + dx + s * (44 + k * 6), 160 + dy - k * 22);
+      g.quadraticCurveTo(128 + dx + s * (52 + k * 4), 150 + dy - k * 22, 128 + dx + s * (42 + k * 4), 144 + dy - k * 22);
+      g.stroke();
+    }
+  };
+  mark(-2, -2, 'rgba(255,160,130,.45)'); mark(2, 2, 'rgba(45,6,2,.75)'); mark(0, 0, '#86200f');
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
+})();
+const TM = {
+  wood: new THREE.MeshStandardMaterial({ color: 0x6b4423, roughness: 0.85 }),
+  dark: new THREE.MeshStandardMaterial({ color: 0x3a2412, roughness: 0.9 }),
+  brass: new THREE.MeshStandardMaterial({ color: 0xc9a24a, metalness: 0.75, roughness: 0.35 }),
+  coin: new THREE.MeshBasicMaterial({ color: new THREE.Color(1.25, 0.82, 0.22) }),
+  wax: new THREE.MeshStandardMaterial({ color: 0x8e2412, roughness: 0.55 }),
+  face: new THREE.MeshStandardMaterial({ map: sealFace, roughness: 0.5 }),
+};
+const TG = {
+  body: new THREE.BoxGeometry(0.46, 0.24, 0.3),
+  groove: new THREE.BoxGeometry(0.462, 0.012, 0.302),
+  strap: new THREE.BoxGeometry(0.035, 0.25, 0.31),
+  lid: new THREE.CylinderGeometry(0.15, 0.15, 0.46, 16, 1, false, 0, Math.PI),
+  lidStrap: new THREE.CylinderGeometry(0.158, 0.158, 0.035, 16, 1, false, 0, Math.PI),
+  lock: new THREE.BoxGeometry(0.06, 0.07, 0.02),
+  hoard: new THREE.SphereGeometry(0.2, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+  coin: new THREE.CylinderGeometry(0.045, 0.045, 0.012, 12),
+  seal: new THREE.CylinderGeometry(0.27, 0.29, 0.07, 32),
+  sealRim: new THREE.TorusGeometry(0.29, 0.025, 6, 32),
+  ribbon: new THREE.BoxGeometry(0.07, 0.2, 0.012),
+};
+const protos = new Map<string, THREE.Group>();
+/** A treasure chest spilling gold, or a covenant seal; the enemy's are faded. Built once, then cloned. */
+function treasureModel(kind: 'gold' | 'seal', faded: boolean): THREE.Group {
+  // The Meshy models, once loaded: the chest a little over half a square across, the seal standing
+  // on its ribbons and leaning back so its kraken looks up at the captain.
+  const prop = propModel(kind, faded);
+  if (prop) {
+    const g = new THREE.Group();
+    if (kind === 'gold') { prop.scale.setScalar(0.56); prop.position.y = -0.02; }
+    else { prop.scale.setScalar(0.66); prop.rotation.x = -0.95; prop.position.set(0, 0.03, 0.16); }
+    g.add(prop);
+    return g;
+  }
+  const key = kind + (faded ? ':dim' : '');
+  let proto = protos.get(key);
+  if (!proto) {
+    proto = new THREE.Group();
+    const add = (geo: THREE.BufferGeometry, mat: THREE.Material | THREE.Material[], x = 0, y = 0, z = 0) => {
+      const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; proto!.add(m); return m;
+    };
+    if (kind === 'gold') {
+      add(TG.body, TM.wood, 0, 0.12, 0);
+      add(TG.groove, TM.dark, 0, 0.08, 0); add(TG.groove, TM.dark, 0, 0.16, 0);
+      for (const x of [-0.15, 0.15]) add(TG.strap, TM.brass, x, 0.12, 0);
+      // The lid stands open on its hinge at the back, showing the hoard.
+      const lid = new THREE.Group(); lid.position.set(0, 0.24, -0.15); lid.rotation.x = -1.15; proto.add(lid);
+      for (const [geo, mat, x] of [[TG.lid, TM.wood, 0], [TG.lidStrap, TM.brass, -0.15], [TG.lidStrap, TM.brass, 0.15]] as const) {
+        const m = new THREE.Mesh(geo, mat); m.rotation.z = Math.PI / 2; m.rotation.y = Math.PI / 2; m.position.set(x, 0, 0.15); m.castShadow = true; lid.add(m);
+      }
+      add(TG.lock, TM.brass, 0, 0.2, 0.16);
+      add(TG.hoard, TM.coin, 0, 0.22, 0.02).scale.set(1, 0.35, 0.68);
+      for (const [x, z, r] of [[0.28, 0.12, 0.4], [-0.3, 0.06, -0.3], [0.2, 0.24, 1.1], [-0.12, 0.25, 0.2]]) {
+        const c = add(TG.coin, TM.coin, x, 0.01, z); c.rotation.set(r * 0.4, r, r * 0.3);
+      }
+    } else {
+      // The seal stands tilted to the light on a short ribbon, like one cut from a covenant.
+      const disc = add(TG.seal, [TM.wax, TM.face, TM.wax], 0, 0.34, 0); disc.rotation.x = Math.PI / 2 - 0.55;
+      const rim = add(TG.sealRim, TM.brass, 0, 0.34, 0); rim.rotation.x = -0.55;
+      for (const s of [-1, 1]) { const r = add(TG.ribbon, TM.wax, s * 0.08, 0.1, 0.06); r.rotation.z = s * 0.35; }
+    }
+    if (faded) proto.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (m.isMesh) m.material = (Array.isArray(m.material) ? m.material : [m.material]).map((x) => { const c = x.clone(); c.transparent = true; c.opacity = 0.55; return c; }) as THREE.Material[];
+    });
+    protos.set(key, proto);
+  }
+  return proto.clone();
 }
 
 export class SeaScene {
   /** Set by the controller to play sounds in step with the effects. */
   sound: (s: Sound) => void = () => {};
+  /** Set by the controller: heavy rain on or off while a storm is over the charts. */
+  rain: (on: boolean) => void = () => {};
+  /** Set by the controller: the sea and the ship's timbers under the whole battle. */
+  ambience: (on: boolean) => void = () => {};
+  private nextGull = 8;
+  /** Messages in bottles crossing between the charts; `stay` ones bob where they land until read. */
+  private bottles: { g: THREE.Group; from: THREE.Vector3; to: THREE.Vector3; t0: number; dur: number; peak: number; yaw: number; spin: number; stay: boolean; landed?: number; fade?: number; done?: () => void }[] = [];
   private renderer: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
   private camera = new THREE.PerspectiveCamera(38, 1, 0.1, 400);
@@ -147,27 +288,31 @@ export class SeaScene {
   private extent = { x: HALF, z: N };
   private last: View | null = null;
   private quality: 'high' | 'low';
+  /** What the player chose: 'auto' lowers the quality by itself on slow machines. */
+  private qualityPref: Quality = 'auto';
+  private paperShadows: THREE.Mesh[] = [];
   private frames = 0; private slow = 0; private laid = false;
   private time = 0;
 
   constructor(private canvas: HTMLCanvasElement) {
-    const forced = new URLSearchParams(location.search).get('q');
-    this.quality = forced === 'low' ? 'low' : 'high';
+    const forced = new URLSearchParams(location.search).get('q') as Quality | null;
+    let stored: string | null = null;
+    try { stored = localStorage.getItem('tsc:quality'); } catch { /* storage unavailable */ }
+    this.qualityPref = forced ?? (stored === 'high' || stored === 'low' ? stored : 'auto');
+    this.quality = this.qualityPref === 'low' ? 'low' : 'high';
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.enabled = this.quality === 'high';
     this.scene.background = new THREE.Color(C.ink);
     this.scene.add(new THREE.HemisphereLight(0xfff1cf, 0x2a2116, 2.0));
     this.sun.position.set(-9, 16, 8);
-    this.sun.castShadow = true;
+    this.sun.castShadow = this.quality === 'high';
     this.sun.shadow.mapSize.set(2048, 2048);
     const sc = this.sun.shadow.camera;
     sc.left = -N - 3; sc.right = N + 3; sc.top = N + 3; sc.bottom = -N - 3; sc.near = 1; sc.far = 60;
     this.sun.shadow.bias = -0.002;
     this.scene.add(this.sun);
-    const table = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), new THREE.MeshLambertMaterial({ color: 0x120e09 }));
-    table.rotation.x = -Math.PI / 2; table.position.y = -1.2;
-    this.scene.add(table);
+    this.scene.add(this.chartTable());
     this.seas = { enemy: new Sea(true), own: new Sea(false) };
     for (const side of ['enemy', 'own'] as Side[]) {
       this.scene.add(this.seas[side].mesh);
@@ -176,6 +321,7 @@ export class SeaScene {
       shGeo.rotateX(-Math.PI / 2);
       const sh = new THREE.Mesh(shGeo, new THREE.ShadowMaterial({ opacity: 0.32 }));
       sh.receiveShadow = true; sh.userData.lift = 0.03;
+      sh.visible = this.quality === 'high';
       this.shadowPlanes.push(sh);
       this.scene.add(sh);
     }
@@ -206,6 +352,7 @@ export class SeaScene {
     canvas.addEventListener('mousedown', (e) => { if (e.button === 1) e.preventDefault(); });
     this.scene.add(this.ghosts);
     this.resize();
+    void loadPropModels().then((n) => { if (n && this.last) this.sync(this.last); });
     void loadShipModels().then((n) => { if (n) { for (const o of this.ships.values()) this.shipsGroup.remove(o.root); this.ships.clear(); if (this.last) this.sync(this.last); } });
     let prev = performance.now();
     const loop = () => {
@@ -214,7 +361,7 @@ export class SeaScene {
       this.time += dt;
       this.frame(dt, this.time);
       // Drop the expensive passes on machines that cannot keep up (unless a quality was forced).
-      if (!forced && this.quality === 'high' && this.frames++ > 20 && this.frames < 140) {
+      if (this.qualityPref === 'auto' && this.quality === 'high' && this.frames++ > 20 && this.frames < 140) {
         if (dt > 0.036) this.slow++;
         if (this.frames === 139 && this.slow > 70) this.lower();
       }
@@ -223,18 +370,135 @@ export class SeaScene {
     loop();
   }
 
+  /** Old sailcloth spread over the table: woven canvas in stitched panels, drawn once on a canvas and tiled. */
+  private sailcloth(): THREE.CanvasTexture {
+    const S = 512, cv = document.createElement('canvas'); cv.width = cv.height = S;
+    const g = cv.getContext('2d')!;
+    g.fillStyle = '#a39680'; g.fillRect(0, 0, S, S);
+    // Weave: fine warp and weft threads of slightly varying shade.
+    for (let i = 0; i < S; i += 2) {
+      g.fillStyle = `rgba(${Math.random() < 0.5 ? '255,240,210' : '60,45,25'},${0.04 + Math.random() * 0.05})`; g.fillRect(i, 0, 1, S);
+      g.fillStyle = `rgba(${Math.random() < 0.5 ? '255,240,210' : '60,45,25'},${0.04 + Math.random() * 0.05})`; g.fillRect(0, i, S, 1);
+    }
+    // Weathering: soft blotches of grime and sun-bleaching.
+    for (let i = 0; i < 26; i++) {
+      const x = Math.random() * S, y = Math.random() * S, r = 20 + Math.random() * 70;
+      for (const [ox, oy] of [[0, 0], [S, 0], [-S, 0], [0, S], [0, -S]]) {
+        const rg = g.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, r);
+        rg.addColorStop(0, Math.random() < 0.6 ? 'rgba(70,50,25,.13)' : 'rgba(255,245,220,.1)'); rg.addColorStop(1, 'rgba(0,0,0,0)');
+        g.fillStyle = rg; g.fillRect(x + ox - r, y + oy - r, 2 * r, 2 * r);
+      }
+    }
+    // Two panels per tile, joined by a lapped seam with a double row of stitches.
+    for (const x of [0, S / 2]) {
+      const sh = g.createLinearGradient(x - 10, 0, x + 14, 0);
+      sh.addColorStop(0, 'rgba(40,28,14,0)'); sh.addColorStop(0.42, 'rgba(40,28,14,.32)'); sh.addColorStop(0.5, 'rgba(255,240,210,.18)'); sh.addColorStop(1, 'rgba(40,28,14,0)');
+      g.fillStyle = sh; g.fillRect(x - 10, 0, 24, S);
+      g.fillStyle = 'rgba(50,36,20,.55)';
+      for (let y = 0; y < S; y += 9) { g.fillRect(x - 5, y, 1.4, 4.5); g.fillRect(x + 7, y + 4, 1.4, 4.5); }
+    }
+    const t = new THREE.CanvasTexture(cv);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+    return t;
+  }
+
+  /** The charts lie on a sail spread over the captain's table, under a pool of lamplight; each sheet casts a soft shadow. */
+  private chartTable(): THREE.Group {
+    const g = new THREE.Group();
+    const cloth = this.sailcloth();
+    cloth.repeat.set(300 / 18, 300 / 18);
+    const table = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), new THREE.MeshStandardMaterial({ map: cloth, color: 0x6c6c6c, roughness: 0.95 }));
+    table.rotation.x = -Math.PI / 2; table.position.y = -1.2;
+    const canvasTex = (draw: (c: CanvasRenderingContext2D) => void) => {
+      const cv = document.createElement('canvas'); cv.width = cv.height = 256;
+      draw(cv.getContext('2d')!);
+      const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
+    };
+    // Lamplight falls off into darkness away from the charts.
+    const dusk = canvasTex((c) => {
+      const r = c.createRadialGradient(128, 128, 30, 128, 128, 128);
+      r.addColorStop(0, 'rgba(13,11,8,0)'); r.addColorStop(0.32, 'rgba(13,11,8,.18)'); r.addColorStop(0.62, 'rgba(13,11,8,.7)'); r.addColorStop(1, 'rgba(13,11,8,1)');
+      c.fillStyle = r; c.fillRect(0, 0, 256, 256);
+    });
+    const pool = new THREE.Mesh(new THREE.PlaneGeometry(96, 96), new THREE.MeshBasicMaterial({ map: dusk, transparent: true, depthWrite: false }));
+    pool.rotation.x = -Math.PI / 2; pool.position.y = -1.18;
+    const far = new THREE.Mesh(new THREE.RingGeometry(47, 200, 48), new THREE.MeshBasicMaterial({ color: C.ink }));
+    far.rotation.x = -Math.PI / 2; far.position.y = -1.17;
+    const soft = canvasTex((c) => {
+      c.filter = 'blur(14px)'; c.fillStyle = 'rgba(0,0,0,.85)'; c.fillRect(36, 36, 184, 184);
+    });
+    for (let i = 0; i < 2; i++) {
+      const s = new THREE.Mesh(new THREE.PlaneGeometry(N + 4, N + 4), new THREE.MeshBasicMaterial({ map: soft, transparent: true, depthWrite: false }));
+      s.rotation.x = -Math.PI / 2;
+      this.paperShadows.push(s);
+      g.add(s);
+    }
+    g.add(table, pool, far);
+    return g;
+  }
+
+  /** Choose the 3D quality: 'auto' starts high and steps down on a slow machine. Remembered between visits. */
+  setQuality(q: Quality) {
+    this.qualityPref = q;
+    try { localStorage.setItem('tsc:quality', q); } catch { /* storage unavailable */ }
+    if (q === 'low') this.lower();
+    else { this.raise(); this.frames = 0; this.slow = 0; }
+  }
+  getQuality(): Quality { return this.qualityPref; }
+  /** Choose how water is drawn around hulls (0 to 4); see Sea.wake. */
+  setWake(n: number) { Sea.wake = n; }
+
+  private refreshMaterials() {
+    this.scene.traverse((o) => {
+      const m = (o as THREE.Mesh).material;
+      if (m) for (const x of Array.isArray(m) ? m : [m]) x.needsUpdate = true;
+    });
+  }
+
+  private raise() {
+    if (this.quality === 'high') return;
+    this.quality = 'high';
+    this.post = new Post(this.renderer, this.scene, this.camera);
+    this.renderer.shadowMap.enabled = true;
+    this.sun.castShadow = true;
+    for (const p of this.shadowPlanes) p.visible = true;
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    this.refreshMaterials();
+    this.resize();
+  }
+
   private lower() {
+    if (this.quality === 'low' && !this.post && !this.renderer.shadowMap.enabled) return;
     this.quality = 'low';
     this.post = null;
     this.renderer.shadowMap.enabled = false;
     this.sun.castShadow = false;
     for (const p of this.shadowPlanes) p.visible = false;
     this.renderer.setPixelRatio(1);
+    this.refreshMaterials();
     this.resize();
   }
 
   /** Warm light on your turn, colder on the enemy's. */
   setTurn(mine: boolean) { this.post?.grade.set(mine ? 1.04 : 0.8, mine ? 1 : 0.86, mine ? 0.94 : 0.96); }
+
+  /** A message in a bottle crosses from one chart to the other. Resolves when it lands. */
+  bottle(to: Side, stay: boolean): Promise<void> {
+    const from: Side = to === 'own' ? 'enemy' : 'own';
+    // From a square near the middle of the thrower's chart to one near the middle of the other.
+    const mid = () => 5 + Math.floor(Math.random() * 6);
+    const a = cellCenter({ side: from, x: mid(), y: mid() }).setY(0.6), land = cellCenter({ side: to, x: mid(), y: mid() }).setY(0.1);
+    const dist = a.distanceTo(land);
+    const g = bottleModel();
+    this.misc.add(g);
+    this.sound('splash');
+    return new Promise((res) => this.bottles.push({
+      g, from: a, to: land, t0: this.time, dur: 1.2 + dist * 0.045, peak: 2.2 + dist * 0.22,
+      yaw: Math.atan2(-(land.z - a.z), land.x - a.x), spin: 2 + Math.floor(Math.random() * 2), stay, done: res,
+    }));
+  }
+  /** The bottle that washed up has been read: it sinks away. */
+  clearBottles() { for (const b of this.bottles) b.stay = false; }
 
   /** The tide turns: a wave crosses both charts in its direction. */
   tide(dx: number, dy: number) {
@@ -248,6 +512,8 @@ export class SeaScene {
     this.ships.clear(); this.marks.clear(); this.misc.clear(); this.hl.clear();
     this.seas.own.clear(); this.seas.enemy.clear();
     this.kraken.setZone(null);
+    this.rain(false);
+    this.ambience(false);
     this.ghosts.clear(); this.ghostKey = '';
     this.last = null;
   }
@@ -268,6 +534,8 @@ export class SeaScene {
     this.camera.aspect = w / h;
     const wide = w > 1000;
     const safe = { left: wide ? 268 : 6, right: wide ? 232 : 6, top: 74, bottom: wide ? 196 : 150 };
+    // Keep the charts' band in focus: the free space between the top bar and the helm.
+    this.post?.setFocus(1 - (safe.top + (h - safe.bottom)) / 2 / h, (h - safe.top - safe.bottom) / h * 0.42);
     const layout = wide && w / h > 1.25 ? ABREAST : STACKED;
     const changed = layout !== origin || !this.laid;
     this.laid = true;
@@ -275,6 +543,7 @@ export class SeaScene {
     (['enemy', 'own'] as Side[]).forEach((side, i) => {
       this.seas[side].mesh.position.set(origin[side].x + HALF, 0, origin[side].z + HALF);
       this.shadowPlanes[i].position.set(origin[side].x + HALF, 0, origin[side].z + HALF);
+      this.paperShadows[i].position.set(origin[side].x + HALF + 0.5, -1.185, origin[side].z + HALF + 0.7);
     });
     this.dir.set(0, 1, layout === ABREAST ? 0.7 : 0.95).normalize();
     this.extent = layout === ABREAST ? { x: N + 0.75, z: HALF } : { x: HALF, z: N + 0.5 };
@@ -359,7 +628,7 @@ export class SeaScene {
       if (o.state === 'afloat') {
         // A moving hull leaves a wake and heels into its turn.
         const speed = before.distanceTo(p) / Math.max(dt, 1e-3), turning = Math.abs(swing);
-        if (speed > 0.3) sea.bump(Math.floor(before.x - origin[o.side].x), Math.floor(before.z - origin[o.side].z), 0.06);
+        if (speed > 0.3 && !Sea.wake) sea.bump(Math.floor(before.x - origin[o.side].x), Math.floor(before.z - origin[o.side].z), 0.06);
         const bob = calm ? 0 : 1;
         // Ride the bending chart: rise with it and lean with its slope along and across the hull.
         const cy = Math.cos(o.root.rotation.y), sy = Math.sin(o.root.rotation.y), half = o.len * 0.35;
@@ -368,29 +637,52 @@ export class SeaScene {
         o.tilt.position.y += (waveH(p.x, p.z, t) * bob + o.lift - o.tilt.position.y) * Math.min(1, k * 2);
         o.tilt.rotation.x = bob * (0.04 * Math.sin(t * 1.25 + o.phase) - Math.atan2(beam, 0.6)) + turning * 0.5;
         o.tilt.rotation.z = bob * (0.015 * Math.sin(t * 0.9 + o.phase * 2.3) + Math.atan2(fore, half * 2)) - Math.min(0.06, speed * 0.02);
-        for (const [x, y] of o.cells) sea.hold(x, y, 0.55);
-        if (o.model.funnel) this.fx.funnel(o.root.localToWorld(o.model.funnel.clone().setY(o.model.funnel.y + o.tilt.position.y)), dt);
+        // The wake builds quickly under way and lingers a moment after she stops, as real wakes do.
+        const want = Math.min(1, speed / 1.2), was = o.way ?? 0;
+        o.way = was + (want - was) * Math.min(1, dt * (want > was ? 6 : 0.7));
+        if (!Sea.wake) for (const [x, y] of o.cells) sea.hold(x, y, 0.55);
+        // At rest, a deck gun keeps its muzzle trained on the enemy's chart, whichever way the hull lies.
+        const gun = o.model.gun;
+        if (gun && o.side === 'own' && !o.laying) {
+          const to = cellCenter({ side: 'enemy', x: N / 2, y: N / 2 });
+          o.tilt.updateMatrixWorld(true);
+          const local = gun.pivot.parent!.worldToLocal(to);
+          const want = Math.atan2(-(local.z - gun.pivot.position.z), local.x - gun.pivot.position.x);
+          const d = Math.atan2(Math.sin(want - gun.pivot.rotation.y), Math.cos(want - gun.pivot.rotation.y));
+          gun.pivot.rotation.y += d * Math.min(1, dt * 3);
+        }
+        if (o.model.funnel && !o.peek) this.fx.funnel(o.root.localToWorld(o.model.funnel.clone().setY(o.model.funnel.y + o.tilt.position.y)), dt);
       } else {
         if (o.state === 'sinking') {
           o.sink = Math.min(1, o.sink + dt / 2.6);
           this.fx.bubbles(p.clone().setY(0.1), dt);
           for (const [x, y] of o.cells) sea.hold(x, y, 0.9);
           if (o.sink > 0.45) o.model.sails.visible = false;
-          if (o.sink >= 1) o.state = 'wreck';
-        } else for (const [x, y] of o.cells) sea.hold(x, y, 0.28);
+          // Down she goes, through the paper, and the water closes over her: nothing is left to block the way.
+          if (o.sink >= 1) { o.state = 'wreck'; o.root.visible = false; }
+        }
         const e = o.sink * o.sink * (3 - 2 * o.sink);
-        o.tilt.position.y = waveH(p.x, p.z, t) * (calm ? 0 : 1) - 0.34 * e;
+        o.tilt.position.y = waveH(p.x, p.z, t) * (calm ? 0 : 1) - 1.25 * e;
         o.tilt.rotation.x = 0.55 * e;
         o.tilt.rotation.z = -0.16 * e;
         for (const m of o.model.mats) { m.uniforms.uTint.value.setHex(0x17120b); m.uniforms.uTintAmt.value = 0.55 * e; }
       }
-      for (const f of o.fires) this.embers.push(o.tilt.localToWorld(f.clone()));
+      if (o.state !== 'wreck') for (const f of o.fires) this.embers.push(o.tilt.localToWorld(f.clone()));
     }
     for (const e of this.embers0) this.embers.push(e);
     for (const e of this.embers) this.fx.ember(e, dt);
     this.flames.forEach((f, i) => { f.scale.y = 1 + 0.22 * Math.sin(t * 9 + i * 1.7); });
     for (const p of this.puffs) { p.s.position.set(p.base.x + 0.5 * Math.sin(t * 0.3 + p.ph), p.base.y + 0.12 * Math.sin(t * 0.5 + p.ph * 2), p.base.z + 0.4 * Math.cos(t * 0.24 + p.ph)); }
-    this.glints.forEach((g, i) => { g.scale.setScalar(1 + 0.12 * Math.sin(t * 3 + i)); g.rotation.y = t * 0.6 + i; });
+    this.glints.forEach((g, i) => {
+      const inner = g.userData.inner as THREE.Object3D | undefined;
+      if (!inner) return;
+      inner.position.y = 0.035 * Math.sin(t * 1.6 + i * 1.3);
+      // Chests turn slowly; a seal keeps its kraken facing the captain.
+      inner.rotation.y = g.userData.spin ? g.userData.spin * t + i : 0;
+      inner.rotation.z = g.userData.spin ? 0.06 * Math.sin(t * 1.1 + i) : 0;
+      const glow = g.userData.glow as THREE.Mesh | undefined;
+      if (glow) (glow.material as THREE.MeshBasicMaterial).opacity = 0.32 + 0.22 * Math.sin(t * 2.4 + i);
+    });
     this.kraken.update(dt, t);
     // Everything lying on the chart follows its swell.
     const swell = calm ? () => 0 : (x: number, z: number) => waveH(x, z, t);
@@ -409,13 +701,78 @@ export class SeaScene {
       if (st) this.weather.strike(cellCenter({ side, x: Math.floor(Math.random() * N), y: st.row + Math.floor(Math.random() * 3) }));
       this.sound('thunder');
     }
+    // The water around each hull follows her real outline, heading and way.
+    for (const side of ['own', 'enemy'] as Side[]) {
+      const list = [];
+      for (const o of this.ships.values()) {
+        if (o.side !== side || o.state === 'wreck' || o.peek || !o.root.visible || !o.root.parent) continue;
+        const p = o.root.position, y = o.root.rotation.y, f = (o.foot ??= this.footprint(o));
+        const cx = p.x + Math.cos(y) * f.cx + Math.sin(y) * f.cz, cz = p.z - Math.sin(y) * f.cx + Math.cos(y) * f.cz;
+        list.push({ x: cx - origin[side].x, y: cz - origin[side].z, dir: -y, half: f.half, beam: f.beam, speed: o.state === 'afloat' ? o.way ?? 0 : 0 });
+      }
+      // Floating treasure sits in the water like a small hull.
+      for (const tr of this.last?.pub.treasures ?? []) {
+        if ((tr.side === this.last!.me) !== (side === 'own')) continue;
+        list.push({ x: tr.x + 0.5, y: tr.y + 0.5, dir: 0, half: 0.38, beam: 0.38, speed: 0 });
+      }
+      this.seas[side].setHulls(list);
+    }
     this.seas.own.update(dt, t); this.seas.enemy.update(dt, t);
-    this.weather.update(dt, t);
+    this.weather.update(dt, t, this.camera);
+    for (const b of [...this.bottles]) {
+      const k = Math.min(1, (t - b.t0) / b.dur);
+      if (k < 1) {
+        // Thrown: a ballistic arc (constant speed across, parabola up and down), tumbling end over end.
+        const p = b.from.clone().lerp(b.to, k);
+        p.y = b.from.y + (b.to.y - b.from.y) * k + 4 * b.peak * k * (1 - k);
+        b.g.position.copy(p);
+        b.g.rotation.set(0, b.yaw, -b.spin * k * Math.PI * 2);
+      } else {
+        if (!b.landed) { b.landed = t; this.fx.water(b.to.clone().setY(0.1)); this.sound('plunge'); if (b.done) { const d = b.done; b.done = undefined; d(); } }
+        // Afloat where it fell: it rides the swell, lying on its side.
+        const s = t - b.landed;
+        b.g.position.set(b.to.x, (calm ? 0 : waveH(b.to.x, b.to.z, t)) + 0.1 + 0.04 * Math.sin(t * 2.4) - (b.stay ? 0 : s * 0.25), b.to.z);
+        b.g.rotation.set(0.25 * Math.sin(t * 1.7), b.yaw, 0.18 * Math.sin(t * 2.1));
+        if (!b.stay) {
+          // The sender only sees it splash down and slip under.
+          b.fade = Math.max(0, (b.fade ?? 1) - dt * 0.9);
+          b.g.traverse((o) => { const m = (o as THREE.Mesh).material as THREE.Material & { opacity: number } | undefined; if (m) { m.transparent = true; m.opacity = Math.min(m.opacity, b.fade!); } });
+          if (b.fade <= 0) { this.misc.remove(b.g); this.bottles.splice(this.bottles.indexOf(b), 1); }
+        }
+      }
+    }
+    // Now and then a gull cries overhead (they keep away from storms).
+    if ((this.nextGull -= dt) < 0) { this.nextGull = 14 + Math.random() * 26; if (this.weather.gullsHere && this.last?.pub.phase === 'battle') this.sound('gull'); }
     this.fx.update(dt);
     this.shakeAmt *= Math.exp(-dt * 7);
     this.camera.position.copy(this.camPos);
     if (this.shakeAmt > 0.002) this.camera.position.add(new THREE.Vector3((Math.random() - 0.5) * this.shakeAmt, (Math.random() - 0.5) * this.shakeAmt, 0));
     if (this.post) this.post.render(t); else this.renderer.render(this.scene, this.camera);
+  }
+
+  /** Measure a ship's hull below her deck (no sails, no bowsprit above it) in her own frame. */
+  private footprint(o: ShipObj) {
+    o.root.updateMatrixWorld(true);
+    const inv = o.root.matrixWorld.clone().invert(), v = new THREE.Vector3(), m = new THREE.Matrix4();
+    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+    const top = o.model.deckY * 0.9;
+    o.model.body.traverse((c) => {
+      const mesh = c as THREE.Mesh;
+      if (!mesh.isMesh || !mesh.geometry?.attributes.position) return;
+      let sail = false;
+      for (let a: THREE.Object3D | null = mesh; a; a = a.parent) if (a === o.model.sails) sail = true;
+      if (sail) return;
+      m.multiplyMatrices(inv, mesh.matrixWorld);
+      const pos = mesh.geometry.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        v.fromBufferAttribute(pos, i).applyMatrix4(m);
+        if (v.y > top) continue;
+        x0 = Math.min(x0, v.x); x1 = Math.max(x1, v.x); z0 = Math.min(z0, v.z); z1 = Math.max(z1, v.z);
+      }
+    });
+    if (!isFinite(x0)) return { cx: 0, cz: 0, half: o.len * 0.47, beam: 0.3 };
+    const beam = (z1 - z0) / 2;
+    return { cx: (x0 + x1) / 2, cz: (z0 + z1) / 2, half: Math.max((x1 - x0) / 2, beam + 0.05), beam };
   }
 
   /* ---------- ships ---------- */
@@ -476,6 +833,7 @@ export class SeaScene {
   }
 
   private drawSide(p: SidePub, side: Side, round: number) {
+    const boxes: { x0: number; y0: number; x1: number; y1: number; color: number; opacity: number }[] = [];
     for (const s of p.shots) {
       if (this.hidden.has(`${side}:${s.x},${s.y}`)) continue;
       const age = round - s.round, fade = Math.max(0.3, 1 - age * 0.14), at = cellCenter({ side, x: s.x, y: s.y });
@@ -508,12 +866,16 @@ export class SeaScene {
     for (const sc of p.scans) {
       if (round - sc.round > 4) continue;
       const at = cellCenter({ side, x: sc.x, y: sc.y });
-      const box = new THREE.LineSegments(G.zone, side === 'enemy' ? M.lineAmber : M.lineWax);
-      box.position.set(at.x, 0.12, at.z);
-      const l = label(sc.count < 0 ? '?' : String(sc.count), side === 'enemy' ? '#d9a441' : '#c0563c');
-      l.position.set(at.x, 0.085, at.z);
-      this.marks.add(box, l);
+      // The patch's outline is drawn into the sea, so the swell cannot hide it.
+      boxes.push({ x0: sc.x - ZONE, y0: sc.y - ZONE, x1: sc.x + ZONE + 1, y1: sc.y + ZONE + 1, color: side === 'enemy' ? C.amber : C.wax, opacity: 0.9 });
+      // Only my own readings carry a number; where the enemy scanned me, the box alone says so.
+      if (side === 'enemy') {
+        const l = label(sc.count < 0 ? '?' : String(sc.count), '#d9a441');
+        l.position.set(at.x, 0.085, at.z);
+        this.marks.add(l);
+      }
     }
+    this.seas[side].setBoxes(boxes);
     p.fogs.forEach((f, fi) => {
       const at = cellCenter({ side, x: f.x, y: f.y });
       for (let i = 0; i < 14; i++) {
@@ -549,7 +911,7 @@ export class SeaScene {
     const foe = (1 - v.me) as 0 | 1, seen = new Set<string>();
     const wreck = (o: ShipObj) => {
       if (o.state !== 'afloat') return;
-      if (v.quiet) { o.state = 'wreck'; o.sink = 1; o.model.sails.visible = false; }
+      if (v.quiet) { o.state = 'wreck'; o.sink = 1; o.model.sails.visible = false; o.root.visible = false; }
       else { o.state = 'sinking'; this.sound('sink'); }
     };
     for (const s of v.ships) {
@@ -578,6 +940,24 @@ export class SeaScene {
       this.aim(o, s);
       this.decorate(o, s.hits, false, !!s.rev);
     }
+    // The Long Glass: while it is still my turn, the patch I looked at shows the enemy ships in it.
+    const peeks = v.pub.sides[v.me].peeks || [];
+    const look = v.pub.phase === 'battle' && v.pub.current === v.me ? peeks.filter((q) => q.round === v.pub.round).slice(-1)[0] : undefined;
+    this.seas.enemy.setPeek(look ? { x: look.x, y: look.y } : null, this.time);
+    if (look) {
+      const a = cellCenter({ side: 'enemy', x: look.x, y: look.y }), clip = new THREE.Vector4(a.x - 0.5, a.z - 0.5, a.x + 1.5, a.z + 1.5);
+      for (const s of look.ships) {
+        const key = `p${s.kind}:${s.x},${s.y}`, fresh = !this.ships.has(key), o = this.ship(key, s.kind, s.len, 'enemy');
+        seen.add(key);
+        // Its shadow and funnel smoke would give away the rest of the ship outside the glass.
+        if (!o.peek) o.root.traverse((c) => { c.castShadow = false; });
+        o.peek = true;
+        this.aim(o, s);
+        for (const m of o.model.mats) m.uniforms.uClip.value.copy(clip);
+        // The ship rises into view a moment after the glass clears.
+        if (fresh) { o.root.visible = false; setTimeout(() => { o.root.visible = true; }, 650); }
+      }
+    }
     for (const [key, o] of this.ships) if (!seen.has(key)) { this.shipsGroup.remove(o.root); this.ships.delete(key); }
 
     for (const c of this.marks.children) { const i = this.flames.indexOf(c); if (i >= 0) this.flames.splice(i, 1); }
@@ -593,6 +973,8 @@ export class SeaScene {
     this.stormy = !!st && v.pub.phase === 'battle';
     this.weather.setCharts(origin.own, origin.enemy);
     this.weather.setStorm(this.stormy ? st!.row : null);
+    this.rain(this.stormy);
+    this.ambience(v.pub.phase !== 'over');
     for (const side of ['own', 'enemy'] as Side[]) {
       this.seas[side].setStorm(st ? st.row : null);
       this.seas[side].setRing(v.pub.ring);
@@ -618,28 +1000,19 @@ export class SeaScene {
     this.syncGhosts(v.ghosts || []);
     for (const t of v.pub.treasures) {
       // The enemy's flotsam is only a clue to where their ships will go: draw it smaller and duller.
-      const theirs = t.side !== v.me, k = theirs ? 0.7 : 1;
+      const theirs = t.side !== v.me;
       const at = cellCenter({ side: theirs ? 'enemy' : 'own', x: t.x, y: t.y });
-      if (t.kind === 'seal') {
-        // A covenant seal: a disc of sealing wax standing in the water.
-        const g = new THREE.Group(), disc = new THREE.Mesh(G.seal, theirs ? M.sealDim : M.seal), rim = new THREE.Mesh(G.sealRim, theirs ? M.goldDim : M.gold);
-        g.scale.setScalar(k);
-        disc.rotation.x = rim.rotation.x = Math.PI / 2;
-        disc.position.y = rim.position.y = 0.42;
-        disc.castShadow = true;
-        g.add(disc, rim);
-        g.position.set(at.x, 0.08, at.z);
-        this.marks.add(g);
-        this.glints.push(g);
-        continue;
+      const g = new THREE.Group(), inner = treasureModel(t.kind, theirs);
+      g.add(inner);
+      g.userData.inner = inner; g.userData.spin = t.kind === 'seal' ? 0 : 0.12;
+      if (t.kind === 'seal' && !theirs) {
+        // A covenant seal calls attention to itself: a slow red-gold glow on the water beneath it.
+        const glow = new THREE.Mesh(G.glow, new THREE.MeshBasicMaterial({ map: glowTex, color: 0xff7a40, transparent: true, opacity: 0.4, depthWrite: false, blending: THREE.AdditiveBlending }));
+        glow.rotation.x = -Math.PI / 2; glow.position.y = 0.01;
+        g.add(glow); g.userData.glow = glow;
       }
-      const g = new THREE.Group(), chest = new THREE.Mesh(G.chest, theirs ? M.chestDim : M.chest), lid = new THREE.Mesh(G.lid, theirs ? M.goldDim : M.gold);
-      g.scale.setScalar(k);
-      chest.position.y = 0.15; lid.position.y = 0.35; chest.castShadow = true;
-      const edge = new THREE.LineSegments(new THREE.EdgesGeometry(G.chest), M.line);
-      edge.position.y = 0.15;
-      g.add(chest, lid, edge);
-      g.position.set(at.x, 0.08, at.z);
+      g.scale.setScalar(theirs ? 1.05 : 1.4);
+      g.position.set(at.x, 0.06, at.z);
       this.marks.add(g);
       this.glints.push(g);
     }
@@ -693,14 +1066,9 @@ export class SeaScene {
     }
   }
 
+  /** Tint squares: drawn by the sea shader itself, so they ride the swell and are never hidden by it. */
   setHighlights(list: Highlight[]) {
-    this.hl.clear();
-    for (const h of list) {
-      const m = new THREE.Mesh(G.cell, new THREE.MeshBasicMaterial({ color: h.color, transparent: true, opacity: h.opacity ?? 0.45, depthWrite: false }));
-      const at = cellCenter(h);
-      m.position.set(at.x, 0.13, at.z);
-      this.hl.add(m);
-    }
+    for (const side of ['own', 'enemy'] as Side[]) this.seas[side].setHighlights(list.filter((h) => h.side === side).map((h) => ({ x: h.x, y: h.y, color: h.color, opacity: h.opacity ?? 0.45 })));
   }
 
   /* ---------- effects ---------- */
@@ -711,8 +1079,9 @@ export class SeaScene {
     const guns = [...this.ships.values()].filter((o) => o.side === 'own' && o.state === 'afloat');
     const armed = guns.filter((o) => o.model.gun);
     if (target.side === 'enemy' && armed.length) {
-      // A ship with a deck gun swings it onto the target and fires from its muzzle.
-      return this.layGun(armed[0], to).then(() => this.fly(armed[0].model.gun!.muzzle.getWorldPosition(new THREE.Vector3()), to, target, outcome, armed[0]));
+      // One of the armed ships swings her deck gun onto the target and fires from its muzzle.
+      const g = armed[Math.floor(Math.random() * armed.length)];
+      return this.layGun(g, to).then(() => this.fly(g.model.gun!.muzzle.getWorldPosition(new THREE.Vector3()), to, target, outcome, g)).finally(() => { g.laying = false; });
     }
     if (target.side === 'enemy' && guns.length) {
       const g = guns[Math.floor(Math.random() * guns.length)];
@@ -730,6 +1099,7 @@ export class SeaScene {
   /** Turn a ship's deck gun towards a point; resolves once it is laid. */
   private layGun(o: ShipObj, to: THREE.Vector3): Promise<void> {
     const { pivot } = o.model.gun!;
+    o.laying = true;
     o.tilt.updateMatrixWorld(true);
     const local = pivot.parent!.worldToLocal(to.clone());
     const want = Math.atan2(-(local.z - pivot.position.z), local.x - pivot.position.x);
@@ -781,7 +1151,7 @@ export class SeaScene {
   private impact(target: Cell, outcome: ShotOutcome) {
     const at = cellCenter(target).setY(0.25);
     this.seas[target.side].bump(target.x, target.y, 1);
-    if (outcome === 'miss' || outcome === 'wreck') { this.fx.water(at); this.sound('splash'); }
+    if (outcome === 'miss' || outcome === 'wreck') { this.fx.water(at); this.sound('plunge'); }
     else if (outcome === 'clang') { this.fx.clang(at.setY(0.5)); this.shake(0.12); this.sound('clang'); }
     else { this.fx.explosion(at.setY(0.45)); this.shake(outcome === 'sunk' ? 0.5 : 0.28); this.sound('hit'); }
   }
@@ -814,5 +1184,5 @@ export class SeaScene {
     });
   }
 
-  coins(c: Cell) { this.fx.coins(cellCenter(c).setY(0.4)); this.sound('coin'); }
+  coins(c: Cell, mine = true) { this.fx.coins(cellCenter(c).setY(0.4)); this.sound(mine ? 'treasure' : 'coin'); }
 }

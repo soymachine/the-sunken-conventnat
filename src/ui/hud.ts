@@ -1,10 +1,10 @@
 // Oak-and-brass HUD drawn with DOM + SVG over the 3D canvas.
 import { Client, SEASON, roleOf } from '../game/engine';
-import { ITEMS, ITEM_IDS, Item } from '../game/powerups';
+import { ITEMS, ITEM_HELP, ITEM_IDS, Item, MAX_ITEMS } from '../game/powerups';
 import { FLEETS, KRAKEN_SEALS, N, Role, shipCells } from '../game/rules';
 
 export type Tool = 'broadside' | 'chain' | 'spy' | Item;
-export type Mode = 'fire' | 'sail' | 'turn' | 'power' | 'kraken' | Tool;
+export type Mode = 'fire' | 'sail' | 'turn' | 'power' | 'kraken' | 'pact' | Tool;
 
 /** The two invented captains of the Convoy mode. */
 export const CAPTAINS: Record<Exclude<Role, 'classic'>, { name: string; title: string; mission: string; power: string; powerText: string }> = {
@@ -27,6 +27,15 @@ export const TOOLS: Record<'broadside' | 'chain' | 'spy', { name: string; ap: nu
   spy: { name: 'Cutter’s glass', ap: 1 },
 };
 
+/** What each special action above the helm does, told in full for its tooltip. */
+const TOOL_HELP: Record<string, { ship?: string; text: string }> = {
+  broadside: { ship: 'Ship of the Line', text: 'Fire three squares in a row at once. Press R to swing the line between across and down.' },
+  chain: { ship: 'Frigate', text: 'A single shot of chained balls: a ship it hits is pinned and cannot sail or turn on her next turn.' },
+  spy: { ship: 'Cutter', text: 'Train the cutter\'s glass on a 5×5 patch of enemy water: you learn how many ship sections lie inside it.' },
+  pact: { text: 'Once a battle: give one of your damaged ships to the deep. She sinks at once and the deep pays two covenant seals (her toll and the pact). Not the merchantman, nor your last ship.' },
+  kraken: { text: 'Break three covenant seals and wake the Kraken under a 3×3 patch of enemy water. It strikes now and again on their next turn, and the ships it finds cannot move meanwhile.' },
+};
+
 function svg<K extends keyof SVGElementTagNameMap>(p: Element, tag: K, a: Record<string, string | number>, text?: string) {
   const e = document.createElementNS(NS, tag);
   for (const k in a) e.setAttribute(k, String(a[k]));
@@ -34,12 +43,14 @@ function svg<K extends keyof SVGElementTagNameMap>(p: Element, tag: K, a: Record
   p.appendChild(e);
   return e;
 }
-const polar = (x: number, y: number, r: number, deg: number) => [x + r * Math.cos((deg * Math.PI) / 180), y - r * Math.sin((deg * Math.PI) / 180)];
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
 export interface HudHandlers {
   mode(m: Mode): void;
   mute(): boolean;
+  quality(q: 'auto' | 'high' | 'low'): void;
+  note(text: string): void;
+  letterRead(): void;
   buy(item: Item): void;
   endTurn(): void;
   shuffle(): void;
@@ -54,19 +65,42 @@ export class Hud {
   private sectors: [SVGPathElement, SVGTextElement][] = [];
   private balls: SVGGElement[] = [];
   private capTurns = 0;
+  private sealHelp = '';
+  private muted = false;
+  private qualityPref = 'auto';
   private q = <T extends Element>(s: string) => this.root.querySelector(s) as T;
 
   constructor(private on: HudHandlers) {
     this.root = document.getElementById('hud')!;
     this.root.innerHTML = `
       <header class="rail top">
-        <div class="turn"><svg class="compass" viewBox="0 0 100 100"></svg><div><b id="turnTitle"></b><i id="turnSub"></i></div><button id="mute" class="mini" aria-pressed="false">Sound on</button></div>
+        <div class="turn"><button id="menuBtn" class="mini" aria-expanded="false" aria-controls="menu">Settings</button></div>
         <h1 class="title"><span>The Sunken Covenant</span></h1>
         <div class="foe"><span id="foeNote"></span></div>
+        <div class="status" role="status"><b id="turnTitle"></b><span id="turnSub"></span><p id="placeHint"></p></div>
       </header>
+      <div class="menu card" id="menu" hidden>
+        <h2>Settings</h2>
+        <p class="opt">Sound</p>
+        <div class="seg" data-pref="sound" role="radiogroup" aria-label="Sound"><button data-v="on" role="radio">On</button><button data-v="off" role="radio">Off</button></div>
+        <p class="opt">3D quality</p>
+        <div class="seg" data-pref="quality" role="radiogroup" aria-label="3D quality"><button data-v="auto" role="radio">Auto</button><button data-v="high" role="radio">High</button><button data-v="low" role="radio">Low</button></div>
+        <p class="meta">Auto steps down by itself if the game runs slowly. Low drops shadows, glow and the print grade.</p>
+      </div>
+      <div class="shopTip" id="shopTip" role="tooltip" hidden></div>
+      <form class="compose card" id="compose" hidden>
+        <h2>A message in a bottle</h2>
+        <label for="noteText" class="meta">One a turn, for the other captain's eyes. It costs nothing.</label>
+        <textarea id="noteText" maxlength="80" rows="2" placeholder="Fair winds, and a fair fight…"></textarea>
+        <div class="row"><span class="count" id="noteCount">0 / 80</span><button type="button" class="plaque dark" id="noteCancel">Keep it</button><button type="submit" class="plaque" id="noteSend">Seal &amp; cast</button></div>
+      </form>
+      <div class="letter" id="letter" hidden role="dialog" aria-labelledby="letterHead">
+        <div class="card"><p class="meta" id="letterHead">A bottle washes up on your waters</p><p class="ink" id="letterText"></p><p class="sign" id="letterSign"></p><button class="plaque" id="letterOk">Fold it away</button></div>
+      </div>
+      <div class="herald" id="herald" aria-hidden="true"><div><b></b><span></span></div></div>
       <div class="objective" id="objective" hidden></div>
       <aside class="card left">
-        <h2>The covenant</h2><div class="seals" id="seals"></div>
+        <h2>The covenant</h2><div class="seals" id="seals" tabindex="0" aria-describedby="shopTip"></div><p class="howto" id="sealHow"></p>
         <h2>Admiralty orders</h2><p id="orderText"></p><p id="orderMeta" class="meta"></p>
         <h2>Quartermaster <span id="gold" title="Doubloons"></span></h2><ul id="shop"></ul>
         <h2>Your fleet</h2><ul id="fleet"></ul>
@@ -76,32 +110,101 @@ export class Hud {
       <div class="belt" id="belt"></div>
       <footer class="rail bottom">
         <div class="battle">
-          <p id="hint"></p>
+          <div class="say"><p id="hint"></p><button class="bottleBtn" id="noteBtn" aria-expanded="false" aria-controls="compose"><img src="/ui/bottle.webp" alt="" draggable="false"><span>Cast a bottle</span></button></div>
           <div class="helm">
             <svg class="telegraph" viewBox="${TG.view}" role="group" aria-label="Orders and action points"></svg>
           </div>
           <button class="capstan" id="endTurn" aria-label="End turn"><img src="/ui/wheel.webp" alt="" draggable="false"><span>End turn</span></button>
         </div>
         <div class="placing">
-          <button class="plaque" id="shuffle">Shuffle</button>
-          <button class="plaque" id="rotate">Rotate (R)</button>
-          <p id="placeHint"></p>
           <button class="capstan" id="ready" aria-label="Ready"><img src="/ui/wheel.webp" alt="" draggable="false"><span>Ready</span></button>
         </div>
       </footer>
       <div class="role" hidden><div class="card"><svg class="medal" viewBox="0 0 100 100"></svg><p class="meta" id="roleTitle"></p><h2 id="roleName"></h2><p id="roleMission"></p><p class="pw"><b id="rolePower"></b> <span id="rolePowerText"></span></p><button class="plaque" id="roleOk">To your station</button></div></div>
       <div class="over" hidden><div class="card"><h2 id="overTitle"></h2><p id="overText"></p><p id="overVerify" class="meta"></p><button class="plaque" id="leave">Back to port</button></div></div>`;
-    this.compass(this.q('.compass'));
     this.telegraph(this.q('.telegraph'));
     this.q<HTMLElement>('#endTurn').onclick = () => { this.spin('#endTurn'); on.endTurn(); };
     this.q<HTMLElement>('#ready').onclick = () => { this.spin('#ready'); on.ready(); };
-    this.q<HTMLElement>('#shuffle').onclick = () => on.shuffle();
-    this.q<HTMLElement>('#rotate').onclick = () => on.rotate();
     this.q<HTMLElement>('#leave').onclick = () => on.leave();
     this.q<HTMLElement>('#roleOk').onclick = () => { this.q<HTMLElement>('.role').hidden = true; };
-    this.q<HTMLElement>('#mute').onclick = (e) => { const off = on.mute(), b = e.currentTarget as HTMLElement; b.textContent = off ? 'Sound off' : 'Sound on'; b.setAttribute('aria-pressed', String(off)); };
-    this.q<HTMLElement>('#shop').onclick = (e) => { const b = (e.target as Element).closest('button'); if (b) on.buy(b.dataset.item as Item); };
-    this.q<HTMLElement>('#belt').onclick = (e) => { const b = (e.target as Element).closest('button'); if (b) on.mode(b.dataset.tool as Mode); };
+    // Settings: sound and 3D quality, in a small parchment menu at the top left.
+    const menu = this.q<HTMLElement>('#menu'), menuBtn = this.q<HTMLElement>('#menuBtn');
+    const show = (open: boolean) => { menu.hidden = !open; menuBtn.setAttribute('aria-expanded', String(open)); };
+    menuBtn.onclick = (e) => { e.stopPropagation(); show(menu.hidden === true); };
+    addEventListener('pointerdown', (e) => { if (!menu.hidden && !menu.contains(e.target as Node) && e.target !== menuBtn) show(false); });
+    addEventListener('keydown', (e) => { if (e.key === 'Escape') show(false); });
+    menu.onclick = (e) => {
+      const b = (e.target as Element).closest<HTMLElement>('.seg button');
+      if (!b) return;
+      const pref = b.parentElement!.dataset.pref, v = b.dataset.v!;
+      if (pref === 'sound' && (v === 'off') !== this.muted) this.muted = on.mute();
+      if (pref === 'quality') { on.quality(v as 'auto' | 'high' | 'low'); this.qualityPref = v; }
+      this.paintPrefs();
+    };
+    // The quartermaster explains each item on hover: what it does, its price, and why you cannot buy it yet.
+    const shop = this.q<HTMLElement>('#shop'), tip = this.q<HTMLElement>('#shopTip');
+    shop.addEventListener('pointerover', (e) => {
+      const b = (e.target as Element).closest<HTMLElement>('button[data-item]');
+      if (!b) return;
+      const id = b.dataset.item as Item, it = ITEMS[id];
+      tip.innerHTML = `<b>${it.name}</b><span class="cost">${it.price} doubloons · ${it.ap} AP</span><p>${esc(ITEM_HELP[id])}</p>${b.dataset.why ? `<p class="why">${esc(b.dataset.why)}</p>` : ''}`;
+      const r = b.getBoundingClientRect(), panel = shop.closest('.card')!.getBoundingClientRect();
+      tip.style.left = panel.right + 10 + 'px';
+      tip.style.top = Math.min(innerHeight - 220, r.top - 6) + 'px';
+      tip.hidden = false;
+    });
+    shop.addEventListener('pointerleave', () => { tip.hidden = true; });
+    // The covenant's seals explain themselves on hover (or focus).
+    const seals = this.q<HTMLElement>('#seals');
+    const showSeals = () => {
+      tip.innerHTML = `<b>The covenant</b><span class="cost">Seals summon the Kraken</span><p>${esc(this.sealHelp)}</p>`;
+      const r = seals.getBoundingClientRect(), panel = seals.closest('.card')!.getBoundingClientRect();
+      tip.style.left = panel.right + 10 + 'px'; tip.style.top = r.top - 6 + 'px'; tip.hidden = false;
+    };
+    seals.addEventListener('pointerenter', showSeals); seals.addEventListener('focus', showSeals);
+    seals.addEventListener('pointerleave', () => { tip.hidden = true; }); seals.addEventListener('blur', () => { tip.hidden = true; });
+    this.q<HTMLElement>('#shop').onclick = (e) => { const b = (e.target as Element).closest('button'); if (b && !b.classList.contains('off')) on.buy(b.dataset.item as Item); };
+    // The message in a bottle: a small sheet to write on, sealed and cast with one button.
+    const compose = this.q<HTMLFormElement>('#compose'), noteBtn = this.q<HTMLElement>('#noteBtn'), noteText = this.q<HTMLTextAreaElement>('#noteText');
+    const showCompose = (open: boolean) => {
+      compose.hidden = !open; noteBtn.setAttribute('aria-expanded', String(open));
+      if (open) { const r = noteBtn.getBoundingClientRect(); compose.style.left = Math.max(12, r.left) + 'px'; compose.style.bottom = innerHeight - r.top + 12 + 'px'; noteText.focus(); }
+    };
+    noteBtn.onclick = () => showCompose(compose.hidden === true);
+    // The bottle bobs on a sine wave while the pointer rests on it: the swell builds up gently to
+    // 20 px each way and holds there; on leaving it dies away just as gently until the bottle is still.
+    const bottle = noteBtn.querySelector('img')!, calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let amp = 0, phase = 0, over = false, last = 0, running = false;
+    const swell = (now: number) => {
+      const dt = Math.min(0.05, (now - last) / 1000); last = now;
+      const want = over && !(noteBtn as HTMLButtonElement).disabled ? 20 : 0;
+      amp += (want - amp) * (1 - Math.exp(-dt * 1.8));
+      phase += dt * Math.PI * 2 / 1.7;
+      if (want === 0 && amp < 0.15) { amp = 0; bottle.style.transform = ''; running = false; return; }
+      bottle.style.transform = `translateY(${(-amp * Math.sin(phase)).toFixed(2)}px)`;
+      requestAnimationFrame(swell);
+    };
+    const wake = () => { if (!running && !calm) { running = true; last = performance.now(); requestAnimationFrame(swell); } };
+    noteBtn.addEventListener('pointerenter', () => { over = true; wake(); });
+    noteBtn.addEventListener('pointerleave', () => { over = false; wake(); });
+    noteText.oninput = () => { this.q('#noteCount').textContent = `${noteText.value.length} / 80`; };
+    noteText.onkeydown = (e) => { e.stopPropagation(); if (e.key === 'Escape') showCompose(false); };
+    this.q<HTMLElement>('#noteCancel').onclick = () => showCompose(false);
+    compose.onsubmit = (e) => { e.preventDefault(); if (!noteText.value.trim()) return; on.note(noteText.value); noteText.value = ''; this.q('#noteCount').textContent = '0 / 80'; showCompose(false); };
+    this.q<HTMLElement>('#letterOk').onclick = () => { this.q<HTMLElement>('#letter').hidden = true; on.letterRead(); };
+    this.q<HTMLElement>('#belt').onclick = (e) => { const b = (e.target as Element).closest('button'); if (b && !b.classList.contains('off')) on.mode(b.dataset.tool as Mode); };
+    // The same tooltip explains the special actions above the helm, shown above the button.
+    const belt = this.q<HTMLElement>('#belt');
+    belt.addEventListener('pointerover', (e) => {
+      const b = (e.target as Element).closest<HTMLElement>('button[data-tool]');
+      if (!b) return;
+      tip.innerHTML = `<b>${esc(b.dataset.name!)}</b><span class="cost">${b.dataset.ap} AP</span><p>${esc(b.dataset.help!)}</p>${b.dataset.why ? `<p class="why">${esc(b.dataset.why)}</p>` : ''}`;
+      tip.hidden = false;
+      const r = b.getBoundingClientRect(), w = tip.offsetWidth;
+      tip.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left + r.width / 2 - w / 2)) + 'px';
+      tip.style.top = r.top - tip.offsetHeight - 10 + 'px';
+    });
+    belt.addEventListener('pointerleave', () => { tip.hidden = true; });
   }
 
   show(v: boolean) { this.root.hidden = !v; if (!v) this.q<HTMLElement>('.role').hidden = true; }
@@ -126,22 +229,6 @@ export class Hud {
     this.q<HTMLElement>('.role').hidden = false;
   }
   private spin(sel: string) { this.q<HTMLElement>(sel + ' img').style.transform = `rotate(${++this.capTurns * 135}deg)`; }
-
-  private compass(s: SVGElement) {
-    svg(s, 'circle', { cx: 50, cy: 50, r: 48, fill: 'url(#brass)', stroke: '#0d0b08' });
-    svg(s, 'circle', { cx: 50, cy: 50, r: 41, fill: '#0d0b08' });
-    for (let i = 0; i < 32; i++) {
-      const a = polar(50, 50, i % 4 ? 37 : 34, i * 11.25), b = polar(50, 50, 40, i * 11.25);
-      svg(s, 'line', { x1: a[0], y1: a[1], x2: b[0], y2: b[1], stroke: '#d9a441', 'stroke-width': i % 4 ? 0.5 : 1 });
-    }
-    for (let k = 0; k < 4; k++) {
-      const t = polar(50, 50, 33, k * 90), a = polar(50, 50, 6, k * 90 + 45), b = polar(50, 50, 6, k * 90 - 45);
-      svg(s, 'polygon', { points: `${t} ${a} 50,50`, fill: '#e8d5a3' });
-      svg(s, 'polygon', { points: `${t} ${b} 50,50`, fill: '#8a6f2c' });
-    }
-    svg(s, 'polygon', { id: 'needle', points: '50,18 53,50 47,50', fill: '#8c2f1b' });
-    svg(s, 'circle', { cx: 50, cy: 50, r: 3.5, fill: '#b08d3c' });
-  }
 
   /* The helm console is public/ui/console.webp (dial with four shot cups on its crest) and
      public/ui/needle.webp. Everything here is in the source picture's pixels (see TG); the
@@ -181,6 +268,51 @@ export class Hud {
     labels.forEach((t) => s.appendChild(t));
   }
 
+  /** Show the saved settings in the menu. */
+  setPrefs(muted: boolean, quality: string) { this.muted = muted; this.qualityPref = quality; this.paintPrefs(); }
+  private paintPrefs() {
+    this.root.querySelectorAll<HTMLElement>('#menu .seg button').forEach((b) => {
+      const pref = b.parentElement!.dataset.pref, v = b.dataset.v;
+      const on = pref === 'sound' ? (v === 'off') === this.muted : v === this.qualityPref;
+      b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on));
+    });
+  }
+
+  /** A ribbon sweeps across the screen to announce whose turn it is. */
+  /** Each ribbon plays to the end before the next: a quick enemy turn no longer cuts its own ribbon short. */
+  herald(title: string, sub: string, mine: boolean) {
+    this.heralds.push({ title, sub, mine });
+    if (this.heralds.length > 2) this.heralds.splice(0, this.heralds.length - 2);
+    if (!this.heralding) this.nextHerald();
+  }
+  private heralds: { title: string; sub: string; mine: boolean }[] = [];
+  private heralding = false;
+  private held: [string, '' | 'head' | 'bad' | 'good'][] = [];
+  private nextHerald() {
+    const n = this.heralds.shift();
+    if (!n) {
+      // The ribbon has gone: now show the notices that waited behind it, one after another.
+      this.heralding = false;
+      const held = this.held; this.held = [];
+      held.forEach(([text, kind], i) => setTimeout(() => this.log(text, kind), i * 1700));
+      return;
+    }
+    this.heralding = true;
+    const h = this.q<HTMLElement>('#herald');
+    h.querySelector('b')!.textContent = n.title; h.querySelector('span')!.textContent = n.sub;
+    h.classList.toggle('enemy', !n.mine);
+    h.classList.remove('go'); void h.offsetWidth; h.classList.add('go');
+    setTimeout(() => this.nextHerald(), matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 2150);
+  }
+
+  /** A bottle has washed up: unroll its letter. */
+  letter(text: string, from: string) {
+    this.q('#letterText').textContent = `“${text}”`;
+    this.q('#letterSign').textContent = `— ${from}`;
+    const l = this.q<HTMLElement>('#letter');
+    l.hidden = false; l.classList.remove('open'); void l.offsetWidth; l.classList.add('open');
+  }
+
   setHint(text: string) { this.q('#hint').textContent = text; }
 
   update(c: Client, mode: Mode, note = '') {
@@ -192,15 +324,22 @@ export class Hud {
     this.sectors.forEach(([path, t], k) => { path.classList.toggle('on', k === i); t.classList.toggle('on', k === i); });
 
     this.q('#turnTitle').textContent = p.phase === 'placement' ? 'Deploy your fleet' : p.phase === 'over' ? 'Battle over' : mine ? 'Your turn' : 'Enemy turn';
-    this.q('#turnSub').textContent = p.phase === 'battle' ? `Round ${p.round}` : '';
+    this.q('#turnSub').textContent = p.phase === 'battle' ? `Round ${p.round} · Wind ${['→ east', '↓ south', '← west', '↑ north'][p.wind ?? 0]}` : '';
     this.q('#seals').innerHTML = Array.from({ length: KRAKEN_SEALS }, (_, i) => `<i class="${i < me.seals ? 'lit' : ''}"></i>`).join('') + `<span>${me.seals >= KRAKEN_SEALS ? 'The Kraken will answer.' : `${Math.min(me.seals, KRAKEN_SEALS)} of ${KRAKEN_SEALS} seals`}</span>`;
+    // The full explanation lives in the seals' tooltip; the panel keeps only what needs doing now.
+    this.sealHelp = me.seals >= KRAKEN_SEALS
+      ? 'Choose Summon the Kraken above the helm (3 AP), then a 3×3 patch of enemy water. It strikes now and again on their next turn, and holds the ships it finds.'
+      : 'Three seals summon the Kraken. A red wax seal surfaces in your waters every few rounds: sail a ship onto it to take it. Each ship you lose also pays one.';
+    this.q('#sealHow').innerHTML = me.seals >= KRAKEN_SEALS ? '<b>The Kraken will answer.</b>' : p.treasures.some((t) => t.side === c.me && t.kind === 'seal') ? '<b>A seal is afloat in your waters now.</b>' : '';
     this.q('#foeSeals').textContent = `${foe.seals} covenant seal${foe.seals === 1 ? '' : 's'} · ${foe.doubloons} doubloons`;
-    this.q<SVGElement>('#needle').style.transform = `rotate(${mine ? 20 : 200}deg)`;
     this.balls.forEach((b, k) => b.classList.toggle('spent', !(mine && k < p.ap)));
     this.q<HTMLButtonElement>('#endTurn').disabled = !c.can();
+    const noteBtn = this.q<HTMLButtonElement>('#noteBtn');
+    noteBtn.disabled = !(p.phase === 'battle' && mine && !p.noteSent);
+    noteBtn.title = p.noteSent && mine ? 'One bottle a turn: you have cast yours.' : mine ? 'Send the other captain a short note.' : 'You may cast a bottle on your own turn.';
+    if (noteBtn.disabled) { this.q<HTMLElement>('#compose').hidden = true; noteBtn.setAttribute('aria-expanded', 'false'); }
     this.q<HTMLButtonElement>('#ready').disabled = me.ready;
-    this.q<HTMLButtonElement>('#shuffle').disabled = this.q<HTMLButtonElement>('#rotate').disabled = me.ready;
-    this.q('#placeHint').textContent = me.ready ? 'Fleet committed. Waiting for the other captain…' : 'Click a ship to lift it, move it over your waters and click again to set it down.';
+    this.q('#placeHint').innerHTML = p.phase !== 'placement' ? '' : me.ready ? 'Fleet committed. Waiting for the other captain…' : 'Click a ship to lift it, move it over your waters and click again to set it down. <kbd>R</kbd> to rotate it.';
 
     this.q('#foeName').textContent = foe.name || 'The other captain';
     this.q('#foeNote').textContent = note;
@@ -219,27 +358,34 @@ export class Hud {
     this.q('#gold').textContent = String(me.doubloons);
     this.q('#shop').innerHTML = ITEM_IDS.map((id) => {
       const it = ITEMS[id];
-      return `<li><button data-item="${id}" title="${esc(it.blurb)}" ${c.canBuy(id) ? '' : 'disabled'}><span>${it.name}</span><em>${it.ap} AP</em><b>${it.price}</b></button></li>`;
+      const why = c.canBuy(id) ? '' : p.phase !== 'battle' ? 'The quartermaster opens once the battle begins.' : !mine ? 'Wait for your turn.'
+        : me.doubloons < it.price ? `You need ${it.price - me.doubloons} more doubloons.` : me.items.length >= MAX_ITEMS ? `Your hold is full: ${MAX_ITEMS} items at most. Use one first.` : 'Not now.';
+      return `<li><button data-item="${id}" data-why="${esc(why)}" aria-disabled="${!!why}" ${why ? 'class="off"' : ''}><span>${it.name}</span><em>${it.ap} AP</em><b>${it.price}</b></button></li>`;
     }).join('');
     this.q('#fleet').innerHTML = c.ships.map((s) => {
       const f = FLEETS[role].find((q) => q.kind === s.kind)!;
-      const pips = s.hits.map((h) => `<i class="${h ? 'hit' : ''}"></i>`).join('');
+      const pips = s.hits.map((h, i) => `<i class="${s.floods?.[i] ? 'flood' : h ? 'hit' : ''}"></i>`).join('');
       return `<li class="${s.sunk ? 'sunk' : ''}"><span>${s.cls}<em>${s.chained ? 'pinned by chain' : f.trait}</em></span><span class="pips">${pips}</span></li>`;
     }).join('');
 
     const belt: string[] = [];
     if (p.phase === 'battle') {
-      const tool = (id: Mode, name: string, ap: number, ok: boolean) =>
-        belt.push(`<button data-tool="${id}" class="${mode === id ? 'on' : ''}" ${ok ? '' : 'disabled'}>${name}<em>${ap} AP</em></button>`);
-      tool('broadside', TOOLS.broadside.name, 2, c.can(2) && c.alive('line'));
-      tool('chain', TOOLS.chain.name, 2, c.can(2) && c.alive('frigate'));
-      tool('spy', TOOLS.spy.name, 1, c.can(1) && c.alive('cutter'));
+      // Each action carries its own explanation and, when it cannot be used, the reason why.
+      const tool = (id: Mode, name: string, ap: number, ok: boolean, help: string, why = '') => {
+        if (!ok && !why) why = p.phase !== 'battle' || !mine ? 'Wait for your turn.' : p.ap < ap ? `Needs ${ap} action point${ap === 1 ? '' : 's'}; you have ${p.ap}.` : 'Not now.';
+        belt.push(`<button data-tool="${id}" data-name="${esc(name)}" data-ap="${ap}" data-help="${esc(help)}" data-why="${ok ? '' : esc(why)}" class="${mode === id ? 'on' : ''}${ok ? '' : ' off'}" aria-disabled="${!ok}">${name}<em>${ap} AP</em></button>`);
+      };
+      const sunk = (kind: 'line' | 'frigate' | 'cutter', cls: string) => (c.alive(kind) ? '' : `Your ${cls} has been sunk.`);
+      tool('broadside', TOOLS.broadside.name, 2, c.can(2) && c.alive('line'), `${TOOL_HELP.broadside.text} Needs your Ship of the Line afloat.`, sunk('line', 'Ship of the Line'));
+      tool('chain', TOOLS.chain.name, 2, c.can(2) && c.alive('frigate'), `${TOOL_HELP.chain.text} Needs your Frigate afloat.`, sunk('frigate', 'Frigate'));
+      tool('spy', TOOLS.spy.name, 1, c.can(1) && c.alive('cutter'), `${TOOL_HELP.spy.text} Needs your Cutter afloat.`, sunk('cutter', 'Cutter'));
       for (const id of [...new Set(me.items)]) {
         const n = me.items.filter((q) => q === id).length;
-        tool(id, ITEMS[id].name + (n > 1 ? ` ×${n}` : ''), ITEMS[id].ap, c.can(ITEMS[id].ap) && !(id === 'winds' && p.windsUsed));
+        tool(id, ITEMS[id].name + (n > 1 ? ` ×${n}` : ''), ITEMS[id].ap, c.can(ITEMS[id].ap) && !(id === 'winds' && p.windsUsed), `${ITEM_HELP[id]} Bought from the quartermaster; used up once played.`, id === 'winds' && p.windsUsed ? 'Trade Winds already blew this turn.' : '');
       }
-      if (me.seals >= KRAKEN_SEALS || mode === 'kraken') tool('kraken', 'Summon the Kraken', 3, c.canKraken());
-      if (role !== 'classic' && !p.power[c.me]) tool('power', CAPTAINS[role].power, 1, c.canPower());
+      if (me.seals >= KRAKEN_SEALS || mode === 'kraken') tool('kraken', 'Summon the Kraken', 3, c.canKraken(), TOOL_HELP.kraken.text, p.kraken ? 'The Kraken is already abroad.' : '');
+      if (!p.pacts?.[c.me] && c.ships.some((s) => !s.sunk && s.hits.some(Boolean) && s.kind !== 'merchant')) tool('pact', 'Blood Pact', 1, c.canPact(), TOOL_HELP.pact.text, c.ships.filter((s) => !s.sunk).length <= 1 ? 'Your last ship cannot be given up.' : '');
+      if (role !== 'classic' && !p.power[c.me]) tool('power', CAPTAINS[role].power, 1, c.canPower(), `Your captain's power. ${CAPTAINS[role].powerText}`);
     }
     this.q('#belt').innerHTML = belt.join('');
 
@@ -276,6 +422,8 @@ export class Hud {
   log(text: string, kind: '' | 'head' | 'bad' | 'good' = '') {
     // There is no log panel for now: the latest event shows briefly above the controls.
     if (kind === 'head') return;
+    // Never over the turn ribbon: wait until it has passed.
+    if (this.heralding) { this.held.push([text, kind]); return; }
     const t = this.q<HTMLElement>('#toast');
     t.textContent = text;
     t.className = 'toast show ' + kind;

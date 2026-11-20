@@ -44,13 +44,15 @@ export interface Ship {
   armour?: boolean;
   /** Pinned by chain shot: cannot sail or turn until its owner's next turn ends. */
   chained?: boolean;
+  /** Sections holed below the waterline by a second hit: each slows her, two sink her. */
+  floods?: boolean[];
 }
 
 /** What the opponent learns about a ship once it is sunk. */
 export type Revealed = Pick<Ship, 'kind' | 'cls' | 'len' | 'x' | 'y' | 'dir' | 'rev'>;
 type Placed = Pick<Ship, 'x' | 'y' | 'dir' | 'len'>;
 
-export type ShotOutcome = 'miss' | 'hit' | 'sunk' | 'wreck' | 'clang';
+export type ShotOutcome = 'miss' | 'hit' | 'sunk' | 'wreck' | 'clang' | 'flood';
 export interface CellResult { x: number; y: number; r: ShotOutcome; ship?: Revealed;
   /** The shot struck the merchantman: a crate of cargo is plundered. */
   cargo?: true }
@@ -81,19 +83,30 @@ export function shipCells(s: Placed): XY[] {
   return out;
 }
 
-/** True when `cand` is inside the grid and overlaps no other ship (wrecks included). */
+/** True when `cand` is inside the grid and overlaps no other ship afloat (a sunk ship leaves open water). */
 export function fits(ships: Placed[] & { id?: number }[], cand: Placed, ignoreId?: number): boolean {
   const cs = shipCells(cand);
   for (const [x, y] of cs) if (!inBoard(x, y)) return false;
   for (const o of ships as (Placed & { id?: number })[]) {
-    if (o.id === ignoreId) continue;
+    if (o.id === ignoreId || (o as { sunk?: boolean }).sunk) continue;
     for (const [ox, oy] of shipCells(o)) for (const [x, y] of cs) if (ox === x && oy === y) return false;
   }
   return true;
 }
 
+/** The ships afloat with a section in the 2×2 patch whose top-left square is (x, y), as the Long Glass shows them. */
+export function peekShips(ships: Ship[], x: number, y: number): Revealed[] {
+  return ships.filter((s) => !s.sunk && shipCells(s).some(([a, b]) => a >= x && a <= x + 1 && b >= y && b <= y + 1))
+    .map((s) => ({ kind: s.kind, cls: s.cls, len: s.len, x: s.x, y: s.y, dir: s.dir, rev: !!s.rev }))
+    .sort((a, b) => a.kind.localeCompare(b.kind));
+}
+/** A 2×2 patch fits on the chart when its top-left square is at most N − 2 across and down. */
+export const peekFits = (x: number, y: number) => x >= 0 && y >= 0 && x <= N - 2 && y <= N - 2;
+
 export function shipAt(ships: Ship[], x: number, y: number): { ship: Ship; idx: number } | null {
+  // A sunk ship is gone from the chart: only ships afloat can be found, or struck, at a square.
   for (const ship of ships) {
+    if (ship.sunk) continue;
     const cs = shipCells(ship);
     for (let idx = 0; idx < cs.length; idx++) if (cs[idx][0] === x && cs[idx][1] === y) return { ship, idx };
   }
@@ -123,6 +136,47 @@ export function randomFleet(rnd: Rnd, role: Role = 'classic'): Ship[] {
 }
 
 const damage = (s: Ship) => s.hits.filter(Boolean).length;
+/** Sections taking water. */
+export const flooded = (s: Ship) => (s.floods || []).filter(Boolean).length;
+
+/** Where the wind blows towards, as a heading (0 east, 1 south, 2 west, 3 north). */
+export const WIND_NAMES = ['east', 'south', 'west', 'north'] as const;
+/** Square-rigged ships cannot sail into the wind; fore-and-aft rigs (the merchant brig among them) can, and the
+ *  ironclad has steam. The merchant's cargo is what is plundered, so she takes no water. */
+const RIG: Record<Kind, 'square' | 'gaff' | 'steam'> = { line: 'square', frigate: 'square', merchant: 'gaff', schooner: 'gaff', cutter: 'gaff', ironclad: 'steam' };
+
+/** How far a ship may sail ahead this turn, before anything blocks her: wind and flooding count. */
+export function sailMax(s: Ship, wind?: number): number {
+  let n = s.kind === 'schooner' ? 2 : 1;
+  if (wind !== undefined && RIG[s.kind] !== 'steam') {
+    const h = headingOf(s);
+    if (h === wind) n += 1;
+    else if ((h + 2) % 4 === wind) n = RIG[s.kind] === 'gaff' ? Math.max(1, n - 1) : 0;
+  }
+  if (flooded(s) > 0) n -= 1;
+  return Math.max(0, n);
+}
+
+/** Why a ship cannot sail ahead at all, if wind or water is the reason. */
+export function becalmed(s: Ship, wind?: number): string | null {
+  if (wind !== undefined && RIG[s.kind] === 'square' && (headingOf(s) + 2) % 4 === wind) return 'she cannot sail into the wind — turn her across it';
+  if (flooded(s) > 0 && sailMax(s, wind) === 0) return 'she is holed and taking water';
+  return null;
+}
+
+/** A sea current carries the whole fleet one square in a heading. Ships that would hit the edge, another
+ *  ship, or that are held (by the Kraken or chain shot) stay put. The front ships move first. */
+export function driftFleet(ships: Ship[], dir: number, held: (s: Ship) => boolean = () => false): number {
+  const [fx, fy] = HEAD[dir];
+  const order = ships.filter((s) => !s.sunk).sort((a, b) => (b.x * fx + b.y * fy) - (a.x * fx + a.y * fy));
+  let n = 0;
+  for (const s of order) {
+    if (s.chained || held(s)) continue;
+    const cand = { ...s, x: s.x + fx, y: s.y + fy };
+    if (fits(ships, cand, s.id)) { s.x += fx; s.y += fy; n++; }
+  }
+  return n;
+}
 
 /** Resolve shots landing on a fleet. Mutates the ships. `shield` blocks the first hit on the merchantman. */
 export function resolveAttack(ships: Ship[], cells: XY[], chain: boolean, shield = false): { results: CellResult[]; chained: boolean; lost: boolean; shielded: boolean } {
@@ -132,7 +186,19 @@ export function resolveAttack(ships: Ship[], cells: XY[], chain: boolean, shield
     const at = shipAt(ships, x, y);
     if (!at) { results.push({ x, y, r: 'miss' }); continue; }
     const { ship, idx } = at;
-    if (ship.sunk || ship.hits[idx]) { results.push({ x, y, r: 'wreck' }); continue; }
+    if (ship.sunk || ship.floods?.[idx]) { results.push({ x, y, r: 'wreck' }); continue; }
+    if (ship.hits[idx] && ship.kind === 'merchant') { results.push({ x, y, r: 'wreck' }); continue; }
+    if (ship.hits[idx]) {
+      // A second ball into a damaged section holes her below the waterline. Two such holes and she goes down.
+      if (chain) { ship.chained = true; chained = true; }
+      (ship.floods ??= new Array(ship.len).fill(false))[idx] = true;
+      if (flooded(ship) >= 2) {
+        ship.sunk = true; ship.chained = false;
+        const { kind, cls, len, dir } = ship;
+        results.push({ x, y, r: 'sunk', ship: { kind, cls, len, x: ship.x, y: ship.y, dir, rev: !!ship.rev } });
+      } else results.push({ x, y, r: 'flood' });
+      continue;
+    }
     if (ship.kind === 'merchant' && shield && !shielded) { shielded = true; results.push({ x, y, r: 'clang' }); continue; }
     if (chain) { ship.chained = true; chained = true; }
     if (ship.armour) { ship.armour = false; results.push({ x, y, r: 'clang' }); continue; }
@@ -168,10 +234,10 @@ export const bowCell = (s: Placed & Pick<Ship, 'rev'>): XY => { const cs = shipC
 export const ahead = <T extends Placed & Pick<Ship, 'rev'>>(s: T, k: number): T => { const [fx, fy] = HEAD[headingOf(s)]; return { ...s, x: s.x + fx * k, y: s.y + fy * k }; };
 
 /** How many cells a ship may sail ahead in one action (0 when blocked). Ships cannot back up. */
-export function sailReach(ships: Ship[], id: number, delta: 1 | -1 = 1): number {
+export function sailReach(ships: Ship[], id: number, delta: 1 | -1 = 1, wind?: number): number {
   const s = ships.find((q) => q.id === id);
   if (!s || s.sunk || s.chained || delta !== 1) return 0;
-  const max = s.kind === 'schooner' ? 2 : 1, [fx, fy] = HEAD[headingOf(s)];
+  const max = sailMax(s, wind), [fx, fy] = HEAD[headingOf(s)];
   let n = 0;
   for (let k = 1; k <= max; k++) {
     if (!fits(ships, { ...s, x: s.x + fx * k, y: s.y + fy * k }, s.id)) break;
@@ -181,8 +247,8 @@ export function sailReach(ships: Ship[], id: number, delta: 1 | -1 = 1): number 
 }
 
 /** Sail a ship ahead. Returns the debris a damaged ship leaves behind, or null if illegal. */
-export function sailShip(ships: Ship[], id: number, delta: 1 | -1, steps: number): XY[] | null {
-  if (steps < 1 || steps > sailReach(ships, id, delta)) return null;
+export function sailShip(ships: Ship[], id: number, delta: 1 | -1, steps: number, wind?: number): XY[] | null {
+  if (steps < 1 || steps > sailReach(ships, id, delta, wind)) return null;
   const s = ships.find((q) => q.id === id)!, [fx, fy] = HEAD[headingOf(s)];
   const debris: XY[] = [];
   for (let k = 0; k < steps; k++) {
@@ -221,7 +287,7 @@ export function turnShip(ships: Ship[], id: number, way: Way = 'right'): boolean
   if (!canTurnShip(ships, id, way)) return false;
   const s = ships.find((q) => q.id === id)!, t = turned(s, way);
   // Damage stays on the same timbers: flip the record when bow and stern swap ends.
-  if (!!s.rev !== t.rev) s.hits.reverse();
+  if (!!s.rev !== t.rev) { s.hits.reverse(); s.floods?.reverse(); }
   Object.assign(s, t);
   return true;
 }
@@ -229,7 +295,8 @@ export function turnShip(ships: Ship[], id: number, way: Way = 'right'): boolean
 export function repairShip(ships: Ship[], id: number, idx: number): boolean {
   const s = ships.find((q) => q.id === id);
   if (!s || s.sunk || !s.hits[idx] || s.kind === 'merchant') return false; // plundered cargo is gone for good
-  s.hits[idx] = false;
+  // A holed section is first pumped out and patched below the waterline; a second repair mends the rest.
+  if (s.floods?.[idx]) s.floods[idx] = false; else s.hits[idx] = false;
   return true;
 }
 

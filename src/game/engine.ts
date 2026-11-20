@@ -4,11 +4,13 @@
 import { Order, pickOrder } from './orders';
 import { ITEMS, Item, MAX_ITEMS, START_DOUBLOONS } from './powerups';
 import {
-  AP_PER_TURN, CellResult, Dir, KRAKEN_SEALS, Kind, MAELSTROM_ROUND, N, Revealed, Rnd, Role, Ship, XY, attackCells, countScan, inBoard, inKraken, inZone, legalPlacement, randomFleet, zoneFits,
-  repairShip, rimCells, resolveAttack, sailReach, sailShip, shipAt, shipCells, turnShip, canTurnShip, Way,
+  AP_PER_TURN, CellResult, Dir, KRAKEN_SEALS, Kind, MAELSTROM_ROUND, N, Revealed, Rnd, Role, Ship, XY, attackCells, countScan, inBoard, inKraken, inZone, legalPlacement, peekFits, peekShips, randomFleet, zoneFits,
+  repairShip, rimCells, resolveAttack, driftFleet, sailReach, sailShip, shipAt, shipCells, turnShip, canTurnShip, Way,
 } from './rules';
 
 export type Mode = 'classic' | 'convoy';
+/** Longest message in a bottle, in characters. */
+export const NOTE_MAX = 80;
 /** Rounds the Admiral has to bring the cargo home. */
 export const SEASON = 12;
 export const CRATES = 3;
@@ -28,6 +30,11 @@ export type Body =
   | { t: 'powerResult'; col: number }
   | { t: 'scan'; x: number; y: number; src: 'cutter' | 'spyglass' }
   | { t: 'scanResult'; x: number; y: number; count: number }
+  | { t: 'peek'; x: number; y: number }
+  | { t: 'note'; text: string }
+  | { t: 'pact'; ship: Revealed }
+  | { t: 'current'; dir: number }
+  | { t: 'peekResult'; x: number; y: number; ships: Revealed[]; fog: boolean }
   | { t: 'buy'; item: Item }
   | { t: 'fog'; x: number; y: number }
   | { t: 'repair' }
@@ -47,6 +54,8 @@ export interface SidePub {
   sunk: Revealed[];
   spotted: { x: number; y: number; round: number }[];
   scans: { x: number; y: number; count: number; round: number }[];
+  /** What this captain's Long Glass showed: a 2×2 patch of the enemy chart, seen for the rest of the turn. */
+  peeks?: { x: number; y: number; ships: Revealed[]; fog: boolean; round: number }[];
   fogs: { x: number; y: number; until: number }[];
   /** Rows in which the laden merchantman was seen running under full sail. */
   wakes: { y: number; round: number }[];
@@ -66,6 +75,14 @@ export interface Pub {
   /** An attack or scan is waiting for the defender's answer. */
   pending: boolean;
   windsUsed: boolean;
+  /** Where the wind blows this round (a heading: 0 east, 1 south, 2 west, 3 north). */
+  wind?: number;
+  /** Each captain may seal one blood pact a battle. */
+  pacts?: [boolean, boolean];
+  /** A message in a bottle was already cast this turn. */
+  noteSent?: boolean;
+  /** Every note cast so far, oldest first. */
+  notes?: { by: 0 | 1; text: string; round: number }[];
   rng: number;
   sides: [SidePub, SidePub];
   treasures: Treasure[];
@@ -100,7 +117,7 @@ export const attackCost = (src: AttackSrc) => COST[src];
 export function newPub(seed: number, mode: Mode = 'classic'): Pub {
   const side = (): SidePub => ({ name: '', ready: false, hash: '', shots: [], debris: [], sunk: [], spotted: [], scans: [], fogs: [], wakes: [], doubloons: START_DOUBLOONS, seals: 0, items: [] });
   return { phase: 'placement', current: 0, ap: AP_PER_TURN, round: 1, winner: null, pending: false, windsUsed: false, rng: seed >>> 0 || 1, sides: [side(), side()], treasures: [],
-    mode, admiral: mode === 'convoy' ? ((((seed >>> 0) >> 3) & 1) as 0 | 1) : null, cargo: CRATES, power: [false, false], ring: 0 };
+    mode, admiral: mode === 'convoy' ? ((((seed >>> 0) >> 3) & 1) as 0 | 1) : null, cargo: CRATES, power: [false, false], ring: 0, wind: ((seed >>> 0) >> 5) & 3, pacts: [false, false] };
 }
 
 function rand(p: Pub): number {
@@ -185,14 +202,25 @@ export function reduce(p: Pub, m: Msg): boolean {
     return true;
   }
 
-  if (m.t === 'result' || m.t === 'scanResult' || m.t === 'powerResult') {
+  if (m.t === 'result' || m.t === 'scanResult' || m.t === 'powerResult' || m.t === 'peekResult') {
     if (!p.pending || m.by === p.current) return false;
     p.pending = false;
     if (m.t === 'powerResult') { p.reckon = { col: m.col, round: p.round }; return true; }
     if (m.t === 'scanResult') { mine.scans.push({ x: m.x, y: m.y, count: m.count, round: p.round }); return true; }
+    // The answer belongs to the captain who looked (the one whose turn it is).
+    if (m.t === 'peekResult') { (p.sides[p.current].peeks ??= []).push({ x: m.x, y: m.y, ships: m.ships || [], fog: !!m.fog, round: p.round }); return true; }
     applyResults(p, m.by, m.results || [], true);
     if (p.strike) { p.strike = undefined; if (p.kraken && p.kraken.left <= 0) p.kraken = undefined; }
     if (m.lost && (p.phase as Pub['phase']) !== 'over') { p.phase = 'over'; p.winner = foe; p.reason = 'fleet'; }
+    return true;
+  }
+
+  // A message in a bottle: one a turn, on your own turn, at no cost. It changes nothing else.
+  if (m.t === 'note') {
+    const text = String(m.text || '').replace(/\s+/g, ' ').trim().slice(0, NOTE_MAX);
+    if (p.phase !== 'battle' || m.by !== p.current || p.noteSent || !text) return false;
+    p.noteSent = true;
+    (p.notes ??= []).push({ by: m.by, text, round: p.round });
     return true;
   }
 
@@ -208,9 +236,24 @@ export function reduce(p: Pub, m: Msg): boolean {
       if (!m.cells?.length || m.cells.some(([, y]) => inStorm(p, y)) || !spend(COST[m.src], m.src === 'fireship' ? 'fireship' : undefined)) return false;
       p.pending = true;
       return true;
+    case 'peek':
+      if (!peekFits(m.x, m.y) || inStorm(p, m.y) || inStorm(p, m.y + 1) || !spend(ITEMS.longglass.ap, 'longglass')) return false;
+      p.pending = true;
+      return true;
     case 'scan':
       if (!zoneFits(m.x, m.y) || inStorm(p, m.y) || !spend(1, m.src === 'spyglass' ? 'spyglass' : undefined)) return false;
       p.pending = true;
+      return true;
+    case 'pact': {
+      // A blood pact: a damaged ship is given to the deep, and the deep pays two seals (its toll and the pact).
+      if ((p.pacts ??= [false, false])[m.by] || !m.ship || !spend(1)) return false;
+      p.pacts[m.by] = true;
+      mine.seals += 2;
+      mine.sunk.push(m.ship);
+      return true;
+    }
+    case 'current':
+      if (!(m.dir >= 0 && m.dir <= 3) || !spend(ITEMS.current.ap, 'current')) return false;
       return true;
     case 'move': {
       if (!spend(1)) return false;
@@ -263,8 +306,11 @@ export function reduce(p: Pub, m: Msg): boolean {
       p.current = foe;
       p.ap = AP_PER_TURN;
       p.windsUsed = false;
+      p.noteSent = false;
       if (p.current === 0) {
         p.round++;
+        // The wind veers each round.
+        p.wind = Math.floor(rand(p) * 4);
         for (const s of p.sides) { s.fogs = s.fogs.filter((f) => f.until >= p.round); s.wakes = s.wakes.filter((w) => p.round - w.round <= 2); }
         if (p.mode === 'convoy' && p.round > SEASON) { p.phase = 'over'; p.winner = (1 - p.admiral!) as 0 | 1; p.reason = 'season'; return true; }
         if (p.round % 3 === 1) { spawnTreasure(p, 0); spawnTreasure(p, 1); }
@@ -272,6 +318,7 @@ export function reduce(p: Pub, m: Msg): boolean {
         if (p.storm && p.round > p.storm.until) p.storm = undefined;
         if (p.round % 4 === 0) p.storm = { row: Math.floor(rand(p) * (N - 2)), until: p.round + 1 };
         if (p.round % 5 === 0) tide(p);
+        // From round 20 the maelstrom swallows the outer ring of both charts every other round.
         if (p.mode === 'classic' && p.round >= MAELSTROM_ROUND && p.round % 2 === 0 && p.ring < N / 2 - 2) p.ring++;
       }
       // As its victim's turn ends the Kraken strikes a second time, then lets go.
@@ -371,6 +418,11 @@ export class Client {
       if (r.results.some((c) => c.r === 'hit' || c.r === 'sunk')) { this.hurt = true; if (this.order?.id === 'unscathed') this.order.n = 0; }
       this.send({ t: 'result', ...r });
     }
+    if (m.t === 'peek' && theirs) {
+      const cells: XY[] = [[m.x, m.y], [m.x + 1, m.y], [m.x, m.y + 1], [m.x + 1, m.y + 1]];
+      const fog = this.side.fogs.some((f) => cells.some(([a, b]) => inZone(f.x, f.y, a, b)));
+      this.send({ t: 'peekResult', x: m.x, y: m.y, ships: fog ? [] : peekShips(this.ships, m.x, m.y), fog });
+    }
     if (m.t === 'scan' && theirs) {
       const fogged = this.side.fogs.some((f) => inZone(f.x, f.y, m.x, m.y));
       this.send({ t: 'scanResult', x: m.x, y: m.y, count: fogged ? -1 : countScan(this.ships, m.x, m.y) });
@@ -428,6 +480,20 @@ export class Client {
     return true;
   }
 
+  /** Cast a message in a bottle to the other captain (one a turn). */
+  note(text: string): boolean {
+    if (!this.myTurn || this.pub.phase !== 'battle' || this.pub.noteSent || !text.trim()) return false;
+    this.send({ t: 'note', text: text.replace(/\s+/g, ' ').trim().slice(0, NOTE_MAX) });
+    return true;
+  }
+
+  /** Look through the Long Glass at the 2×2 patch of enemy water whose top-left square is (x, y). */
+  peek(x: number, y: number): boolean {
+    if (!peekFits(x, y) || !this.can(ITEMS.longglass.ap) || !this.has('longglass') || inStorm(this.pub, y) || inStorm(this.pub, y + 1)) return false;
+    this.send({ t: 'peek', x, y });
+    return true;
+  }
+
   scan(x: number, y: number, src: 'cutter' | 'spyglass'): boolean {
     if (!zoneFits(x, y) || !this.can(1) || inStorm(this.pub, y) || (src === 'cutter' ? !this.alive('cutter') : !this.has('spyglass'))) return false;
     this.send({ t: 'scan', x, y, src });
@@ -459,10 +525,10 @@ export class Client {
     const k = this.pub.kraken, s = this.ships.find((q) => q.id === id);
     return !!k && k.side === this.me && !!s && !s.sunk && shipCells(s).some(([x, y]) => inKraken(k.x, k.y, x, y));
   }
-  reach(id: number, delta: 1 | -1 = 1) { return this.can(1) && !this.held(id) ? sailReach(this.ships, id, delta) : 0; }
+  reach(id: number, delta: 1 | -1 = 1) { return this.can(1) && !this.held(id) ? sailReach(this.ships, id, delta, this.pub.wind) : 0; }
   sail(id: number, delta: 1 | -1, steps = this.reach(id, delta)): boolean {
     if (!this.can(1) || this.held(id)) return false;
-    const from = this.middle(id), debris = sailShip(this.ships, id, delta, steps);
+    const from = this.middle(id), debris = sailShip(this.ships, id, delta, steps, this.pub.wind);
     if (!debris) return false;
     this.acts.push({ k: 'sail', id, delta, steps });
     this.moved(id, 'sail', debris, from);
@@ -475,6 +541,29 @@ export class Client {
     if (!this.can(1) || this.held(id) || !turnShip(this.ships, id, way)) return false;
     this.acts.push({ k: 'turn', id, way });
     this.moved(id, 'turn', [], from);
+    return true;
+  }
+
+  /** A blood pact needs a damaged ship that is not the merchantman nor the last afloat, once a battle. */
+  canPact(id?: number): boolean {
+    if (!this.can(1) || this.pub.pacts?.[this.me]) return false;
+    const afloat = this.ships.filter((s) => !s.sunk);
+    const ok = (s: Ship) => !s.sunk && s.kind !== 'merchant' && s.hits.some(Boolean) && afloat.length > 1;
+    return id === undefined ? afloat.some(ok) : afloat.some((s) => s.id === id && ok(s));
+  }
+  pact(id: number): boolean {
+    if (!this.canPact(id)) return false;
+    const s = this.ships.find((q) => q.id === id)!;
+    s.sunk = true; s.chained = false;
+    this.send({ t: 'pact', ship: { kind: s.kind, cls: s.cls, len: s.len, x: s.x, y: s.y, dir: s.dir, rev: !!s.rev } });
+    return true;
+  }
+
+  /** Ride a sea current: the whole fleet drifts one square towards `dir`. */
+  current(dir: number): boolean {
+    if (!this.can(ITEMS.current.ap) || !this.has('current') || !(dir >= 0 && dir <= 3)) return false;
+    driftFleet(this.ships, dir, (s) => this.held(s.id));
+    this.send({ t: 'current', dir });
     return true;
   }
 

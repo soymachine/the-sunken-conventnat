@@ -1,6 +1,7 @@
 // Weather over the charts: rain under the storm front, lightning, drifting sea mist and gulls.
 // Everything that moves in numbers (rain, mist) is animated on the GPU from a time uniform.
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { N } from '../game/rules';
 
 /* ---------- rain ---------- */
@@ -163,46 +164,197 @@ class Mist {
 }
 
 /* ---------- gulls ---------- */
-interface Gull { body: THREE.Group; l: THREE.Mesh; r: THREE.Mesh; c: THREE.Vector2; rad: number; h: number; sp: number; ph: number; up: number }
-function wing(side: 1 | -1) {
-  const g = new THREE.BufferGeometry();
-  // A crooked gull's wing: up from the body to the wrist, then down to a swept tip.
-  const v = [0, 0, 0.07, 0, 0, -0.07, side * 0.22, 0.05, -0.02, 0, 0, -0.07, side * 0.22, 0.05, -0.02, side * 0.24, 0.05, 0.05, side * 0.22, 0.05, -0.02, side * 0.46, -0.03, -0.12, side * 0.24, 0.05, 0.05];
-  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(v), 3));
-  g.computeVertexNormals();
-  return g;
+
+/** One gull with a mind of its own: it flies in from the horizon, wanders over the charts from one point
+ *  to the next, turning no faster than a bird can and banking into each turn, flaps to climb and glides
+ *  to sink, then heads off and is gone. */
+class Gull {
+  obj = new THREE.Group();
+  private pos = new THREE.Vector3(); private vel = new THREE.Vector3(); private goal = new THREE.Vector3();
+  private bank = 0; private flapAmp = 0; private flapPh = Math.random() * 6.28; private life = 0; private leaving = false;
+  active = false;
+  private base: Float32Array | null = null;
+  private geos: THREE.BufferGeometry[] = [];
+  constructor(model: THREE.Object3D) {
+    const m = model.clone(true);
+    // Each bird bends its own wings, so it needs its own copy of the geometry.
+    m.traverse((o) => { const me = o as THREE.Mesh; if (me.isMesh) { me.geometry = me.geometry.clone(); this.geos.push(me.geometry); me.castShadow = true; } });
+    this.base = this.geos.length ? (this.geos[0].attributes.position.array as Float32Array).slice() : null;
+    m.scale.setScalar(1.7);
+    this.obj.add(m);
+    this.obj.visible = false;
+  }
+  /** Fly in from a point beyond the charts, over `area` (centre, half-width, half-depth). */
+  launch(area: THREE.Vector3, w: number, d: number, delay: number) {
+    const a = Math.random() * Math.PI * 2;
+    this.pos.set(area.x + Math.cos(a) * (w + 14), 8 + Math.random() * 2, area.z + Math.sin(a) * (d + 10));
+    this.vel.set(area.x - this.pos.x, -1, area.z - this.pos.z).normalize().multiplyScalar(3.2);
+    this.life = -delay; this.leaving = false; this.active = true; this.bank = 0;
+    this.area = area; this.w = w; this.d = d;
+    this.pickGoal();
+  }
+  private area = new THREE.Vector3(); private w = 10; private d = 8;
+  private pickGoal() {
+    if (this.leaving) {
+      const a = Math.atan2(this.vel.z, this.vel.x) + (Math.random() - 0.5) * 1.2;
+      this.goal.set(this.pos.x + Math.cos(a) * 60, 12, this.pos.z + Math.sin(a) * 45);
+    } else this.goal.set(this.area.x + (Math.random() * 2 - 1) * this.w, 4.2 + Math.random() * 2.6, this.area.z + (Math.random() * 2 - 1) * this.d);
+  }
+  leave() { if (!this.leaving) { this.leaving = true; this.pickGoal(); } }
+  update(dt: number, t: number) {
+    if (!this.active) return;
+    this.life += dt;
+    if (this.life < 0) return;
+    this.obj.visible = true;
+    // Steer: turn towards the goal at a bird's rate, keep a gull's cruising speed.
+    const to = this.goal.clone().sub(this.pos), flat = new THREE.Vector3(to.x, 0, to.z);
+    if (flat.length() < 2.5 && !this.leaving) this.pickGoal();
+    const head = Math.atan2(this.vel.x, this.vel.z), want = Math.atan2(flat.x, flat.z);
+    const turn = Math.max(-0.75, Math.min(0.75, Math.atan2(Math.sin(want - head), Math.cos(want - head)) * 1.2));
+    const h = head + turn * dt, speed = this.leaving ? 4.2 : 3.2;
+    const climb = Math.max(-1, Math.min(1, to.y * 0.6));
+    this.vel.set(Math.sin(h) * speed, climb, Math.cos(h) * speed);
+    this.pos.addScaledVector(this.vel, dt);
+    // Bank into the turn; flap when climbing or turning hard, glide otherwise.
+    this.bank += (-turn * 0.9 - this.bank) * Math.min(1, dt * 2.5);
+    const wantFlap = climb > 0.15 || Math.abs(turn) > 0.5 || this.life < 1.5 ? 1 : 0.08;
+    this.flapAmp += (wantFlap - this.flapAmp) * Math.min(1, dt * 1.5);
+    this.flapPh += dt * 9.5;
+    this.obj.position.copy(this.pos);
+    this.obj.rotation.set(-climb * 0.25, h, this.bank, 'YXZ');
+    this.bend(Math.sin(this.flapPh) * 0.55 * this.flapAmp + 0.04);
+    // Gone once it is far beyond the charts.
+    if (this.leaving && this.pos.distanceTo(this.area) > 55) { this.active = false; this.obj.visible = false; }
+  }
+  /** Vertex normals averaged over every copy of a point, so the UV seams leave no crease in the light. */
+  private twins: Int32Array | null = null;
+  private smoothNormals(g: THREE.BufferGeometry) {
+    const pos = g.attributes.position.array as Float32Array, nv = pos.length / 3;
+    if (!this.twins) {
+      const key = new Map<string, number>(); this.twins = new Int32Array(nv);
+      for (let i = 0; i < nv; i++) { const k = `${pos[i * 3].toFixed(4)},${pos[i * 3 + 1].toFixed(4)},${pos[i * 3 + 2].toFixed(4)}`; if (!key.has(k)) key.set(k, i); this.twins[i] = key.get(k)!; }
+    }
+    g.computeVertexNormals();
+    const n = g.attributes.normal.array as Float32Array, acc = new Float32Array(n.length);
+    for (let i = 0; i < nv; i++) { const r = this.twins[i] * 3; acc[r] += n[i * 3]; acc[r + 1] += n[i * 3 + 1]; acc[r + 2] += n[i * 3 + 2]; }
+    for (let i = 0; i < nv; i++) { const r = this.twins[i] * 3, l = Math.hypot(acc[r], acc[r + 1], acc[r + 2]) || 1; n[i * 3] = acc[r] / l; n[i * 3 + 1] = acc[r + 1] / l; n[i * 3 + 2] = acc[r + 2] / l; }
+    g.attributes.normal.needsUpdate = true;
+  }
+
+  /** Raise or lower both wings about the shoulders, the outer wing a little more than the inner. */
+  private bend(a: number) {
+    if (!this.base) return;
+    const g = this.geos[0], pos = g.attributes.position.array as Float32Array, b = this.base;
+    const sh = 0.08;
+    for (let i = 0; i < pos.length; i += 3) {
+      const x = b[i], ax = Math.abs(x);
+      if (ax <= sh) { pos[i] = x; pos[i + 1] = b[i + 1]; pos[i + 2] = b[i + 2]; continue; }
+      const r = ax - sh, ang = a * (1 + 0.6 * Math.min(1, r / 0.35)), s = Math.sign(x);
+      // Model: wings along x, up is y (glTF), the shoulder near x = ±sh.
+      pos[i] = s * (sh + r * Math.cos(ang)); pos[i + 1] = b[i + 1] + r * Math.sin(ang); pos[i + 2] = b[i + 2];
+    }
+    g.attributes.position.needsUpdate = true;
+    this.smoothNormals(g);
+  }
 }
 
 class Gulls {
   group = new THREE.Group();
   private birds: Gull[] = [];
-  private away = 0;
-  constructor(count: number) {
-    const mat = new THREE.MeshBasicMaterial({ color: 0x1b150d, side: THREE.DoubleSide });
-    const bodyGeo = new THREE.ConeGeometry(0.045, 0.32, 5); bodyGeo.rotateX(Math.PI / 2);
-    for (let i = 0; i < count; i++) {
-      const body = new THREE.Group(), l = new THREE.Mesh(wing(-1), mat), r = new THREE.Mesh(wing(1), mat), b = new THREE.Mesh(bodyGeo, mat);
-      for (const m of [l, r, b]) m.castShadow = true;
-      body.add(l, r, b);
-      body.scale.setScalar(1.6);
-      this.group.add(body);
-      this.birds.push({ body, l, r, c: new THREE.Vector2(), rad: 2.5 + Math.random() * 3.5, h: 4.5 + Math.random() * 2, sp: (0.25 + Math.random() * 0.2) * (i % 2 ? 1 : -1), ph: Math.random() * 6.28, up: 0 });
+  private timer = 8 + Math.random() * 12;
+  private present = false;
+  private area = new THREE.Vector3(); private w = 16; private d = 8;
+  constructor() {
+    new GLTFLoader().loadAsync(`${import.meta.env.BASE_URL}models/gull.glb`).then((gltf) => {
+      gltf.scene.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (!m.isMesh) return;
+        const map = (m.material as THREE.MeshStandardMaterial).map ?? null;
+        if (map) map.colorSpace = THREE.SRGBColorSpace;
+        // Soft, smooth light: the ships' banded engraving shader drew every facet of the flexing wings as a line.
+        m.material = new THREE.MeshLambertMaterial({ map, side: THREE.DoubleSide });
+      });
+      for (let i = 0; i < 3; i++) { const g = new Gull(gltf.scene); this.birds.push(g); this.group.add(g.obj); }
+    }).catch(() => { /* no gulls without the model */ });
+  }
+  setArea(c: THREE.Vector3, w: number, d: number) { this.area.copy(c); this.w = w; this.d = d; }
+  update(dt: number, t: number, flee: boolean) {
+    if ((this.timer -= dt) < 0 || (flee && this.present)) {
+      if (!this.present && !flee && this.birds.length) {
+        // One, two or three birds, each arriving on its own a few seconds apart.
+        const n = 1 + Math.floor(Math.random() * 3);
+        this.birds.forEach((b, i) => { if (i < n) b.launch(this.area, this.w, this.d, i * (2 + Math.random() * 4)); });
+        this.present = true; this.timer = 35 + Math.random() * 35;
+      } else if (this.present) {
+        // They leave one by one.
+        this.birds.forEach((b, i) => setTimeout(() => b.leave(), i * (1500 + Math.random() * 3000)));
+        this.present = false; this.timer = 50 + Math.random() * 70;
+      } else this.timer = 10;
+    }
+    for (const b of this.birds) b.update(dt, t);
+  }
+  /** True while any gull is over the charts (for their cries). */
+  get here() { return this.present && this.birds.some((b) => b.active); }
+}
+
+/* ---------- shafts of sunlight ---------- */
+const RAY_VERT = /* glsl */ `
+varying vec2 vUv;
+void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
+const RAY_FRAG = /* glsl */ `
+uniform float uTime, uOn, uSeed;
+varying vec2 vUv;
+float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float noise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y); }
+void main() {
+  // Soft across the shaft, brightest a little below the top, dying away towards the chart.
+  float across = smoothstep(0.0, 0.5, vUv.x) * smoothstep(1.0, 0.5, vUv.x);
+  // They reach right down onto the paper, fading only at the very ends.
+  float along = smoothstep(1.0, 0.8, vUv.y) * (0.55 + 0.45 * vUv.y) * smoothstep(0.0, 0.06, vUv.y);
+  float motes = 0.75 + 0.25 * noise(vec2(vUv.x * 6.0 + uSeed, vUv.y * 3.0 - uTime * 0.12));
+  float flicker = 0.85 + 0.15 * sin(uTime * 0.6 + uSeed * 4.0);
+  float a = across * across * along * motes * flicker * uOn;
+  gl_FragColor = vec4(vec3(1.0, 0.86, 0.58) * a * 0.4, 1.0);
+}`;
+
+/** A few shafts of sunlight slanting in from the upper left onto your chart, now and then, swaying a little. */
+class SunRays {
+  group = new THREE.Group();
+  private rays: { m: THREE.Mesh; mat: THREE.ShaderMaterial; to: THREE.Vector3; w: number; ph: number }[] = [];
+  private on = 0; private want = 0; private timer = 25 + Math.random() * 30;
+  private from = new THREE.Vector3(); private target = new THREE.Vector3();
+  constructor() {
+    for (let i = 0; i < 5; i++) {
+      const mat = new THREE.ShaderMaterial({ vertexShader: RAY_VERT, fragmentShader: RAY_FRAG, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+        uniforms: { uTime: { value: 0 }, uOn: { value: 0 }, uSeed: { value: Math.random() * 10 } } });
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat);
+      m.matrixAutoUpdate = false; m.frustumCulled = false; m.renderOrder = 6;
+      this.group.add(m);
+      this.rays.push({ m, mat, to: new THREE.Vector3(), w: 1.4 + Math.random() * 1.6, ph: Math.random() * 6.28 });
     }
   }
-  /** Circle over these points of the world; scatter when `flee`. */
-  update(dt: number, t: number, centres: THREE.Vector2[], flee: boolean) {
-    this.away += ((flee ? 1 : 0) - this.away) * Math.min(1, dt * 0.6);
-    this.birds.forEach((g, i) => {
-      g.c.lerp(centres[i % centres.length], Math.min(1, dt * 0.5));
-      const a = t * g.sp + g.ph, y = g.h + 0.4 * Math.sin(t * 0.7 + g.ph) + this.away * 14;
-      g.body.position.set(g.c.x + Math.cos(a) * g.rad * (1 + this.away), y, g.c.y + Math.sin(a) * g.rad * 0.8 * (1 + this.away));
-      // Face along the circle and bank into it.
-      g.body.rotation.set(0, -a + (g.sp > 0 ? Math.PI : 0), 0.35 * Math.sign(g.sp));
-      // Flap in bursts, then glide.
-      const flap = Math.sin(t * 1.3 + g.ph) > 0.1 ? Math.sin(t * 11 + g.ph) : 0.15;
-      g.l.rotation.z = -0.5 * flap; g.r.rotation.z = 0.5 * flap;
-      g.body.visible = this.away < 0.97;
-    });
+  /** Aim at a chart: its top-left corner in the world. */
+  aim(chart: { x: number; z: number }) {
+    this.target.set(chart.x + N * 0.55, 0, chart.z + N * 0.55);
+    this.from.set(chart.x - 9, 16, chart.z - 12);
+    this.rays.forEach((r, i) => r.to.set(this.target.x + (i - 2) * 2.6, 0, this.target.z + (i % 2 ? 1.5 : -1.5)));
+  }
+  update(dt: number, t: number, cam: THREE.Camera, allowed: boolean) {
+    if ((this.timer -= dt) < 0) { this.want = this.want ? 0 : 1; this.timer = this.want ? 20 + Math.random() * 20 : 45 + Math.random() * 60; }
+    this.on += ((allowed ? this.want : 0) - this.on) * Math.min(1, dt * 0.3);
+    this.group.visible = this.on > 0.01;
+    if (!this.group.visible) return;
+    for (const r of this.rays) {
+      // Each shaft sways slowly across the chart, and turns its face to the camera about its own length.
+      const to = r.to.clone().add(new THREE.Vector3(0.9 * Math.sin(t * 0.07 + r.ph), 0, 0.6 * Math.cos(t * 0.05 + r.ph)));
+      const top = this.from.clone().add(new THREE.Vector3((to.x - this.target.x) * 0.15, 0, 0));
+      const axis = top.clone().sub(to), len = axis.length(); axis.normalize();
+      const mid = top.clone().add(to).multiplyScalar(0.5), toCam = cam.position.clone().sub(mid);
+      const n = toCam.sub(axis.clone().multiplyScalar(toCam.dot(axis))).normalize(), x = new THREE.Vector3().crossVectors(axis, n);
+      r.m.matrix.makeBasis(x.multiplyScalar(r.w * (0.9 + 0.1 * Math.sin(t * 0.3 + r.ph))), axis.multiplyScalar(len), n).setPosition(mid);
+      r.mat.uniforms.uTime.value = t; r.mat.uniforms.uOn.value = this.on;
+    }
   }
 }
 
@@ -212,15 +364,18 @@ export class Weather {
   private rain: Rain[] = [new Rain(1300), new Rain(1300)];
   private bolt = new Bolt();
   private mist = new Mist();
-  private gulls = new Gulls(7);
+  private gulls = new Gulls();
+  private sun = new SunRays();
   private stormy = false;
   constructor() {
-    this.group.add(this.rain[0].mesh, this.rain[1].mesh, this.bolt.group, this.mist.mesh, this.gulls.group);
+    this.group.add(this.rain[0].mesh, this.rain[1].mesh, this.bolt.group, this.mist.mesh, this.gulls.group, this.sun.group);
   }
   /** Where the two charts lie (their top-left corners in the world). */
   private charts: { x: number; z: number }[] = [];
   setCharts(a: { x: number; z: number }, b: { x: number; z: number }) {
     this.charts = [a, b];
+    this.sun.aim(a);
+    this.gulls.setArea(new THREE.Vector3((Math.min(a.x, b.x) + Math.max(a.x, b.x) + N) / 2, 0, (Math.min(a.z, b.z) + Math.max(a.z, b.z) + N) / 2), (Math.abs(a.x - b.x) + N) / 2, (Math.abs(a.z - b.z) + N) / 2);
     const x0 = Math.min(a.x, b.x) - 2, z0 = Math.min(a.z, b.z) - 2, x1 = Math.max(a.x, b.x) + N + 2, z1 = Math.max(a.z, b.z) + N + 2;
     this.mist.cover(x0, z0, x1 - x0, z1 - z0);
   }
@@ -230,11 +385,13 @@ export class Weather {
     this.charts.forEach((c, i) => this.rain[i].set(row === null ? null : [c.x - 0.6, c.z + row - 0.4, N + 1.2, 3.8]));
   }
   strike(at: THREE.Vector3) { this.bolt.strike(at); }
-  update(dt: number, t: number) {
+  update(dt: number, t: number, cam: THREE.Camera) {
     for (const r of this.rain) r.update(dt, t);
     this.bolt.update(dt);
     this.mist.update(t, this.stormy ? 0.32 : 0.2);
-    const centres = this.charts.map((c) => new THREE.Vector2(c.x + N / 2, c.z + N / 2));
-    if (centres.length) this.gulls.update(dt, t, centres, this.stormy);
+    this.gulls.update(dt, t, this.stormy);
+    if (this.charts.length) this.sun.update(dt, t, cam, !this.stormy);
   }
+  /** The gulls are overhead (so they may cry). */
+  get gullsHere() { return this.gulls.here; }
 }

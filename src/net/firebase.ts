@@ -1,7 +1,7 @@
 // Network sessions over Firebase Realtime Database (free Spark plan, no server code).
 // A room is an append-only log of messages; both captains replay it in key order.
 import { FirebaseApp, initializeApp } from 'firebase/app';
-import { connectAuthEmulator, getAuth, signInAnonymously } from 'firebase/auth';
+import { browserSessionPersistence, connectAuthEmulator, getAuth, setPersistence, signInAnonymously } from 'firebase/auth';
 import { Database, connectDatabaseEmulator, get, getDatabase, off, onChildAdded, onDisconnect, onValue, orderByChild, push, query, ref, remove, serverTimestamp, set } from 'firebase/database';
 import { Mode, Msg } from '../game/engine';
 import { Session } from './session';
@@ -26,6 +26,10 @@ async function connect(): Promise<void> {
     connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
     connectDatabaseEmulator(db, '127.0.0.1', 9000);
   }
+  // Each tab is its own captain: with the default (shared) persistence, two tabs of one browser were
+  // the same player, and a second tab joining a room took the host's own seat. A tab keeps its identity
+  // across reloads, so a captain can still return to a battle in progress.
+  await setPersistence(auth, browserSessionPersistence);
   uid = (await signInAnonymously(auth)).user.uid;
 }
 
@@ -49,6 +53,7 @@ class FirebaseSession implements Session {
       if (m.t === 'move') m.debris ||= [];
       if (m.t === 'result' || m.t === 'drowned') m.results ||= [];
       if (m.t === 'reveal') { m.acts ||= []; m.initial ||= []; m.final ||= []; }
+      if (m.t === 'peekResult') m.ships ||= [];
       cb(m as Msg);
     });
     this.unsub.push(() => off(log));

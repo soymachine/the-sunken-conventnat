@@ -12,6 +12,7 @@ const VERT = /* glsl */ `
 uniform float uTime, uFlutter;
 varying vec3 vN;
 varying vec2 vUv;
+varying vec3 vW;
 void main() {
   vUv = uv;
   vec3 p = position;
@@ -20,15 +21,20 @@ void main() {
     p += normal * w * uFlutter * (0.6 * sin(uTime * 2.1 + position.y * 5.0) + 0.4 * sin(uTime * 3.7 + position.z * 9.0 + position.x * 7.0));
   }
   vN = mat3(modelMatrix) * normal;
+  vW = (modelMatrix * vec4(p, 1.0)).xyz;
   gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
 }`;
 const FRAG = /* glsl */ `
 uniform vec3 uColor, uTint, uLight;
 uniform float uTintAmt, uAlpha, uUseMap;
 uniform sampler2D uMap;
+uniform vec4 uClip;
 varying vec3 vN;
 varying vec2 vUv;
+varying vec3 vW;
 void main() {
+  // A ship seen through the Long Glass exists only inside the patch of water it shows.
+  if (uClip.z > uClip.x && (vW.x < uClip.x || vW.x > uClip.z || vW.z < uClip.y || vW.z > uClip.w)) discard;
   vec3 n = normalize(vN);
   if (!gl_FrontFacing) n = -n;
   float d = dot(n, uLight) * 0.5 + 0.5;
@@ -48,7 +54,7 @@ void main() {
 export function inkMaterial(color: number, flutter = 0, map: THREE.Texture | null = null): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     vertexShader: VERT, fragmentShader: FRAG, side: THREE.DoubleSide,
-    uniforms: { uColor: { value: new THREE.Color(color) }, uTint: { value: new THREE.Color(0xd9a441) }, uTintAmt: { value: 0 }, uAlpha: { value: 1 }, uLight: { value: LIGHT }, uTime: time, uFlutter: { value: flutter }, uMap: { value: map }, uUseMap: { value: map ? 1 : 0 } },
+    uniforms: { uColor: { value: new THREE.Color(color) }, uTint: { value: new THREE.Color(0xd9a441) }, uTintAmt: { value: 0 }, uAlpha: { value: 1 }, uLight: { value: LIGHT }, uTime: time, uFlutter: { value: flutter }, uMap: { value: map }, uUseMap: { value: map ? 1 : 0 }, uClip: { value: new THREE.Vector4(0, 0, -1, -1) } },
   });
 }
 
@@ -120,6 +126,41 @@ function foreAft(c: [number, number][], bulge: number): THREE.BufferGeometry {
 
 const models = new Map<Kind, THREE.Object3D>();
 /** Look for hand-made models; resolves once every kind has been tried. */
+/** Treasure props made in Meshy (public/models/treasure.glb, seal.glb), shaded like the ships. */
+const props = new Map<'gold' | 'seal', THREE.Object3D>();
+export async function loadPropModels(): Promise<number> {
+  const loader = new GLTFLoader();
+  await Promise.all((['gold', 'seal'] as const).map(async (kind) => {
+    try {
+      const g = (await loader.loadAsync(`${import.meta.env.BASE_URL}models/${kind === 'gold' ? 'treasure' : 'seal'}.glb`)).scene;
+      g.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (!m.isMesh) return;
+        const map = (m.material as THREE.MeshStandardMaterial).map ?? null;
+        if (map) map.colorSpace = THREE.SRGBColorSpace;
+        m.material = inkMaterial(0xffffff, 0, map);
+        m.castShadow = true;
+      });
+      props.set(kind, g);
+    } catch { /* keep the procedural treasure */ }
+  }));
+  return props.size;
+}
+/** A fresh copy of a treasure prop with its own materials (so the enemy's can be faded), or null if not loaded. */
+export function propModel(kind: 'gold' | 'seal', faded: boolean): THREE.Object3D | null {
+  const src = props.get(kind);
+  if (!src) return null;
+  const g = src.clone(true);
+  g.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    const mat = (m.material as THREE.ShaderMaterial).clone();
+    if (faded) { mat.uniforms.uAlpha.value = 0.55; mat.transparent = true; mat.depthWrite = false; }
+    m.material = mat;
+  });
+  return g;
+}
+
 export async function loadShipModels(): Promise<number> {
   const loader = new GLTFLoader();
   await Promise.all((Object.keys(SPECS) as Kind[]).map(async (kind) => {

@@ -75,3 +75,9 @@ add `?q=low` or `?q=high` to the address to force either.
 - `src/net` — sessions: local (against the bot) and Firebase
 - `src/render` — scene, sea shader, ships, particle effects, post-processing
 - `src/ui` — HUD, lobby and synthesised sound
+
+## Version
+
+The version shown at the foot of the Articles of Engagement comes from `version` in `package.json`.
+Raise it with every change that is published: the last number for fixes and small changes
+(0.1.0 → 0.1.1), the middle one for new features (0.1.1 → 0.2.0).

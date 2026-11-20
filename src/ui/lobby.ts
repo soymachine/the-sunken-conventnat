@@ -20,7 +20,8 @@ export class Lobby {
           <path id="bannerLine" d="M232,443 C243,442 279,436 300,434 C321,432 340,428 360,429 C380,430 402,434 420,439 C438,444 452,450 470,456 C488,462 510,470 530,477 C550,484 570,491 590,497 C610,503 630,509 650,513 C670,517 690,521 710,520 C730,519 753,513 770,508 C787,503 803,493 810,490" />
           <filter id="inkRough" x="-5%" y="-20%" width="110%" height="140%">
             <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="7" />
-            <feDisplacementMap in="SourceGraphic" scale="2.5" result="ink" />
+            <feDisplacementMap in="SourceGraphic" scale="1.6" result="rough" />
+            <feGaussianBlur in="rough" stdDeviation=".55" result="ink" />
             <feGaussianBlur in="ink" stdDeviation="2.4" result="soft" />
             <feOffset in="soft" dx="2" dy="4" result="drop" />
             <feFlood flood-color="#3a2410" flood-opacity=".42" />
@@ -29,7 +30,7 @@ export class Lobby {
           </filter>
         </defs>
         <image href="/ui/crest.webp" width="1024" height="1024" />
-        <text class="bannerText" filter="url(#inkRough)"><textPath href="#bannerLine" startOffset="50%" text-anchor="middle" textLength="548" lengthAdjust="spacingAndGlyphs">The Sunken Covenant</textPath></text>
+        <text class="bannerText" filter="url(#inkRough)"><textPath href="#bannerLine" startOffset="50%" text-anchor="middle" textLength="586" lengthAdjust="spacingAndGlyphs">The Sunken Covenant</textPath></text>
         <g class="monogram" text-anchor="middle">
           <text x="511" y="828" fill="#3d0f07" opacity=".8">SC</text>
           <text x="517" y="834" fill="#e68a6c" opacity=".35">SC</text>
@@ -50,9 +51,15 @@ export class Lobby {
         <div class="row"><button class="plaque" id="vsBot">Play the machine</button></div>
         <p class="or"><span>or sail against a friend</span></p>
         <div class="row"><button class="plaque dark" id="create">Create a room</button></div>
-        <div class="row"><input id="code" maxlength="4" placeholder="CODE" aria-label="Room code" autocomplete="off" /><button class="plaque dark" id="join">Join</button></div>
-        <div class="drums" hidden></div>
+        <div class="row joinRow"><input id="code" maxlength="4" placeholder="CODE" aria-label="Room code" autocomplete="off" /><button class="plaque dark" id="join">Join</button></div>
+        <div class="invite" hidden>
+          <p class="field">Your room</p>
+          <div class="drums" aria-label="Room code"></div>
+          <div class="row"><button class="plaque dark" id="copyCode" data-keep="1">Copy code</button><button class="plaque dark" id="copyLink" data-keep="1">Copy invite link</button></div>
+          <p class="link" id="inviteLink"></p>
+        </div>
         <p class="status" role="status"></p>
+        <p class="version">Version ${__APP_VERSION__}</p>
       </div>
       </div>`;
     const name = this.q<HTMLInputElement>('#capName');
@@ -74,13 +81,32 @@ export class Lobby {
     }
   }
 
-  show(v: boolean) { this.root.hidden = !v; if (v) { this.q<HTMLElement>('.drums').hidden = true; this.busy(false); } }
-  busy(b: boolean) { this.root.querySelectorAll<HTMLButtonElement>('button').forEach((x) => { if (!x.dataset.off) x.disabled = b; }); }
+  show(v: boolean) { this.root.hidden = !v; if (v) { this.invite(false); this.busy(false); } }
+  private invite(on: boolean) { this.q<HTMLElement>('.invite').hidden = !on; this.q<HTMLElement>('.joinRow').hidden = on; }
+  busy(b: boolean) { this.root.querySelectorAll<HTMLButtonElement>('button').forEach((x) => { if (!x.dataset.off && !x.dataset.keep) x.disabled = b; }); }
   status(text: string, err = false) { const s = this.q<HTMLElement>('.status'); s.textContent = text; s.classList.toggle('err', err); }
+  /** The room is open: show its code in place of the join row, with ways to pass it on. */
   showCode(code: string) {
-    const d = this.q<HTMLElement>('.drums');
-    d.innerHTML = [...code].map((c) => `<span>${c}</span>`).join('');
-    d.hidden = false;
-    this.status('Send this code to your rival. Waiting for the second captain…');
+    this.q<HTMLElement>('.drums').innerHTML = [...code].map((c) => `<span>${c}</span>`).join('');
+    const link = `${location.origin}/?join=${code}`;
+    this.q<HTMLElement>('#inviteLink').textContent = link;
+    const copy = (id: string, text: string, done: string) => {
+      const b = this.q<HTMLButtonElement>(id), label = b.textContent;
+      b.onclick = () => navigator.clipboard.writeText(text).then(
+        () => { b.textContent = done; setTimeout(() => (b.textContent = label), 1600); },
+        () => { const r = document.createRange(); r.selectNodeContents(this.q('#inviteLink')); getSelection()?.removeAllRanges(); getSelection()?.addRange(r); },
+      );
+    };
+    copy('#copyCode', code, 'Copied');
+    copy('#copyLink', link, 'Link copied');
+    this.invite(true);
+    this.status('Send the code or the link to your rival. The battle begins as soon as they join…');
+  }
+
+  /** Opened from an invite link: the code is filled in, the guest only signs and joins. */
+  invited(code: string) {
+    this.q<HTMLInputElement>('#code').value = code;
+    this.status(`You are invited to room ${code}. Sign your name and press Join.`);
+    this.q<HTMLInputElement>('#capName').focus();
   }
 }

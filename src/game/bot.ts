@@ -20,7 +20,8 @@ function scoreGrid(c: Client, rnd: Rnd): number[][] {
   const live = (x: number, y: number) => foe.shots.some((s) => s.x === x && s.y === y && s.result !== 'miss' && !s.sunk && round - s.round <= 3);
   for (const s of foe.shots) {
     const age = round - s.round;
-    if (s.sunk) { bump(s.x, s.y, -100); continue; }
+    // A sunk ship is gone and another may sail over her grave: the penalty fades like any other.
+    if (s.sunk) { if (age <= 4) bump(s.x, s.y, -100 + age * 20); continue; }
     if (s.result === 'clang' && age <= 1) bump(s.x, s.y, 9); // armour is gone: strike the same plate again
     else if (age <= 4) bump(s.x, s.y, s.result === 'miss' ? -10 : -6);
     if (s.result !== 'miss' && age <= 3) for (const [dx, dy] of NEIGH) {
@@ -47,13 +48,15 @@ function scoreGrid(c: Client, rnd: Rnd): number[][] {
     const rk = c.pub.reckon;
     if (rk) { const age = round - rk.round; if (age <= 2) for (let y = 0; y < N; y++) for (let x = rk.col - 1; x <= rk.col + 1 + age * 2; x++) bump(x, y, 3 - age); }
   }
-  for (const s of foe.sunk) for (const [x, y] of shipCells(s)) bump(x, y, -100);
   // No gun can be laid under the storm, and nothing floats in the drowned rim.
   for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (inStorm(c.pub, y) || !safe(c.pub.ring, x, y)) score[y][x] = -1000;
   return score;
 }
 
 /** Take one step for the bot. Returns true if it did something. */
+/** What the machine writes back when a bottle reaches it. */
+const REPLIES = ['Brave words for a captain with so much water left to lose.', 'The sea keeps its own counsel, and so do I.', 'Fair winds to you, while they last.', 'Your bottle sank before I could read it. A pity.', 'Strike your colours and I may be merciful.', 'I have read your note. I am unmoved.'];
+
 export function botAct(c: Client, rnd: Rnd = Math.random): boolean {
   const p = c.pub;
   if (p.phase === 'placement') { if (!c.side.ready) { void c.ready(); return true; } return false; }
@@ -62,6 +65,10 @@ export function botAct(c: Client, rnd: Rnd = Math.random): boolean {
   const me = c.side, foe = c.foeSide;
 
   if (c.has('winds') && !p.windsUsed && c.winds()) return true;
+
+  // Answer a bottle with one of its own, now and then.
+  const notes = p.notes || [], last = notes[notes.length - 1];
+  if (last && last.by !== c.me && !p.noteSent && rnd() < 0.8) return c.note(REPLIES[Math.floor(rnd() * REPLIES.length)]);
 
   const mer = c.merchant;
   if (c.role === 'admiral' && mer && !mer.sunk) {
