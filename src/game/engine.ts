@@ -4,7 +4,7 @@
 import { Order, pickOrder } from './orders';
 import { ITEMS, Item, MAX_ITEMS, START_DOUBLOONS } from './powerups';
 import {
-  AP_PER_TURN, CellResult, Dir, KRAKEN_SEALS, Kind, MAELSTROM_ROUND, N, Revealed, Rnd, Role, Ship, XY, attackCells, countScan, inBoard, inKraken, inZone, legalPlacement, peekFits, peekShips, randomFleet, zoneFits,
+  AP_PER_TURN, CellResult, Dir, KRAKEN_SEALS, Kind, MAELSTROM_MAX_RING, MAELSTROM_ROUND, N, Revealed, Rnd, Role, Ship, XY, attackCells, countScan, inBoard, inKraken, inZone, legalPlacement, peekFits, peekShips, randomFleet, zoneFits,
   repairShip, rimCells, resolveAttack, driftFleet, sailReach, sailShip, shipAt, shipCells, turnShip, canTurnShip, Way,
 } from './rules';
 
@@ -107,6 +107,14 @@ export interface Pub {
   tide?: { dx: number; dy: number; round: number };
   /** How the battle ended. */
   reason?: 'fleet' | 'plunder' | 'home' | 'season';
+}
+/** Rounds until the maelstrom swallows its next ring (1 = at the start of the next round), or null once spent or
+ *  outside the classic battle. */
+export function maelstromIn(p: Pub): number | null {
+  if (p.mode !== 'classic' || p.ring >= MAELSTROM_MAX_RING || p.phase === 'over') return null;
+  let next = Math.max(MAELSTROM_ROUND, p.round + 1);
+  if (next % 2) next++;
+  return next - p.round;
 }
 export const inStorm = (p: Pub, y: number) => !!p.storm && y >= p.storm.row && y <= p.storm.row + 2;
 export const roleOf = (p: Pub, who: 0 | 1): Role => (p.admiral === null ? 'classic' : p.admiral === who ? 'admiral' : 'corsair');
@@ -319,7 +327,7 @@ export function reduce(p: Pub, m: Msg): boolean {
         if (p.round % 4 === 0) p.storm = { row: Math.floor(rand(p) * (N - 2)), until: p.round + 1 };
         if (p.round % 5 === 0) tide(p);
         // From round 20 the maelstrom swallows the outer ring of both charts every other round.
-        if (p.mode === 'classic' && p.round >= MAELSTROM_ROUND && p.round % 2 === 0 && p.ring < N / 2 - 2) p.ring++;
+        if (p.mode === 'classic' && p.round >= MAELSTROM_ROUND && p.round % 2 === 0 && p.ring < MAELSTROM_MAX_RING) p.ring++;
       }
       // As its victim's turn ends the Kraken strikes a second time, then lets go.
       if (p.kraken && p.kraken.side === m.by) { if (p.kraken.left > 0) strike(p); else p.kraken = undefined; }

@@ -60,6 +60,8 @@ export interface CellResult { x: number; y: number; r: ShotOutcome; ship?: Revea
 /** Seals needed to summon the Kraken, and the round the maelstrom begins (classic battles). */
 export const KRAKEN_SEALS = 3;
 export const MAELSTROM_ROUND = 20;
+/** The maelstrom stops once five rings have gone under, leaving the middle 6×6 of the chart. */
+export const MAELSTROM_MAX_RING = 5;
 /** The Kraken holds a 3×3 patch around its centre. */
 export const inKraken = (cx: number, cy: number, x: number, y: number) => Math.abs(x - cx) <= 1 && Math.abs(y - cy) <= 1;
 /** True while a cell is still inside the chart after `ring` outer rings have gone under. */

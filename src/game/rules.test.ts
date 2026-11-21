@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { botAct, driveBot } from './bot';
-import { Client, Msg } from './engine';
+import { Client, Msg, maelstromIn } from './engine';
 import { verify } from './verify';
 import { FLEET, FLEETS, N, Ship, attackCells, becalmed, countScan, driftFleet, fits, flooded, randomFleet, repairShip, resolveAttack, sailMax, sailReach, sailShip, shipCells, turnShip } from './rules';
 import { Bus } from '../net/session';
@@ -472,8 +472,11 @@ describe('the covenant', () => {
     expect(a.pub.storm).toMatchObject({ until: 9 });
     expect(a.pub).toEqual(b.pub);
   });
-  it('the maelstrom swallows the rim from round 20 and its toll is verified', async () => {
+  it('the maelstrom is announced, stops at the middle 6×6, and its toll is verified', async () => {
     const { bus, a, b } = await duel();
+    expect(maelstromIn(a.pub)).toBe(19);
+    for (let guard = 0; guard < 400 && a.pub.round < 19; guard++) (a.myTurn ? a : b).endTurn();
+    expect(maelstromIn(a.pub)).toBe(1);
     for (let guard = 0; guard < 400 && a.pub.phase === 'battle' && a.pub.round < 23; guard++) (a.myTurn ? a : b).endTurn();
     expect(a.pub.ring).toBe(2);
     // a's line lies along the top rim and drowns whole at ring 1; the rest sit on column 0 and lose a section per ring.
@@ -555,6 +558,15 @@ describe('the covenant', () => {
     expect(await verify(bus.log, 0, 'classic', 7)).toBeNull();
     const forged: Msg[] = bus.log.map((m) => (m.t === 'current' ? { ...m, dir: 3 } : m));
     expect(await verify(forged, 0, 'classic', 7)).not.toBeNull();
+  });
+  it('the maelstrom stops after five rings, leaving the middle 6×6', async () => {
+    const { a, b } = await duel();
+    // Keep both fleets afloat in the middle so the game runs long enough.
+    for (const c of [a, b]) for (const s of c.ships) { s.dir = 'h'; s.len = Math.min(s.len, 2); s.hits = s.hits.slice(0, s.len); }
+    a.ships.forEach((s, i) => { s.x = 7; s.y = 5 + i; }); b.ships.forEach((s, i) => { s.x = 7; s.y = 5 + i; });
+    for (let guard = 0; guard < 600 && a.pub.phase === 'battle' && a.pub.round < 34; guard++) (a.myTurn ? a : b).endTurn();
+    expect(a.pub.ring).toBe(5);
+    expect(maelstromIn(a.pub)).toBeNull();
   });
   it('a sunk ship leaves open water: others sail through her squares and shots there fall in the sea', () => {
     const line = mk(0, 'line', 5, 0, 0, 'h'), cutter = mk(1, 'cutter', 2, 5, 0, 'h');

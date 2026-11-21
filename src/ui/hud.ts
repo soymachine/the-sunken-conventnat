@@ -1,5 +1,5 @@
 // Oak-and-brass HUD drawn with DOM + SVG over the 3D canvas.
-import { Client, SEASON, roleOf } from '../game/engine';
+import { Client, SEASON, maelstromIn, roleOf } from '../game/engine';
 import { ITEMS, ITEM_HELP, ITEM_IDS, Item, MAX_ITEMS } from '../game/powerups';
 import { FLEETS, KRAKEN_SEALS, N, Role, shipCells } from '../game/rules';
 
@@ -344,6 +344,11 @@ export class Hud {
 
   update(c: Client, mode: Mode, note = '') {
     const p = c.pub, me = c.side, foe = c.foeSide, mine = c.myTurn;
+    // When the battle opens the desk is laid out piece by piece instead of appearing all at once.
+    if (p.phase === 'battle' && this.root.dataset.phase !== 'battle') {
+      this.root.classList.remove('deal'); void this.root.offsetWidth; this.root.classList.add('deal');
+      setTimeout(() => this.root.classList.remove('deal'), 2600);
+    }
     this.root.dataset.phase = p.phase;
     const i = mode === 'fire' ? 0 : mode === 'sail' ? 1 : mode === 'turn' ? 2 : 3, span = 180 / SECTORS.length;
     const mid = ((180 - span * i - span / 2) * Math.PI) / 180;
@@ -435,7 +440,12 @@ export class Hud {
       parts.push(`<span><b>Season closes</b>${p.phase === 'battle' ? `in ${left} round${left === 1 ? '' : 's'}` : `after round ${SEASON}`}</span>`);
     }
     if (p.kraken) parts.push(`<span><b>The Kraken</b>holds ${p.kraken.side === c.me ? 'your' : 'enemy'} ships</span>`);
-    if (p.ring) parts.push(`<span><b>Maelstrom</b>${p.ring} ring${p.ring === 1 ? '' : 's'} drowned</span>`);
+    // The maelstrom's countdown is always in sight, so captains can plan their moves around it.
+    if (p.mode === 'classic' && p.phase === 'battle') {
+      const left = maelstromIn(p), ringTxt = p.ring ? `${p.ring} ring${p.ring === 1 ? '' : 's'} drowned · ` : '';
+      parts.push(left === null ? `<span class="mael"><b>Maelstrom</b>spent — the middle 6×6 remains</span>`
+        : `<span class="mael${left === 1 ? ' soon' : ''}"><b>Maelstrom</b>${ringTxt}${left === 1 ? 'the next ring goes under <u>next round</u>' : `${p.ring ? 'next ring' : 'rises'} in <u>${left} rounds</u>`}</span>`);
+    }
     obj.hidden = !parts.length || p.phase === 'over';
     obj.innerHTML = parts.join('');
     this.q<HTMLElement>('.over').hidden = p.phase !== 'over';

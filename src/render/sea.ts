@@ -104,6 +104,8 @@ void main() {
 const FRAG = /* glsl */ `
 uniform sampler2D uMap, uEnergy;
 uniform float uTime, uEnemy, uNight, uRing, uFlash;
+// The ring the maelstrom swallows next round (0 = none yet) and how to mark it: 1 red hatching, 2 creeping ink.
+uniform float uDoom, uDoomStyle;
 // The Long Glass: uPeek = (left, top, start time, strength 0..1) of a 2×2 patch, in chart squares.
 uniform vec4 uPeek;
 // Squares tinted on the chart (aim, spyglass patch, placement shadow) and outlined boxes (scans), drawn
@@ -261,6 +263,28 @@ void main() {
       col = mix(col, INK, step(0.982, hash(floor(p * 40.0))) * smoothstep(1.3, 0.4, d) * step(0.35, d) * 0.65);
       col *= 1.0 - 0.22 * exp(-(d - 1.0) * (d - 1.0) * 1.5);
     }
+    // The ring that goes under next round: marked so captains can get clear in time.
+    float em = min(edge.x, edge.y);
+    if (uDoom > 0.5 && em <= uDoom && em > uDoom - 1.0) {
+      float into = uDoom - em; // 0 at the inner edge of the doomed band, 1 at its outer edge
+      if (uDoomStyle < 1.5) {
+        // 1 · Red hatching: wax-red diagonal strokes that pulse, and a dashed warning line along the inner edge.
+        float pulse = 0.65 + 0.35 * sin(uTime * 3.2);
+        float hatch = smoothstep(0.45, 0.8, sin((p.x + p.y) * 18.0 - uTime * 2.0));
+        col = mix(col, vec3(0.62, 0.16, 0.08), (0.18 + 0.38 * hatch) * pulse);
+        float along = abs(edge.x - em) < 0.001 ? p.y : p.x;
+        float dash = step(0.5, fract(along * 2.0 - uTime * 0.8));
+        col = mix(col, vec3(0.55, 0.1, 0.05), smoothstep(0.07, 0.0, abs(into)) * dash * 0.95);
+      } else {
+        // 2 · Creeping ink: the maelstrom's swirl already reaches in, dark tendrils and a foam edge advancing.
+        vec2 cc = p - uN * 0.5;
+        float sw = 0.5 + 0.5 * sin(atan(cc.y, cc.x) * 9.0 + length(cc) * 2.4 - uTime * 2.2);
+        float reach = 0.35 + 0.65 * (0.5 + 0.5 * sin(uTime * 1.2));
+        float ink = smoothstep(reach + 0.25, reach - 0.2, 1.0 - into + 0.35 * noise(p * 3.0 + uTime * 0.4));
+        col = mix(col, INK * 3.0, ink * (0.55 + 0.3 * sw));
+        col = mix(col, vec3(0.97, 0.93, 0.82), smoothstep(0.08, 0.0, abs(1.0 - into - reach + 0.15 * noise(p * 4.0))) * 0.7);
+      }
+    }
     // Maelstrom: the drowned rim churns in ink.
     float rim = step(0.5, uRing) * step(min(edge.x, edge.y), uRing);
     vec2 c = p - uN * 0.5;
@@ -323,7 +347,7 @@ export class Sea {
     this.tex.magFilter = this.tex.minFilter = THREE.LinearFilter;
     this.mat = new THREE.ShaderMaterial({
       vertexShader: VERT, fragmentShader: FRAG,
-      uniforms: { uMap: { value: chartTexture(enemy) }, uEnergy: { value: this.tex }, uTime: { value: 0 }, uEnemy: { value: enemy ? 1 : 0 }, uN: { value: N }, uNight: { value: 0 }, uRing: { value: 0 }, uFlash: { value: 0 }, uStorm: { value: new THREE.Vector2(0, 0) }, uTide: { value: new THREE.Vector4(1, 0, -99, 0) }, uPeek: { value: new THREE.Vector4(0, 0, 0, 0) }, uHl: { value: this.hlTex }, uBox: { value: Array.from({ length: 8 }, () => new THREE.Vector4()) }, uBoxCol: { value: Array.from({ length: 8 }, () => new THREE.Vector4()) }, uBoxN: { value: 0 },
+      uniforms: { uMap: { value: chartTexture(enemy) }, uEnergy: { value: this.tex }, uTime: { value: 0 }, uEnemy: { value: enemy ? 1 : 0 }, uN: { value: N }, uNight: { value: 0 }, uRing: { value: 0 }, uDoom: { value: 0 }, uDoomStyle: { value: Sea.doomStyle }, uFlash: { value: 0 }, uStorm: { value: new THREE.Vector2(0, 0) }, uTide: { value: new THREE.Vector4(1, 0, -99, 0) }, uPeek: { value: new THREE.Vector4(0, 0, 0, 0) }, uHl: { value: this.hlTex }, uBox: { value: Array.from({ length: 8 }, () => new THREE.Vector4()) }, uBoxCol: { value: Array.from({ length: 8 }, () => new THREE.Vector4()) }, uBoxN: { value: 0 },
         uHull: { value: Array.from({ length: 14 }, () => new THREE.Vector4()) }, uHull2: { value: Array.from({ length: 14 }, () => new THREE.Vector4()) }, uHullN: { value: 0 }, uWake: { value: Sea.wake } },
     });
     const geo = new THREE.PlaneGeometry(N + 1, N + 1, 96, 96);
@@ -362,7 +386,9 @@ export class Sea {
   /** Target darkness of this chart (1 while the Kraken holds it). */
   night = 0;
   setStorm(row: number | null) { (this.mat.uniforms.uStorm.value as THREE.Vector2).set(row ?? 0, row === null ? 0 : 1); }
-  setRing(ring: number) { this.mat.uniforms.uRing.value = ring; }
+  setRing(ring: number, doom = 0) { this.mat.uniforms.uRing.value = ring; this.mat.uniforms.uDoom.value = doom; this.mat.uniforms.uDoomStyle.value = Sea.doomStyle; }
+  /** How the doomed ring is marked: 1 red hatching, 2 creeping ink. */
+  static doomStyle = 1;
   flash() { this.mat.uniforms.uFlash.value = 1; }
   /** Open the Long Glass on the 2×2 patch at (x, y), from time t; null closes it. */
   setPeek(at: { x: number; y: number } | null, t: number) {

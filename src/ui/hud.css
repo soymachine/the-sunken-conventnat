@@ -363,3 +363,29 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); out
 #hud .status .objective > span { display: flex; align-items: center; gap: 7px; font: italic 14px var(--body); letter-spacing: 0; text-transform: none; color: var(--parch); margin: 0; }
 #hud .status .objective b { display: inline; font: 700 9.5px var(--label); letter-spacing: .16em; text-transform: uppercase; color: var(--amber); }
 #hud .status .objective .crates { display: inline-flex; margin: 0; }
+
+#hud .status .objective .mael u { text-decoration: none; color: var(--amber); font-style: normal; font-family: var(--label); font-size: 12px; letter-spacing: .06em; }
+#hud .status .objective .mael.soon { animation: maelSoon 1.6s ease-in-out infinite; }
+#hud .status .objective .mael.soon u { color: #f08a64; }
+@keyframes maelSoon { 50% { text-shadow: 0 0 10px rgba(240, 120, 80, .8); } }
+
+/* ---------- the desk is laid out when the battle opens ---------- */
+@keyframes deskRise { from { opacity: 0; transform: translateY(60px); } to { opacity: 1; transform: none; } }
+@keyframes deskDeal { from { opacity: 0; transform: translateY(190px); } to { opacity: 1; transform: none; } }
+@keyframes deskFade { from { opacity: 0; transform: translateY(20px) scale(.9); } to { opacity: 1; transform: none; } }
+#hud.deal .order { animation: deskRise .7s cubic-bezier(.2, .8, .3, 1.1) backwards; }
+#hud.deal .order:nth-child(1) { animation-delay: .15s; } #hud.deal .order:nth-child(2) { animation-delay: .28s; } #hud.deal .order:nth-child(3) { animation-delay: .41s; }
+#hud.deal .bottleBtn { animation: deskRise .8s cubic-bezier(.2, .8, .3, 1.1) .6s backwards; }
+#hud.deal .belt { animation: deskDeal 1s cubic-bezier(.2, .8, .3, 1.05) .5s backwards; }
+#hud.deal .watch { animation: deskFade .8s cubic-bezier(.2, .8, .3, 1.2) .9s backwards; }
+@keyframes deskShow { from { opacity: 0; } to { opacity: 1; } }
+#hud.deal .status { animation: deskShow .7s ease-out .1s backwards; }
+@media (prefers-reduced-motion: reduce) { #hud.deal * { animation: none !important; } }
+
+/* ---------- tooltips on old chart paper with brass corners (public/ui/tooltip.webp, nine slices) ---------- */
+.shopTip, #tip { background: none; border-style: solid; border-width: 24px; border-image: url('/ui/tooltip.webp') 40 fill / 24px stretch; border-radius: 0; padding: 4px 6px 2px; color: #2b1a0b; box-shadow: none; filter: drop-shadow(0 8px 14px rgba(0, 0, 0, .55)); }
+.shopTip b { color: var(--wax); }
+.shopTip .cost { color: #6b5233; }
+.shopTip p { color: #2b1a0b; }
+.shopTip p.why { color: var(--wax); border-top-color: rgba(107, 82, 51, .35); }
+#tip { max-width: 230px; color: #2b1a0b; }
