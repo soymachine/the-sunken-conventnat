@@ -29,6 +29,8 @@ export const TOOLS: Record<'broadside' | 'chain' | 'spy', { name: string; ap: nu
 
 /** What each special action above the helm does, told in full for its tooltip. */
 /** Cards that have their own picture in public/ui/cards/. */
+/** Card families, each with its own frame. */
+const CARD_KIND: Record<string, string> = { fire: 'shot', broadside: 'shot', chain: 'shot', fireship: 'shot', sail: 'move', turn: 'move', current: 'move', winds: 'move', kraken: 'kraken' };
 const CARD_ART = new Set(['fire', 'sail', 'turn', 'broadside', 'chain', 'spy', 'spyglass', 'longglass', 'fireship', 'fog', 'shipwright', 'winds', 'current', 'pact', 'kraken']);
 /** What each ship's trait means, for the fleet's tooltips. */
 const TRAIT_HELP: Record<string, string> = {
@@ -394,8 +396,9 @@ export class Hud {
       const tool = (id: Mode, name: string, ap: number, ok: boolean, help: string, why = '') => {
         if (!ok && !why) why = p.phase !== 'battle' || !mine ? 'Wait for your turn.' : p.ap < ap ? `Needs ${ap} action point${ap === 1 ? '' : 's'}; you have ${p.ap}.` : 'Not now.';
         // An order card: the frame and its picture, the name and the cost in a wax seal.
-        const art = CARD_ART.has(id) ? `background-image:url(/ui/cards/${id}.webp)` : '';
-        belt.push(`<button data-tool="${id}" data-name="${esc(name)}" data-ap="${ap}" data-help="${esc(help)}" data-why="${ok ? '' : esc(why)}" class="ocard${mode === id ? ' on' : ''}${ok ? '' : ' off'}${art ? '' : ' noart'}" aria-disabled="${!ok}" aria-label="${esc(name)}, ${ap} AP"><span class="art" style="${art}"></span><span class="nm">${name.replace(/ ×\d+$/, '')}</span>${/×\d+$/.test(name) ? `<span class="many">${name.match(/×\d+$/)![0]}</span>` : ''}<span class="cost">${ap}</span></button>`);
+        const pic = id === 'power' ? (role === 'admiral' ? 'escort' : 'reckoning') : id;
+        const art = CARD_ART.has(id) || id === 'power' ? `background-image:url(/ui/cards/${pic}.webp)` : '';
+        belt.push(`<button data-tool="${id}" data-name="${esc(name)}" data-ap="${ap}" data-help="${esc(help)}" data-why="${ok ? '' : esc(why)}" class="ocard${CARD_KIND[id] ? ' k-' + CARD_KIND[id] : ''}${mode === id ? ' on' : ''}${ok ? '' : ' off'}${art ? '' : ' noart'}" aria-disabled="${!ok}" aria-label="${esc(name)}, ${ap} AP"><span class="art" style="${art}"></span><span class="nm">${name.replace(/ ×\d+$/, '')}</span>${/×\d+$/.test(name) ? `<span class="many">${name.match(/×\d+$/)![0]}</span>` : ''}<span class="cost">${ap}</span></button>`);
       };
       // Fire, Sail and Turn are cards too; they always sit in the middle of the hand (placed below).
       orderCards = [];

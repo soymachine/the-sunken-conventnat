@@ -413,3 +413,19 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); out
 #fleet { flex-wrap: nowrap; gap: 8px; }
 #fleet li .pips { gap: 1.5px; }
 #fleet li .pips i { width: 8px; height: 14px; }
+
+/* Card families: shot (ochre), movement (sea green), the Kraken (blood red). */
+.belt .ocard.ocard.k-shot { background-image: url('/ui/card_shot.webp'); }
+.belt .ocard.ocard.k-move { background-image: url('/ui/card_move.webp'); }
+.belt .ocard.ocard.k-kraken { background-image: url('/ui/card_kraken.webp'); }
+.belt .ocard.ocard.k-shot .nm { color: #3a1a08; }
+.belt .ocard.ocard.k-move .nm { color: #0f2e30; }
+.belt .ocard.ocard.k-kraken .nm { color: #f3d9c8; text-shadow: 0 1px 2px #000; }
+/* A card rises along its own tilt instead of straightening up. */
+.belt .ocard:hover, .belt .ocard:focus-visible { transform: translateY(var(--y)) rotate(var(--r)) translateY(-62px) scale(1.06); }
+.belt .ocard.on { transform: translateY(var(--y)) rotate(var(--r)) translateY(-62px); }
+/* The desk recedes towards a vanishing point in the middle of the screen, just a little. */
+.bottom { background: none; perspective: 520px; perspective-origin: 50% -140%; }
+.bottom::before { content: ""; position: absolute; left: -30%; right: -30%; top: 0; bottom: -40%; z-index: -1; transform: rotateX(28deg); transform-origin: 50% 100%;
+  background: linear-gradient(rgba(13, 11, 8, .55), transparent 40%, rgba(255, 214, 150, .06)), url('/ui/desk.jpg') center top / 900px auto repeat-x, #3b1a10; }
+.battle .say, .battle .watch, .belt { z-index: 2; }
