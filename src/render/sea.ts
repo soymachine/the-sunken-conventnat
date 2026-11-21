@@ -242,7 +242,7 @@ void main() {
       col = mix(col, INK, clamp(wake * 0.25, 0.0, 0.3));
     }
     // Storm front: rows darken under slanting rain and flare with lightning.
-    float st = uStorm.y * step(uStorm.x, p.y) * step(p.y, uStorm.x + 3.0);
+    float st = step(0.5, uStorm.y) * step(uStorm.x, p.y) * step(p.y, uStorm.x + uStorm.y);
     // Raindrops ring the wet paper where they land.
     vec2 rp = p * 3.2, ri = floor(rp), rf = fract(rp) - 0.5;
     float rh = hash(ri), rt = fract(uTime * 1.4 + rh);
@@ -424,7 +424,8 @@ export class Sea {
   /** Where the wind blows towards: a heading (0 east, 1 south, 2 west, 3 north); the strokes swing round to it. */
   setWind(h: number) { this.windTo.set([1, 0, -1, 0][h], [0, 1, 0, -1][h]); }
   setGust(g: number) { this.mat.uniforms.uGust.value = g; }
-  setStorm(row: number | null) { (this.mat.uniforms.uStorm.value as THREE.Vector2).set(row ?? 0, row === null ? 0 : 1); }
+  /** The storm front: its first row and how many rows it covers (none when `row` is null). */
+  setStorm(row: number | null, rows = 3) { (this.mat.uniforms.uStorm.value as THREE.Vector2).set(row ?? 0, row === null ? 0 : rows); }
   setRing(ring: number, doom = 0) { this.mat.uniforms.uRing.value = ring; this.mat.uniforms.uDoom.value = doom; this.mat.uniforms.uDoomStyle.value = Sea.doomStyle; }
   /** How the doomed ring is marked: 1 red hatching, 2 creeping ink. */
   static doomStyle = 1;

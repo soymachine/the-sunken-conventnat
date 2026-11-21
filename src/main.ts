@@ -1,6 +1,6 @@
 // Controller: lobby → session → one Client driving the scene and the HUD.
 import './ui/hud.css';
-import { Client, Msg, Snapshot, roleOf } from './game/engine';
+import { Client, Msg, Snapshot, afloat, roleOf } from './game/engine';
 import { ITEMS, Item } from './game/powerups';
 import { Dir, Ship, Way, ZONE, ahead, attackCells, bowCell, cellName, clampZone, fits, headingOf, inBoard, legalPlacement, pivotCell, randomFleet, shipAt, shipCells, turned, MAELSTROM_ROUND, N, becalmed } from './game/rules';
 import { verify } from './game/verify';
@@ -375,8 +375,9 @@ function refresh() {
   if (myTurn() && hover) {
     const { side, x, y } = hover;
     if (side === 'enemy') {
-      if (mode === 'fire' || mode === 'chain') hl.push({ ...hover, color: WAX, opacity: 0.55 });
-      if (mode === 'broadside' || mode === 'fireship') for (const [a, b] of attackCells(mode, x, y, aimDir)) hl.push({ side, x: a, y: b, color: WAX, opacity: 0.55 });
+      // Drowned water cannot be fired on: the square shows dark instead of red.
+      if (mode === 'fire' || mode === 'chain') hl.push({ ...hover, color: afloat(c.pub, x, y) ? WAX : INK, opacity: 0.55 });
+      if (mode === 'broadside' || mode === 'fireship') for (const [a, b] of attackCells(mode, x, y, aimDir)) hl.push({ side, x: a, y: b, color: afloat(c.pub, x, y) && afloat(c.pub, a, b) ? WAX : INK, opacity: 0.55 });
       if (mode === 'spy' || mode === 'spyglass') hl.push(...zone(side, clampZone(x), clampZone(y), AMBER, 0.3)); // the patch slides to stay on the chart
       if (mode === 'longglass') { const a0 = Math.min(x, N - 2), b0 = Math.min(y, N - 2); for (const [a, b] of [[a0, b0], [a0 + 1, b0], [a0, b0 + 1], [a0 + 1, b0 + 1]]) hl.push({ side, x: a, y: b, color: AMBER, opacity: 0.45 }); }
       if (mode === 'kraken') for (let b = y - 1; b <= y + 1; b++) for (let a = x - 1; a <= x + 1; a++) if (inBoard(a, b)) hl.push({ side, x: a, y: b, color: WAX, opacity: 0.5 });
@@ -440,6 +441,10 @@ function battleClick(cell: Cell) {
   const { side, x, y } = cell;
   if (side === 'enemy') {
     let played = false;
+    if (['fire', 'broadside', 'chain', 'fireship', 'kraken'].includes(mode) && !afloat(c.pub, x, y)) {
+      hud.log('That water has gone into the maelstrom: aim inside the chart that remains.', 'bad');
+      return;
+    }
     if (mode === 'fire') c.attack('shot', x, y);
     else if (mode === 'broadside' || mode === 'chain' || mode === 'fireship') played = c.attack(mode, x, y, aimDir);
     else if (mode === 'spy') played = c.scan(clampZone(x), clampZone(y), 'cutter');
@@ -499,6 +504,9 @@ const tip = document.body.appendChild(Object.assign(document.createElement('div'
 canvas.addEventListener('pointermove', (e) => {
   const t = session && hover && c.pub.phase !== 'over' ? c.pub.treasures.find((q) => (q.side === c.me) === (hover!.side === 'own') && q.x === hover!.x && q.y === hover!.y) : undefined;
   tip.hidden = !t;
+  // Over one of your own ships (and no flotsam there): her name, state and speciality.
+  const own = !t && session && hover?.side === 'own' && !lifted ? shipAt(c.ships, hover.x, hover.y) : null;
+  hud.shipTip(own ? c.ships.indexOf(own.ship) : null, e.clientX, e.clientY);
   if (!t) return;
   const mine = t.side === c.me, seal = t.kind === 'seal';
   tip.textContent = mine
@@ -507,7 +515,7 @@ canvas.addEventListener('pointermove', (e) => {
   tip.style.left = Math.min(innerWidth - 260, e.clientX + 16) + 'px';
   tip.style.top = e.clientY + 18 + 'px';
 });
-canvas.addEventListener('pointerleave', () => { tip.hidden = true; });
+canvas.addEventListener('pointerleave', () => { tip.hidden = true; hud.shipTip(null, 0, 0); });
 // Right-click on one of your ships offers the other manoeuvre beside her: Turn while sailing, Sail while turning.
 canvas.addEventListener('contextmenu', (e) => {
   e.preventDefault();

@@ -180,8 +180,11 @@ export function driftFleet(ships: Ship[], dir: number, held: (s: Ship) => boolea
   return n;
 }
 
-/** Resolve shots landing on a fleet. Mutates the ships. `shield` blocks the first hit on the merchantman. */
-export function resolveAttack(ships: Ship[], cells: XY[], chain: boolean, shield = false): { results: CellResult[]; chained: boolean; lost: boolean; shielded: boolean } {
+/**
+ * Resolve shots landing on a fleet. Mutates the ships. `shield` blocks the first hit on the merchantman.
+ * `sea`: the maelstrom takes the sections, whatever armour or escort they have.
+ */
+export function resolveAttack(ships: Ship[], cells: XY[], chain: boolean, shield = false, sea = false): { results: CellResult[]; chained: boolean; lost: boolean; shielded: boolean } {
   const results: CellResult[] = [];
   let chained = false, shielded = false;
   for (const [x, y] of cells) {
@@ -201,9 +204,9 @@ export function resolveAttack(ships: Ship[], cells: XY[], chain: boolean, shield
       } else results.push({ x, y, r: 'flood' });
       continue;
     }
-    if (ship.kind === 'merchant' && shield && !shielded) { shielded = true; results.push({ x, y, r: 'clang' }); continue; }
+    if (ship.kind === 'merchant' && shield && !shielded && !sea) { shielded = true; results.push({ x, y, r: 'clang' }); continue; }
     if (chain) { ship.chained = true; chained = true; }
-    if (ship.armour) { ship.armour = false; results.push({ x, y, r: 'clang' }); continue; }
+    if (ship.armour && !sea) { ship.armour = false; results.push({ x, y, r: 'clang' }); continue; }
     ship.hits[idx] = true;
     const cargo = ship.kind === 'merchant' ? { cargo: true as const } : {};
     if (ship.hits.every(Boolean)) {

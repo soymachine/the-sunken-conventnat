@@ -97,7 +97,10 @@ export async function verify(log: Msg[], who: 0 | 1, role: Role = 'classic', see
       if (r.shielded) shield = false;
       expect = sig(r.results);
     }
-    if (p.ring > ring && p.phase === 'battle') drown = sig(resolveAttack(ships, rimCells(ships, p.ring), false).results);
+    if (p.phase === 'battle' && (p.ring > ring || (m.t === 'endTurn' && m.by === who && p.ring > 0))) {
+      const rim = rimCells(ships, p.ring);
+      if (p.ring > ring || rim.length) drown = sig(resolveAttack(ships, rim, false, false, true).results);
+    }
   }
   return null;
 }

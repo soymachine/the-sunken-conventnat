@@ -523,3 +523,16 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); out
 /* ---------- the hand sits higher, so each card's name shows; a raised card keeps the spot it rose from ---------- */
 .belt { bottom: 0; }
 .belt .ocard::after { content: ''; position: absolute; left: 0; right: 0; top: 100%; height: 72px; }
+
+/* ---------- 0.18: the maelstrom gauge, a brass instrument hung from the beam over the table ---------- */
+.mael { position: fixed; right: 262px; top: 92px; width: 96px; height: 96px; margin: 0; filter: drop-shadow(0 6px 8px rgba(0, 0, 0, .75)); }
+.mael img { position: absolute; display: block; pointer-events: none; user-select: none; }
+.mael .face { inset: 9%; width: 82%; height: 82%; }
+.mael .swirl { inset: 16%; width: 68%; height: 68%; opacity: .5; mix-blend-mode: screen; transform-origin: 50% 50%; animation: maelSpin var(--spin, 8s) linear infinite; }
+.mael.spent .swirl { animation: none; opacity: .2; }
+.mael .bezel { inset: 0; width: 100%; height: 100%; }
+.mael .hanger { left: 50%; top: -36px; width: 22px; height: 46px; transform: translateX(-50%); z-index: -1; }
+.mael .notch { position: absolute; width: 15px; height: 15px; margin: -7.5px 0 0 -7.5px; background: url('/ui/mael_lamp_off.webp') center / contain no-repeat; transition: filter .4s; }
+.mael .notch.lit { background-image: url('/ui/mael_lamp_on.webp'); filter: drop-shadow(0 0 4px rgba(255, 60, 40, .9)); }
+.mael b { top: 25px; font-size: 27px; z-index: 1; }
+.mael small { top: 55px; font-size: 7.5px; z-index: 1; color: #bcd6d6; }

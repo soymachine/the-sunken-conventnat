@@ -723,7 +723,7 @@ export class SeaScene {
       this.seas.own.flash(); this.seas.enemy.flash();
       // The bolt comes down somewhere under the front, on either chart.
       const st = this.last?.pub.storm, side: Side = Math.random() < 0.5 ? 'own' : 'enemy';
-      if (st) this.weather.strike(cellCenter({ side, x: Math.floor(Math.random() * N), y: st.row + Math.floor(Math.random() * 3) }));
+      if (st) this.weather.strike(cellCenter({ side, x: Math.floor(Math.random() * N), y: st.row + Math.floor(Math.random() * (st.rows ?? 3)) }));
       this.sound('thunder');
     }
     // The water around each hull follows her real outline, heading and way.
@@ -1005,18 +1005,18 @@ export class SeaScene {
     const st = v.pub.storm;
     this.stormy = !!st && v.pub.phase === 'battle';
     this.weather.setCharts(origin.own, origin.enemy);
-    this.weather.setStorm(this.stormy ? st!.row : null);
+    this.weather.setStorm(this.stormy ? st!.row : null, st?.rows ?? 3);
     this.weather.setWind(v.pub.wind ?? 0);
     for (const sd of ['own', 'enemy'] as const) this.seas[sd].setWind(v.pub.wind ?? 0);
     this.rain(this.stormy);
     this.ambience(v.pub.phase !== 'over');
     for (const side of ['own', 'enemy'] as Side[]) {
-      this.seas[side].setStorm(st ? st.row : null);
+      this.seas[side].setStorm(st ? st.row : null, st?.rows ?? 3);
       this.seas[side].setRing(v.pub.ring, maelstromIn(v.pub) === 1 ? v.pub.ring + 1 : 0);
       if (st) for (let i = 0; i < 9; i++) {
         const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: puffTex, color: 0x241d14, transparent: true, opacity: 0.85, depthWrite: false }));
         s.scale.set(5, 3.2, 1);
-        const base = new THREE.Vector3(origin[side].x + 0.8 + i * (N - 1.6) / 8, 1.5 + (i % 3) * 0.25, origin[side].z + st.row + 1.5 + ((i % 2) - 0.5) * 0.9);
+        const base = new THREE.Vector3(origin[side].x + 0.8 + i * (N - 1.6) / 8, 1.5 + (i % 3) * 0.25, origin[side].z + st.row + (st.rows ?? 3) / 2 + ((i % 2) - 0.5) * 0.3 * (st.rows ?? 3));
         s.position.copy(base);
         this.marks.add(s);
         this.puffs.push({ s, base, ph: i * 2.3 + (side === 'own' ? 0 : 4) });

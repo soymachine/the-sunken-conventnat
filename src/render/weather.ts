@@ -8,7 +8,7 @@ import { N } from '../game/rules';
 const RAIN_VERT = /* glsl */ `
 attribute vec3 aSeed;
 attribute float aEnd;
-uniform float uTime, uTop, uOn;
+uniform float uTime, uTop, uOn, uDensity;
 uniform vec4 uBox;
 uniform vec2 uWind;
 varying float vA;
@@ -19,7 +19,7 @@ void main() {
   // Drops are blown sideways as they fall, and each streak trails up-wind.
   p.xz += uWind * (uTop - y) / fall;
   p += aEnd * vec3(-uWind.x / fall, 1.0, -uWind.y / fall) * 0.6;
-  vA = (1.0 - 0.85 * aEnd) * smoothstep(-0.2, 0.5, y) * smoothstep(uTop, uTop * 0.35, y) * uOn;
+  vA = (1.0 - 0.85 * aEnd) * smoothstep(-0.2, 0.5, y) * smoothstep(uTop, uTop * 0.35, y) * uOn * step(fract(aSeed.z * 7.13), uDensity);
   gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
 }`;
 const RAIN_FRAG = /* glsl */ `
@@ -47,7 +47,7 @@ class Rain {
     g.setAttribute('aEnd', new THREE.BufferAttribute(end, 1));
     this.mat = new THREE.ShaderMaterial({
       vertexShader: RAIN_VERT, fragmentShader: RAIN_FRAG, transparent: true, depthWrite: false,
-      uniforms: { uTime: { value: 0 }, uTop: { value: 4.5 }, uOn: { value: 0 }, uBox: { value: new THREE.Vector4() }, uWind: { value: new THREE.Vector2(2.2, 0.9) } },
+      uniforms: { uTime: { value: 0 }, uTop: { value: 4.5 }, uOn: { value: 0 }, uDensity: { value: 1 }, uBox: { value: new THREE.Vector4() }, uWind: { value: new THREE.Vector2(2.2, 0.9) } },
     });
     this.mesh = new THREE.LineSegments(g, this.mat);
     this.mesh.frustumCulled = false;
@@ -56,7 +56,7 @@ class Rain {
   /** Rain over a box of the world (x, z, width, depth), or none. */
   set(box: [number, number, number, number] | null) {
     this.want = box ? 1 : 0;
-    if (box) (this.mat.uniforms.uBox.value as THREE.Vector4).set(...box);
+    if (box) { (this.mat.uniforms.uBox.value as THREE.Vector4).set(...box); this.mat.uniforms.uDensity.value = Math.min(1, box[3] / 3.8); } // as many drops per square for a narrow front
   }
   update(dt: number, t: number) {
     this.on += (this.want - this.on) * Math.min(1, dt * 1.5);
@@ -459,7 +459,11 @@ vec3 curtain(float along, float up, float seed, float height) {
   // A violet crown, and violet folds drifting along the curtain among the green.
   col = mix(col, vec3(0.75, 0.3, 1.0), smoothstep(0.3, 0.75, h));
   float purple = smoothstep(0.55, 0.85, noise(along * 3.0 - uTime * 0.05 + seed * 3.0));
-  col = mix(col, vec3(0.85, 0.35, 0.95), purple * 0.7);
+  col = mix(col, vec3(0.85, 0.35, 0.95), purple * 0.45);
+  // Fine violet rays standing straight up among the green ones, drifting along the curtain.
+  float vr = smoothstep(0.62, 0.8, noise(along * 48.0 + seed * 7.0 - uTime * 0.35)) * smoothstep(0.3, 0.7, noise(along * 9.0 + uTime * 0.04 + seed));
+  col = mix(col, vec3(0.72, 0.32, 1.0), vr * 0.9);
+  k *= 1.0 + 0.5 * vr * smoothstep(0.0, 0.2, h);
   // Below the hem, a faint magenta fringe as in the brightest displays.
   col = mix(col, vec3(1.0, 0.3, 0.6), (1.0 - smoothstep(-0.02, 0.0, up)) * 0.8);
   return col * k * (1.0 + 0.3 * purple);
@@ -535,10 +539,10 @@ export class Weather {
   force(sky: 'sun' | 'aurora' | 'clear' | null) { this.forced = sky; this.sun.force(sky === null ? null : sky === 'sun'); }
   /** How dark the aurora has made the night (0 by day, 1 at its height). */
   get night() { return this.aurora.on; }
-  /** A storm front over three rows from `row`, on both charts; null when the sky clears. */
-  setStorm(row: number | null) {
+  /** A storm front over `rows` rows from `row`, on both charts; null when the sky clears. */
+  setStorm(row: number | null, rows = 3) {
     this.stormy = row !== null;
-    this.charts.forEach((c, i) => this.rain[i].set(row === null ? null : [c.x - 0.6, c.z + row - 0.4, N + 1.2, 3.8]));
+    this.charts.forEach((c, i) => this.rain[i].set(row === null ? null : [c.x - 0.6, c.z + row - 0.4, N + 1.2, rows + 0.8]));
   }
   strike(at: THREE.Vector3) { this.bolt.strike(at); }
   setWind(h: number) { this.wind.setWind(h); }

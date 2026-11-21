@@ -639,3 +639,69 @@ describe('bot', () => {
     expect(Math.max(...rounds)).toBeLessThan(120);
   });
 });
+
+describe('the maelstrom leaves no ship afloat in drowned water', () => {
+  /** Play on until round `r` (end turns only). */
+  const until = (a: Client, b: Client, r: number) => { for (let guard = 0; guard < 800 && a.pub.phase === 'battle' && a.pub.round < r; guard++) (a.myTurn ? a : b).endTurn(); };
+  it('armour does not hold out the sea', async () => {
+    const { bus, a, b } = await duel();
+    until(a, b, 21); // ring 1 has gone under at the start of round 20
+    expect(a.pub.ring).toBe(1);
+    const iron = a.ships.find((s) => s.kind === 'ironclad')!;
+    expect(iron.hits[0]).toBe(true); // her plate on column 0 went under at once, armour or no
+    expect(a.pub).toEqual(b.pub);
+    for (let guard = 0; guard < 400 && a.pub.phase === 'battle'; guard++) (a.myTurn ? a : b).endTurn();
+    expect(await verify(bus.log, 0, 'classic', 7)).toBeNull();
+  });
+  it('a ship that strays into drowned water goes under as her captain\'s turn ends', async () => {
+    const { bus, a, b } = await duel();
+    until(a, b, 21);
+    if (!b.myTurn) a.endTurn();
+    // b's cutter is carried onto the drowned rim (as a current or a careless helm might).
+    const cutter = b.ships.find((s) => s.kind === 'cutter')!;
+    cutter.x = 0; cutter.y = 13;
+    b.endTurn();
+    expect(cutter.sunk).toBe(true);
+    expect(a.pub.sides[1].sunk.some((s) => s.kind === 'cutter')).toBe(true);
+    expect(a.pub).toEqual(b.pub);
+    // The stray was never disclosed as a move, so b's log does not verify; a's still does.
+    for (let guard = 0; guard < 400 && a.pub.phase === 'battle'; guard++) (a.myTurn ? a : b).endTurn();
+    expect(await verify(bus.log, 0, 'classic', 7)).toBeNull();
+  });
+  it('no shot, broadside or Kraken may fall on drowned water', async () => {
+    const { a, b } = await duel();
+    until(a, b, 21);
+    const me = a.myTurn ? a : b;
+    expect(me.attack('shot', 0, 0)).toBe(false);
+    expect(me.attack('shot', 15, 8)).toBe(false);
+    expect(me.attack('shot', 1, 1)).toBe(true);
+  });
+  it('the storm narrows to one row once the charts have shrunk, and stays over open water', async () => {
+    const { a, b } = await duel();
+    const seen: { row: number; rows?: number; ring: number }[] = [];
+    for (let guard = 0; guard < 800 && a.pub.phase === 'battle' && a.pub.round < 33; guard++) {
+      (a.myTurn ? a : b).endTurn();
+      if (a.pub.storm && a.pub.storm.until === a.pub.round + 1) seen.push({ ...a.pub.storm, ring: a.pub.ring });
+    }
+    for (const s of seen) {
+      expect(s.rows).toBe(s.ring > 0 ? 1 : 3);
+      expect(s.row).toBeGreaterThanOrEqual(s.ring);
+      expect(s.row + (s.rows ?? 3) - 1).toBeLessThanOrEqual(N - 1 - s.ring);
+    }
+    expect(seen.some((s) => s.rows === 1)).toBe(true);
+  });
+});
+
+describe('the Kraken', () => {
+  it('never lashes the same square twice', async () => {
+    for (let seed = 3; seed < 23; seed++) {
+      const { bus, a, b } = await duel(seed);
+      for (const c of [a, b]) c.pub.sides[0].seals = 3;
+      expect(a.kraken(6, 6)).toBe(true);
+      a.endTurn(); b.endTurn();
+      const lashed = bus.log.filter((m) => m.t === 'result' && m.kraken).flatMap((m) => (m.t === 'result' ? m.results.map((r) => `${r.x},${r.y}`) : []));
+      expect(lashed.length).toBe(6);
+      expect(new Set(lashed).size).toBe(6);
+    }
+  });
+});

@@ -101,11 +101,11 @@ export interface Pub {
   /** Column of the merchantman as revealed by Dead Reckoning. */
   reckon?: { col: number; round: number };
   /** The Kraken, while it holds a patch of `side`'s waters. `left` strikes remain. */
-  kraken?: { side: 0 | 1; x: number; y: number; left: number };
+  kraken?: { side: 0 | 1; x: number; y: number; left: number; struck?: XY[] };
   /** Cells the Kraken is striking right now, awaiting the defender's answer. */
   strike?: XY[];
-  /** A storm front over rows `row`..`row+2` of both charts: no shots or spyglasses there. */
-  storm?: { row: number; until: number };
+  /** A storm front over `rows` rows from `row` (three, or one once the maelstrom has shrunk the charts): no shots or spyglasses there. */
+  storm?: { row: number; until: number; rows?: number };
   /** Outer rings of the chart swallowed by the maelstrom. */
   ring: number;
   /** The last tide, for the log. */
@@ -121,7 +121,9 @@ export function maelstromIn(p: Pub): number | null {
   if (next % 2) next++;
   return next - p.round;
 }
-export const inStorm = (p: Pub, y: number) => !!p.storm && y >= p.storm.row && y <= p.storm.row + 2;
+export const inStorm = (p: Pub, y: number) => !!p.storm && y >= p.storm.row && y < p.storm.row + (p.storm.rows ?? 3);
+/** Water the maelstrom has not yet swallowed: the only place worth a shot. */
+export const afloat = (p: Pub, x: number, y: number) => inBoard(x, y) && safe(p.ring, x, y);
 export const roleOf = (p: Pub, who: 0 | 1): Role => (p.admiral === null ? 'classic' : p.admiral === who ? 'admiral' : 'corsair');
 
 const COST: Record<AttackSrc, number> = { shot: 1, broadside: 2, chain: 2, fireship: 2 };
@@ -165,11 +167,16 @@ export function dropSquare(p: Pub, side: 0 | 1, id: number, salt: string, ships:
   return null;
 }
 
-/** The Kraken lashes three cells of its patch; the defender must answer. */
+/**
+ * The Kraken lashes three squares of its 3×3 patch, chosen at random (the same for both captains); the defender
+ * must answer. Its second strike picks among the squares it has not lashed yet, and never drowned water.
+ */
 function strike(p: Pub) {
   const k = p.kraken!, cells: XY[] = [];
-  for (let y = k.y - 1; y <= k.y + 1; y++) for (let x = k.x - 1; x <= k.x + 1; x++) if (inBoard(x, y)) cells.push([x, y]);
+  for (let y = k.y - 1; y <= k.y + 1; y++) for (let x = k.x - 1; x <= k.x + 1; x++)
+    if (afloat(p, x, y) && !k.struck?.some(([a, b]) => a === x && b === y)) cells.push([x, y]);
   while (cells.length > 3) cells.splice(Math.floor(rand(p) * cells.length), 1);
+  (k.struck ??= []).push(...cells);
   p.strike = cells;
   p.pending = true;
   k.left--;
@@ -267,7 +274,7 @@ export function reduce(p: Pub, m: Msg): boolean {
   };
   switch (m.t) {
     case 'attack':
-      if (!m.cells?.length || m.cells.some(([, y]) => inStorm(p, y)) || !spend(COST[m.src], m.src === 'fireship' ? 'fireship' : undefined)) return false;
+      if (!m.cells?.length || m.cells.some(([x, y]) => inStorm(p, y) || !afloat(p, x, y)) || !spend(COST[m.src], m.src === 'fireship' ? 'fireship' : undefined)) return false;
       p.pending = true;
       return true;
     case 'peek':
@@ -321,7 +328,7 @@ export function reduce(p: Pub, m: Msg): boolean {
     case 'repair':
       return spend(ITEMS.shipwright.ap, 'shipwright');
     case 'kraken':
-      if (!inBoard(m.x, m.y) || mine.seals < KRAKEN_SEALS || p.kraken || !spend(3)) return false;
+      if (!afloat(p, m.x, m.y) || mine.seals < KRAKEN_SEALS || p.kraken || !spend(3)) return false;
       mine.seals -= KRAKEN_SEALS;
       p.kraken = { side: foe, x: m.x, y: m.y, left: 2 };
       strike(p);
@@ -350,10 +357,15 @@ export function reduce(p: Pub, m: Msg): boolean {
         if (p.round % 3 === 1) { spawnTreasure(p, 0); spawnTreasure(p, 1); }
         if (p.round % 4 === 2) { spawnTreasure(p, 0, 'seal'); spawnTreasure(p, 1, 'seal'); }
         if (p.storm && p.round > p.storm.until) p.storm = undefined;
-        if (p.round % 4 === 0) p.storm = { row: Math.floor(rand(p) * (N - 2)), until: p.round + 1 };
         if (p.round % 5 === 0) tide(p);
         // From round 20 the maelstrom swallows the outer ring of both charts every other round.
         if (p.mode === 'classic' && p.round >= MAELSTROM_ROUND && p.round % 2 === 0 && p.ring < MAELSTROM_MAX_RING) p.ring++;
+        // A storm front: three rows on the open sea, a single row once the maelstrom has shrunk the charts,
+        // and always over water that is still afloat.
+        if (p.round % 4 === 0) {
+          const rows = p.ring > 0 ? 1 : 3, span = N - 2 * p.ring - rows + 1;
+          p.storm = { row: p.ring + Math.floor(rand(p) * span), until: p.round + 1, rows };
+        }
       }
       // As its victim's turn ends the Kraken strikes a second time, then lets go.
       if (p.kraken && p.kraken.side === m.by) { if (p.kraken.left > 0) strike(p); else p.kraken = undefined; }
@@ -486,10 +498,12 @@ export class Client {
       this.send({ t: 'result', ...r, kraken: true });
     }
     // The maelstrom swallows another ring: report what it took from my fleet.
-    if (p.ring > this.ringSeen && p.phase === 'battle') {
+    // Anything that has strayed into drowned water (by sail, current or repair) goes under as my turn ends,
+    // armour or no: the sea takes it all.
+    if (p.phase === 'battle' && (p.ring > this.ringSeen || (m.t === 'endTurn' && !theirs && p.ring > 0))) {
+      const grown = p.ring > this.ringSeen, rim = rimCells(this.ships, p.ring);
       this.ringSeen = p.ring;
-      const r = resolveAttack(this.ships, rimCells(this.ships, p.ring), false);
-      this.send({ t: 'drowned', results: r.results, lost: r.lost });
+      if (grown || rim.length) { const r = resolveAttack(this.ships, rim, false, false, true); this.send({ t: 'drowned', results: r.results, lost: r.lost }); }
     }
     if (m.t === 'endTurn' && theirs && this.order && p.phase === 'battle') {
       if (this.order.id === 'unscathed' && !this.hurt && ++this.order.n >= 2) this.fulfil();
@@ -515,11 +529,11 @@ export class Client {
   }
 
   attack(src: AttackSrc, x: number, y: number, dir: Dir = 'h'): boolean {
-    if (!inBoard(x, y) || !this.can(COST[src]) || inStorm(this.pub, y)) return false;
+    if (!afloat(this.pub, x, y) || !this.can(COST[src]) || inStorm(this.pub, y)) return false;
     if (src === 'broadside' && !this.alive('line')) return false;
     if (src === 'chain' && !this.alive('frigate')) return false;
     if (src === 'fireship' && !this.has('fireship')) return false;
-    this.send({ t: 'attack', src, cells: attackCells(src, x, y, dir).filter(([, b]) => !inStorm(this.pub, b)) });
+    this.send({ t: 'attack', src, cells: attackCells(src, x, y, dir).filter(([a, b]) => !inStorm(this.pub, b) && afloat(this.pub, a, b)) });
     return true;
   }
 
@@ -639,7 +653,7 @@ export class Client {
   /** Three seals and three action points wake the Kraken under a 3×3 patch of enemy water. */
   canKraken() { return this.can(3) && this.side.seals >= KRAKEN_SEALS && !this.pub.kraken; }
   kraken(x: number, y: number): boolean {
-    if (!inBoard(x, y) || !this.canKraken()) return false;
+    if (!afloat(this.pub, x, y) || !this.canKraken()) return false;
     this.send({ t: 'kraken', x, y });
     return true;
   }

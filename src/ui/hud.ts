@@ -100,13 +100,11 @@ export class Hud {
         <h1 class="title"><span>The Sunken Covenant</span></h1>
         <div class="foe"><span id="foeNote"></span>
           <div class="mael" id="mael" hidden tabindex="0" aria-label="Maelstrom">
-            <svg viewBox="0 0 100 100" aria-hidden="true">
-              <defs><radialGradient id="maelBrass" cx=".35" cy=".3" r=".9"><stop offset="0" stop-color="#f6dc95"/><stop offset=".45" stop-color="#b08d3c"/><stop offset="1" stop-color="#4a3710"/></radialGradient></defs>
-              <circle cx="50" cy="50" r="48" fill="url(#maelBrass)" stroke="#2a1e08" stroke-width="1.5"/>
-              <circle cx="50" cy="50" r="39" fill="#0e1517" stroke="#2a1e08" stroke-width="2"/>
-              <g class="swirl">${[0, 72, 144, 216, 288].map((a) => `<path d="M50 50 C 50 34, 66 26, 80 34" transform="rotate(${a} 50 50)" fill="none" stroke="#5f8a8f" stroke-width="2.4" stroke-linecap="round" opacity=".75"/>`).join('')}</g>
-              ${[0, 1, 2, 3, 4].map((k) => { const a = (-90 - 48 + k * 24) * Math.PI / 180; return `<circle class="notch" cx="${(50 + 43.5 * Math.cos(a)).toFixed(1)}" cy="${(50 + 43.5 * Math.sin(a)).toFixed(1)}" r="3.2"/>`; }).join('')}
-            </svg>
+            <img class="hanger" src="/ui/mael_hanger.webp" alt="" draggable="false">
+            <img class="face" src="/ui/mael_face.webp" alt="" draggable="false">
+            <img class="swirl" src="/ui/mael_swirl.webp" alt="" draggable="false">
+            <img class="bezel" src="/ui/mael_bezel.webp" alt="" draggable="false">
+            ${[0, 1, 2, 3, 4].map((k) => { const a = (90 + 48 - k * 24) * Math.PI / 180; return `<i class="notch" style="left:${(50 + 43 * Math.cos(a)).toFixed(1)}%;top:${(50 + 43 * Math.sin(a)).toFixed(1)}%"></i>`; }).join('')}
             <b></b><small></small>
           </div>
         </div>
@@ -341,6 +339,17 @@ export class Hud {
     void Promise.all(fx.getAnimations({ subtree: true }).map((an) => an.finished)).catch(() => undefined).then(() => fx.remove());
   }
 
+  /** The paper tooltip beside the pointer for one of your ships on the chart (by her place in Your fleet). */
+  private tipShip: number | null = null;
+  shipTip(i: number | null, x: number, y: number) {
+    const tip = this.q<HTMLElement>('#shopTip'), li = i === null ? null : this.root.querySelectorAll<HTMLElement>('#fleet li[data-cls]')[i];
+    if (!li) { if (this.tipShip !== null) tip.hidden = true; this.tipShip = null; return; }
+    if (this.tipShip !== i) tip.innerHTML = `<b>${esc(li.dataset.cls!)}</b><span class="cost">${esc(li.dataset.state!)}</span><p>${esc(li.dataset.trait!)}</p>`;
+    this.tipShip = i; tip.hidden = false;
+    tip.style.left = Math.min(innerWidth - tip.offsetWidth - 8, x + 18) + 'px';
+    tip.style.top = Math.min(innerHeight - tip.offsetHeight - 8, y + 18) + 'px';
+  }
+
   /** Show the saved settings in the menu. */
   setPrefs(muted: boolean, quality: string) { this.muted = muted; this.qualityPref = quality; this.paintPrefs(); }
   private paintPrefs() {
@@ -414,7 +423,7 @@ export class Hud {
     this.sectors.forEach(([path, t], k) => { path.classList.toggle('on', k === i); t.classList.toggle('on', k === i); });
 
     this.q('#turnTitle').textContent = p.phase === 'placement' ? 'Deploy your fleet' : p.phase === 'over' ? 'Battle over' : mine ? 'Your turn' : 'Enemy turn';
-    this.q('#turnWx').textContent = p.phase === 'battle' && p.storm ? `Storm over rows ${p.storm.row + 1}–${p.storm.row + 3} · no guns or glasses there` : '';
+    this.q('#turnWx').textContent = p.phase === 'battle' && p.storm ? `Storm over ${(p.storm.rows ?? 3) === 1 ? `row ${p.storm.row + 1}` : `rows ${p.storm.row + 1}–${p.storm.row + (p.storm.rows ?? 3)}`} · no guns or glasses there` : '';
     this.q('#turnSub').textContent = p.phase === 'battle' ? `Round ${p.round} · Wind ${['→ east', '↓ south', '← west', '↑ north'][p.wind ?? 0]}` : '';
     this.q('#seals').innerHTML = Array.from({ length: KRAKEN_SEALS }, (_, i) => `<i class="${i < me.seals ? 'lit' : ''}"></i>`).join('') + `<span>${me.seals >= KRAKEN_SEALS ? 'The Kraken will answer.' : `${Math.min(me.seals, KRAKEN_SEALS)} of ${KRAKEN_SEALS} seals`}</span>`;
     // The full explanation lives in the seals' tooltip; the panel keeps only what needs doing now.
