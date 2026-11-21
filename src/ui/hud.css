@@ -445,3 +445,81 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); out
 
 .menu .seg.three { display: grid; grid-template-columns: 1fr 1fr 1fr; }
 .menu .debug .seg button { font-size: 9.5px; letter-spacing: .04em; }
+
+/* ---------- the desk's perspective and the corner pieces, all tunable (debug ?debug=true) ---------- */
+:root { --desk-persp: 520px; --desk-oy: -140%; --desk-tilt: 28deg; --desk-tex: 1216px; --desk-shade: .5;
+  --bottle-x: 14px; --bottle-y: 6px; --bottle-h: 150px; --glass-x: 74px; --glass-y: 22px; --glass-h: 132px; }
+.bottom { perspective: var(--desk-persp); perspective-origin: 50% var(--desk-oy); }
+.bottom::before { transform: rotateX(var(--desk-tilt));
+  background: linear-gradient(rgba(13, 11, 8, var(--desk-shade)), transparent 40%, rgba(255, 214, 150, .05)), url('/ui/desk.jpg') center top / var(--desk-tex) auto repeat-x, #3b1a10; }
+.battle .say { left: var(--bottle-x); bottom: var(--bottle-y); }
+.bottleBtn { flex-direction: column; align-items: center; gap: 4px; }
+.bottleBtn img { height: var(--bottle-h); }
+.bottleBtn span { writing-mode: horizontal-tb; transform: none; padding: 0; }
+.battle .watch { right: var(--glass-x); bottom: var(--glass-y); }
+.glass img { height: var(--glass-h); }
+/* Debug: arranging the desk */
+#hud.arrange .battle .say, #hud.arrange .battle .watch { outline: 2px dashed #ffcf6a; outline-offset: 4px; cursor: move; }
+#hud.arrange .battle .say *, #hud.arrange .battle .watch * { pointer-events: none; }
+.tuner { position: fixed; z-index: 30; right: 16px; top: 74px; width: 300px; padding: 14px 16px; background: rgba(13, 11, 8, .92); border: 1px solid var(--brass); border-radius: 4px; color: var(--parch); font: 12px ui-monospace, Menlo, monospace; pointer-events: auto; }
+.tuner h3 { margin: 0 0 8px; font: 700 11px var(--label); letter-spacing: .16em; color: var(--amber); text-transform: uppercase; display: flex; justify-content: space-between; }
+.tuner label { display: grid; grid-template-columns: 92px 1fr 52px; gap: 6px; align-items: center; margin: 4px 0; }
+.tuner input[type=range] { width: 100%; }
+.tuner .row { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.tuner button { font: 700 10px var(--label); letter-spacing: .08em; padding: 5px 8px; background: var(--parch); border: 1px solid var(--brass); border-radius: 3px; cursor: pointer; color: var(--ink); }
+.tuner textarea { width: 100%; box-sizing: border-box; height: 92px; margin-top: 8px; background: #000; color: #f0d489; border: 1px solid #5e4717; font: 11px ui-monospace, Menlo, monospace; }
+#hud.arrange .battle .say, #hud.arrange .battle .watch { pointer-events: auto; }
+
+/* Values tuned in debug (desk perspective, bottle and glass placement). */
+:root { --desk-persp: 260px; --desk-oy: -70%; --desk-tilt: 37deg; --desk-tex: 480px; --desk-shade: .3;
+  --bottle-h: 226px; --glass-h: 176px; --bottle-x: 93px; --bottle-y: 18px; --glass-x: 107px; --glass-y: 10px; }
+/* The Kraken's card: pure black with red borders and anchors, white lettering. */
+.belt .ocard.ocard.k-kraken .nm { color: #fff; text-shadow: 0 1px 2px #000; }
+/* The maelstrom gauge in the top bar. */
+.mael { position: relative; width: 74px; height: 74px; margin-top: 30px; pointer-events: auto; cursor: help; filter: drop-shadow(0 4px 8px rgba(0, 0, 0, .7)); }
+.mael svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.mael .swirl { transform-origin: 50px 50px; animation: maelSpin var(--spin, 8s) linear infinite; }
+.mael.spent .swirl { animation: none; opacity: .35; }
+.mael .notch { fill: #2a1e08; stroke: #c9a24d; stroke-width: 1; }
+.mael .notch.lit { fill: #b8312a; }
+.mael b { position: absolute; left: 0; right: 0; top: 23px; text-align: center; font: 700 22px var(--label); color: #f0d489; text-shadow: 0 1px 3px #000; }
+.mael small { position: absolute; left: 0; right: 0; top: 47px; text-align: center; font: 700 7.5px var(--label); letter-spacing: .14em; text-transform: uppercase; color: #a8c4c6; }
+.mael.soon b { color: #ff8a6a; } .mael.soon { animation: maelWarn 1.4s ease-in-out infinite; }
+@keyframes maelSpin { to { transform: rotate(-360deg); } }
+@keyframes maelWarn { 50% { filter: drop-shadow(0 0 14px rgba(255, 90, 60, .85)); } }
+@media (prefers-reduced-motion: reduce) { .mael .swirl, .mael.soon { animation: none; } }
+.mael { width: 96px; height: 96px; margin-top: 78px; margin-right: 6px; }
+.mael b { top: 27px; font-size: 27px; }
+.mael small { top: 58px; font-size: 8px; }
+.mael .swirl { opacity: .55; }
+
+/* ---------- 0.16: the hourglass stays upright; it goes dull while the other captain plays ---------- */
+.glass img { transition: filter .6s, opacity .6s; }
+.glass:disabled img { opacity: .5; filter: grayscale(.7) brightness(.6) drop-shadow(0 6px 8px rgba(0, 0, 0, .7)); }
+.glass { position: relative; }
+.glass::before { content: ''; position: absolute; left: 45.5%; top: 49%; width: 2px; height: 22%; border-radius: 1px; pointer-events: none;
+  background: repeating-linear-gradient(to bottom, rgba(236, 222, 190, .95) 0 3px, rgba(236, 222, 190, .35) 3px 6px); background-size: 2px 12px;
+  animation: sand .5s linear infinite; opacity: .9; transition: opacity .4s; }
+.glass:disabled::before { opacity: 0; }
+@keyframes sand { to { background-position: 0 12px; } }
+
+/* ---------- the covenant's seals take up the Kraken when all three are lit ---------- */
+.seals.ready { cursor: pointer; }
+.seals.ready i.lit { animation: sealGlow 1.8s ease-in-out infinite; }
+.seals.ready i.lit:nth-child(2) { animation-delay: .2s; } .seals.ready i.lit:nth-child(3) { animation-delay: .4s; }
+.seals.ready:hover i.lit { transform: scale(1.12); }
+@keyframes sealGlow { 50% { box-shadow: 0 0 10px 2px rgba(214, 70, 40, .75), 0 1px 3px rgba(0, 0, 0, .5); } }
+
+/* ---------- the Kraken card's entrance: a little ink and a few bubbles ---------- */
+.kfx { position: fixed; z-index: 60; pointer-events: none; }
+.kfx i { position: absolute; display: block; width: var(--s); height: var(--s); border-radius: 50%; opacity: 0; }
+.kfx .drop { left: 50%; top: 45%; background: radial-gradient(circle at 35% 30%, #6a1f26, #0b0508 70%); }
+.kfx .bub { left: var(--x); top: 60%; border: 1px solid rgba(220, 240, 245, .9); background: radial-gradient(circle at 35% 30%, rgba(255, 255, 255, .6), transparent 60%); }
+
+/* ---------- action points: a row of seals under the turn header ---------- */
+#hud .status .apSeals { flex-direction: row; justify-content: center; gap: 6px; padding: 7px 0 0; }
+#hud .status .apSeals i { width: 24px; height: 24px; }
+
+/* ---------- the hand sits higher, so each card's name shows; a raised card keeps the spot it rose from ---------- */
+.belt { bottom: 0; }
+.belt .ocard::after { content: ''; position: absolute; left: 0; right: 0; top: 100%; height: 72px; }

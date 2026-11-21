@@ -198,3 +198,91 @@ the upper left. Photorealistic. No text, no letters.
 ```
 
 If Meshy cannot give transparency, ask for "isolated on a solid pure black background" instead and I cut it out.
+
+## 10. The maelstrom gauge (a brass instrument in layers)
+
+The gauge hangs under the top bar, top right, about 96 px across. To keep the whirlpool turning and the rings
+lighting up, it is built from **separate layers** stacked on top of each other: each piece is its own picture,
+seen exactly face-on (no perspective), centred, square, on transparency. Same light for all of them: warm, from
+the upper left. Ask for 1024 × 1024 so they stay sharp when scaled down.
+
+**a. Bezel (the brass ring, hollow in the middle)**
+```
+A heavy antique ship's instrument bezel seen exactly face-on: a thick polished brass ring with a knurled outer
+edge, six small round rivets evenly spaced, a thin engraved inner border, worn darker in the recesses with a
+little verdigris. The middle of the ring is completely empty (transparent): only the ring. Centred, square
+frame, filling about 90 percent of it. Transparent background, PNG with alpha. Warm light from the upper left.
+Photorealistic, 19th-century naval brasswork. No text, no numbers, no letters.
+```
+
+**b. Dial face (behind everything)**
+```
+A circular instrument dial face seen exactly face-on: deep sea-green enamel turning almost black at the edge,
+finely crackled with age, a ring of small engraved tick marks near the rim (no numbers), and in the middle a
+faint engraved spiral like a whirlpool, very low contrast so a number can be printed over it. Only the disc.
+Centred, square frame, the disc filling about 80 percent of it. Transparent background, PNG with alpha. Soft
+light. Photorealistic. No text, no numbers, no letters.
+```
+
+**c. Whirlpool (the layer that spins)**
+```
+A whirlpool seen from directly above, as a separate transparent layer: five curved streaks of pale sea foam
+and silvery water spiralling into a dark centre, like water draining in a vortex, the streaks thin and
+translucent at their outer ends. Nothing else: no sea around it, no frame. Centred, square, rotationally
+balanced so it can spin. Transparent background, PNG with alpha. Painterly realism. No text.
+```
+
+**d. Ring lamps (five small jewels on the bezel: one picture lit, one unlit)**
+```
+A small round faceted garnet jewel set in a tiny brass cup, seen exactly face-on, glowing deep red from
+within as if lit, with a bright highlight at the upper left. Only the jewel and its cup. Centred, square.
+Transparent background, PNG with alpha. Photorealistic. No text.
+```
+```
+The same small round faceted garnet jewel in its tiny brass cup, seen face-on, but dark and unlit: almost
+black red, only a faint highlight. Only the jewel and its cup. Centred, square. Transparent background, PNG
+with alpha. Photorealistic. No text.
+```
+
+**e. Optional: the hanger (to hang the gauge from the top beam)**
+```
+A short wrought-iron bracket seen face-on, hanging straight down: a flat plate with two rivets at the top and
+a small ring at the bottom, holding a short chain of three iron links. Only the bracket and chain, vertical,
+centred in a tall frame. Transparent background, PNG with alpha. Warm light from the upper left.
+Photorealistic. No text.
+```
+
+The number of rounds and the word under it stay as text drawn by the game, over the dial.
+
+## 11. The covenant's seals (three in the left panel)
+
+Three seals sit in a row under "The covenant". Each has three states, so ask for three pictures of the same
+seal, all seen exactly from above, centred, square, on transparency, about 512 × 512. They must not look like
+the red wax seals used for action points: these are **black wax with a red kraken**, older and more sinister.
+
+**a. Lit (a seal you hold)**
+```
+A single round wax seal seen exactly from above: glossy black wax with irregular poured edges, pressed with a
+deep circular stamp of a kraken whose tentacles curl around the rim, the impression picked out in dark blood
+red, a few tiny bubbles in the wax. Only the seal. Centred, square frame, filling about 85 percent of it.
+Transparent background, PNG with alpha. Warm light from the upper left. Photorealistic. No text, no letters.
+```
+
+**b. Empty (a seal still to be won)**
+```
+A faint blind-embossed circle pressed into old parchment, seen exactly from above: the same kraken stamp
+design but only as a shallow colourless impression in the paper, with a soft shadow on its lower right edge.
+Only the round impression, its surroundings fading to transparent. Centred, square. Transparent background,
+PNG with alpha. Photorealistic. No text.
+```
+
+**c. Broken (when the Kraken is summoned)**
+```
+The same round black wax seal with the red kraken stamp, seen from above, cracked clean in two with a jagged
+break through the middle and a few small chips of black wax beside it. Only the broken seal and chips.
+Centred, square. Transparent background, PNG with alpha. Warm light from the upper left. Photorealistic.
+No text.
+```
+
+With these, the three seals glow when all three are lit, and clicking them takes up the Kraken's card (already
+in the game); when the Kraken is summoned they can crack and fall away using the broken picture.

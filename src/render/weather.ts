@@ -340,9 +340,13 @@ class SunRays {
     this.from.set(chart.x - 9, 16, chart.z - 12);
     this.rays.forEach((r, i) => r.to.set(this.target.x + (i - 2) * 2.6, 0, this.target.z + (i % 2 ? 1.5 : -1.5)));
   }
+  private held: boolean | null = null;
+  force(on: boolean | null) { this.held = on; }
+  get shining() { return this.on > 0.05; }
   update(dt: number, t: number, cam: THREE.Camera, allowed: boolean) {
     if ((this.timer -= dt) < 0) { this.want = this.want ? 0 : 1; this.timer = this.want ? 20 + Math.random() * 20 : 45 + Math.random() * 60; }
-    this.on += ((allowed ? this.want : 0) - this.on) * Math.min(1, dt * 0.3);
+    const want = this.held !== null ? +this.held : allowed ? this.want : 0;
+    this.on += (want - this.on) * Math.min(1, dt * 0.3);
     this.group.visible = this.on > 0.01;
     if (!this.group.visible) return;
     for (const r of this.rays) {
@@ -358,6 +362,148 @@ class SunRays {
   }
 }
 
+/* ---------- wind streaks ---------- */
+const WIND_VERT = /* glsl */ `
+attribute vec4 seed;   // where across the area (x, z), speed, phase
+attribute vec2 corner; // along the streak (0 tail .. 1 head), across it (-1 .. 1)
+uniform float uTime, uGust;
+uniform vec2 uDir;     // where the wind blows towards, on the water
+uniform vec4 uArea;    // x0, z0, width, depth
+varying float vA; varying vec2 vC;
+void main() {
+  vec2 side = vec2(-uDir.y, uDir.x);
+  float sp = seed.z * (1.0 + 1.6 * uGust);
+  // Each streak runs downwind across the area and wraps round, living a short while each pass.
+  vec2 o = seed.xy * uArea.zw + uDir * uTime * sp * 2.2;
+  o = mod(o, uArea.zw);
+  float life = fract(uTime * 0.35 * seed.z + seed.w);
+  float len = (0.7 + 1.4 * seed.z) * (1.0 + 0.9 * uGust);
+  vec2 xz = uArea.xy + o + uDir * (corner.x - 1.0) * len + side * corner.y * 0.045 * (1.0 + uGust);
+  // A slight lift and waver so they read as moving air.
+  float y = 0.35 + 0.12 * sin(seed.w * 20.0 + uTime * 1.3) + 0.05 * sin(corner.x * 3.0 + uTime * 4.0 + seed.w * 9.0);
+  vA = sin(life * 3.14159) * (0.35 + 0.4 * uGust);
+  // Fade out near the edges of the area so the wrap is never seen.
+  vec2 e = min(o, uArea.zw - o);
+  vA *= smoothstep(0.0, 1.5, min(e.x, e.y));
+  vC = corner;
+  gl_Position = projectionMatrix * viewMatrix * vec4(xz.x, y, xz.y, 1.0);
+}`;
+const WIND_FRAG = /* glsl */ `
+varying float vA; varying vec2 vC;
+void main() {
+  // Thin at the tail, fullest just behind the head, soft across.
+  float along = smoothstep(0.0, 0.7, vC.x) * smoothstep(1.0, 0.85, vC.x);
+  gl_FragColor = vec4(vec3(1.0, 0.98, 0.93), vA * along * (1.0 - vC.y * vC.y) * 0.9);
+}`;
+
+/** Thin streaks of air running downwind over the charts; a gust makes them longer, quicker and brighter. */
+class WindStreaks {
+  mesh: THREE.Mesh;
+  private mat: THREE.ShaderMaterial;
+  private dir = new THREE.Vector2(1, 0);
+  private want = new THREE.Vector2(1, 0);
+  private gust = 0;
+  private nextGust = 6 + Math.random() * 8;
+  private forced = 0;
+  constructor(count = 220) {
+    const seed: number[] = [], corner: number[] = [], idx: number[] = [];
+    for (let i = 0; i < count; i++) {
+      const s = [Math.random(), Math.random(), 0.6 + Math.random() * 0.8, Math.random()];
+      for (const [a, b] of [[0, -1], [0, 1], [1, -1], [1, 1]]) { seed.push(...s); corner.push(a, b); }
+      const k = i * 4; idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(count * 12), 3));
+    g.setAttribute('seed', new THREE.Float32BufferAttribute(seed, 4)); g.setAttribute('corner', new THREE.Float32BufferAttribute(corner, 2)); g.setIndex(idx);
+    this.mat = new THREE.ShaderMaterial({ vertexShader: WIND_VERT, fragmentShader: WIND_FRAG, transparent: true, depthWrite: false, side: THREE.DoubleSide,
+      uniforms: { uTime: { value: 0 }, uGust: { value: 0 }, uDir: { value: this.dir }, uArea: { value: new THREE.Vector4(0, 0, 1, 1) } } });
+    this.mesh = new THREE.Mesh(g, this.mat); this.mesh.frustumCulled = false; this.mesh.renderOrder = 6;
+  }
+  cover(x: number, z: number, w: number, d: number) { (this.mat.uniforms.uArea.value as THREE.Vector4).set(x, z, w, d); }
+  /** Where the wind blows towards: a heading (0 east, 1 south, 2 west, 3 north). */
+  setWind(h: number) { this.want.set([1, 0, -1, 0][h], [0, 1, 0, -1][h]); }
+  /** A strong gust now (e.g. when a ship is caught in irons). */
+  blow() { this.forced = 2.5; }
+  update(dt: number, t: number, stormy: boolean) {
+    // The streaks swing round smoothly when the wind veers.
+    this.dir.lerp(this.want, Math.min(1, dt * 1.5)).normalize();
+    if ((this.nextGust -= dt) < 0) this.nextGust = 7 + Math.random() * 10;
+    const gusting = this.nextGust < 2.2 || this.forced > 0 || stormy;
+    this.forced = Math.max(0, this.forced - dt);
+    this.gust += ((gusting ? 1 : 0) - this.gust) * Math.min(1, dt * 2.5);
+    this.mat.uniforms.uTime.value = t; this.mat.uniforms.uGust.value = this.gust;
+  }
+  get gustLevel() { return this.gust; }
+}
+
+/* ---------- the northern lights ---------- */
+// Drawn straight onto the screen: from up here the sky is out of sight, so the lights hang across the top of
+// the view and down its left side, over a table gone dim and blue.
+const AUR_VERT = /* glsl */ `
+varying vec2 vUv;
+void main() { vUv = uv; gl_Position = vec4(position.xy * 2.0, 0.0, 1.0); }`;
+const AUR_FRAG = /* glsl */ `
+uniform float uTime, uOn, uAspect;
+varying vec2 vUv;
+float hash(float p) { return fract(sin(p * 127.1) * 43758.5453); }
+float noise(float x) { float i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f); return mix(hash(i), hash(i + 1.0), f); }
+// One curtain: 'along' runs along its hem, 'up' is the distance above the hem (in screen heights).
+vec3 curtain(float along, float up, float seed, float height) {
+  float rays = 0.35 + 0.65 * noise(along * 70.0 + seed + uTime * 0.5) * noise(along * 23.0 - uTime * 0.21 + seed);
+  float folds = 0.3 + 0.7 * smoothstep(0.15, 0.85, noise(along * 5.0 + uTime * 0.06 + seed));
+  float above = smoothstep(-0.012, 0.004, up) * pow(max(0.0, 1.0 - up / height), 1.8);
+  float below = smoothstep(-0.05, 0.0, up) * (1.0 - smoothstep(-0.0, 0.004, up)) * 0.6;
+  float k = (above * rays + below) * folds;
+  float h = clamp(up / height, 0.0, 1.0);
+  vec3 col = mix(vec3(0.3, 1.0, 0.55), vec3(0.15, 0.8, 0.85), smoothstep(0.1, 0.4, h));
+  // A violet crown, and violet folds drifting along the curtain among the green.
+  col = mix(col, vec3(0.75, 0.3, 1.0), smoothstep(0.3, 0.75, h));
+  float purple = smoothstep(0.55, 0.85, noise(along * 3.0 - uTime * 0.05 + seed * 3.0));
+  col = mix(col, vec3(0.85, 0.35, 0.95), purple * 0.7);
+  // Below the hem, a faint magenta fringe as in the brightest displays.
+  col = mix(col, vec3(1.0, 0.3, 0.6), (1.0 - smoothstep(-0.02, 0.0, up)) * 0.8);
+  return col * k * (1.0 + 0.3 * purple);
+}
+void main() {
+  vec2 p = vec2(vUv.x * uAspect, vUv.y);
+  // Across the top: the hem wanders in slow waves; the curtain rises from it to the edge of the screen.
+  float hem = 0.74 + 0.05 * sin(vUv.x * 5.0 + uTime * 0.09) + 0.025 * sin(vUv.x * 13.0 - uTime * 0.16);
+  vec3 c = curtain(vUv.x, vUv.y - hem, 3.1, 0.3);
+  // A fainter second fold behind it.
+  float hem2 = 0.84 + 0.04 * sin(vUv.x * 4.0 - uTime * 0.07 + 2.0);
+  c += 0.55 * curtain(vUv.x * 1.3, vUv.y - hem2, 9.7, 0.22);
+  gl_FragColor = vec4(c * uOn * 0.75, 1.0);
+}`;
+const DIM_FRAG = /* glsl */ `
+uniform float uOn;
+varying vec2 vUv;
+void main() {
+  // Darker towards the top, where the lights hang.
+  float k = 0.32 + 0.22 * smoothstep(0.4, 1.0, vUv.y);
+  gl_FragColor = vec4(0.01, 0.03, 0.07, k * uOn);
+}`;
+
+class Aurora {
+  group = new THREE.Group();
+  private mat = new THREE.ShaderMaterial({ vertexShader: AUR_VERT, fragmentShader: AUR_FRAG, transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending,
+    uniforms: { uTime: { value: 0 }, uOn: { value: 0 }, uAspect: { value: 1.6 } } });
+  private dim = new THREE.ShaderMaterial({ vertexShader: AUR_VERT, fragmentShader: DIM_FRAG, transparent: true, depthWrite: false, depthTest: false,
+    uniforms: { uOn: { value: 0 } } });
+  on = 0;
+  want = 0;
+  constructor() {
+    const quad = (mat: THREE.Material, order: number) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat); m.frustumCulled = false; m.renderOrder = order; this.group.add(m); };
+    quad(this.dim, 50); quad(this.mat, 51);
+    this.group.visible = false;
+  }
+  update(dt: number, t: number, aspect: number) {
+    this.on += (this.want - this.on) * Math.min(1, dt * 0.35);
+    this.group.visible = this.on > 0.01;
+    this.mat.uniforms.uTime.value = t; this.mat.uniforms.uOn.value = this.on; this.mat.uniforms.uAspect.value = aspect;
+    this.dim.uniforms.uOn.value = this.on;
+  }
+}
+
 /* ---------- the lot ---------- */
 export class Weather {
   group = new THREE.Group();
@@ -366,9 +512,14 @@ export class Weather {
   private mist = new Mist();
   private gulls = new Gulls();
   private sun = new SunRays();
+  private aurora = new Aurora();
+  private wind = new WindStreaks();
   private stormy = false;
+  /** Debug: hold one sky (or none) instead of letting them come and go. */
+  private forced: 'sun' | 'aurora' | 'clear' | null = null;
+  private auroraTimer = 240 + Math.random() * 180;
   constructor() {
-    this.group.add(this.rain[0].mesh, this.rain[1].mesh, this.bolt.group, this.mist.mesh, this.gulls.group, this.sun.group);
+    this.group.add(this.rain[0].mesh, this.rain[1].mesh, this.bolt.group, this.mist.mesh, this.gulls.group, this.sun.group, this.aurora.group, this.wind.mesh);
   }
   /** Where the two charts lie (their top-left corners in the world). */
   private charts: { x: number; z: number }[] = [];
@@ -378,19 +529,39 @@ export class Weather {
     this.gulls.setArea(new THREE.Vector3((Math.min(a.x, b.x) + Math.max(a.x, b.x) + N) / 2, 0, (Math.min(a.z, b.z) + Math.max(a.z, b.z) + N) / 2), (Math.abs(a.x - b.x) + N) / 2, (Math.abs(a.z - b.z) + N) / 2);
     const x0 = Math.min(a.x, b.x) - 2, z0 = Math.min(a.z, b.z) - 2, x1 = Math.max(a.x, b.x) + N + 2, z1 = Math.max(a.z, b.z) + N + 2;
     this.mist.cover(x0, z0, x1 - x0, z1 - z0);
+    this.wind.cover(x0 - 1, z0 - 1, x1 - x0 + 2, z1 - z0 + 2);
   }
+  /** Debug: show the shafts of sun or the aurora now, or clear the sky; null lets them come and go again. */
+  force(sky: 'sun' | 'aurora' | 'clear' | null) { this.forced = sky; this.sun.force(sky === null ? null : sky === 'sun'); }
+  /** How dark the aurora has made the night (0 by day, 1 at its height). */
+  get night() { return this.aurora.on; }
   /** A storm front over three rows from `row`, on both charts; null when the sky clears. */
   setStorm(row: number | null) {
     this.stormy = row !== null;
     this.charts.forEach((c, i) => this.rain[i].set(row === null ? null : [c.x - 0.6, c.z + row - 0.4, N + 1.2, 3.8]));
   }
   strike(at: THREE.Vector3) { this.bolt.strike(at); }
+  setWind(h: number) { this.wind.setWind(h); }
+  /** A strong gust, to show the wind plainly. */
+  blow() { this.wind.blow(); }
+  /** How hard the wind is gusting now (0 to 1). */
+  get gust() { return this.wind.gustLevel; }
   update(dt: number, t: number, cam: THREE.Camera) {
     for (const r of this.rain) r.update(dt, t);
     this.bolt.update(dt);
     this.mist.update(t, this.stormy ? 0.32 : 0.2);
     this.gulls.update(dt, t, this.stormy);
-    if (this.charts.length) this.sun.update(dt, t, cam, !this.stormy);
+    if (this.charts.length) this.sun.update(dt, t, cam, !this.stormy && this.aurora.on < 0.05);
+    // Now and then, while no storm blows and no sun breaks through, the northern lights come out for a while.
+    if ((this.auroraTimer -= dt) < 0) {
+      this.aurora.want = this.aurora.want ? 0 : 1;
+      // A rare sight: half a minute or so, every five to ten minutes.
+      this.auroraTimer = this.aurora.want ? 30 + Math.random() * 20 : 300 + Math.random() * 300;
+    }
+    if (this.forced) this.aurora.want = this.forced === 'aurora' ? 1 : 0;
+    else if (this.stormy || this.sun.shining) this.aurora.want = 0;
+    this.wind.update(dt, t, this.stormy);
+    this.aurora.update(dt, t, (cam as THREE.PerspectiveCamera).aspect ?? 1.6);
   }
   /** The gulls are overhead (so they may cry). */
   get gullsHere() { return this.gulls.here; }

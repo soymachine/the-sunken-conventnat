@@ -84,7 +84,8 @@ export interface Pub {
   due?: { id: number; side: 0 | 1; kind: 'gold' | 'seal'; value: number }[];
   dueSeq?: number;
   /** A message in a bottle was already cast this turn. */
-  noteSent?: boolean;
+  /** Who has cast a bottle since their own turn began: one each, on your turn or, if you forgot, the other's. */
+  bottle?: [boolean, boolean];
   /** Every note cast so far, oldest first. */
   notes?: { by: 0 | 1; text: string; round: number }[];
   rng: number;
@@ -248,11 +249,11 @@ export function reduce(p: Pub, m: Msg): boolean {
     return true;
   }
 
-  // A message in a bottle: one a turn, on your own turn, at no cost. It changes nothing else.
+  // A message in a bottle: one between the start of your turn and the start of your next, at no cost. It changes nothing else.
   if (m.t === 'note') {
     const text = String(m.text || '').replace(/\s+/g, ' ').trim().slice(0, NOTE_MAX);
-    if (p.phase !== 'battle' || m.by !== p.current || p.noteSent || !text) return false;
-    p.noteSent = true;
+    if (p.phase !== 'battle' || (m.by !== 0 && m.by !== 1) || p.bottle?.[m.by] || !text) return false;
+    (p.bottle ??= [false, false])[m.by] = true;
     (p.notes ??= []).push({ by: m.by, text, round: p.round });
     return true;
   }
@@ -339,7 +340,7 @@ export function reduce(p: Pub, m: Msg): boolean {
       p.current = foe;
       p.ap = AP_PER_TURN;
       p.windsUsed = false;
-      p.noteSent = false;
+      if (p.bottle) p.bottle[foe] = false;
       if (p.current === 0) {
         p.round++;
         // The wind veers each round.
@@ -524,7 +525,7 @@ export class Client {
 
   /** Cast a message in a bottle to the other captain (one a turn). */
   note(text: string): boolean {
-    if (!this.myTurn || this.pub.phase !== 'battle' || this.pub.noteSent || !text.trim()) return false;
+    if (this.pub.phase !== 'battle' || this.pub.bottle?.[this.me] || !text.trim()) return false;
     this.send({ t: 'note', text: text.replace(/\s+/g, ' ').trim().slice(0, NOTE_MAX) });
     return true;
   }

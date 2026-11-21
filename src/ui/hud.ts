@@ -1,5 +1,6 @@
 // Oak-and-brass HUD drawn with DOM + SVG over the 3D canvas.
 import { Client, SEASON, maelstromIn, roleOf } from '../game/engine';
+import { installTuner } from './tuner';
 import { ITEMS, ITEM_HELP, ITEM_IDS, Item, MAX_ITEMS } from '../game/powerups';
 import { FLEETS, KRAKEN_SEALS, N, Role, shipCells } from '../game/rules';
 
@@ -53,6 +54,8 @@ function svg<K extends keyof SVGElementTagNameMap>(p: Element, tag: K, a: Record
   p.appendChild(e);
   return e;
 }
+const rnd = (a: number, b: number) => a + Math.random() * (b - a);
+
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
 export interface HudHandlers {
@@ -62,6 +65,10 @@ export interface HudHandlers {
   note(text: string): void;
   /** Debug only (?debug=true): grant doubloons, seals or action points to try the cards. */
   cheat?(what: 'gold' | 'seals' | 'ap'): void;
+  /** Debug only: call up a sky (shafts of sun, an aurora) or clear it. */
+  sky?(what: 'sun' | 'aurora' | 'clear'): void;
+  /** A sound for the HUD's own flourishes. */
+  sound?(name: 'roar' | 'splash'): void;
   letterRead(): void;
   buy(item: Item): void;
   endTurn(): void;
@@ -77,8 +84,10 @@ export class Hud {
   private sectors: [SVGPathElement, SVGTextElement][] = [];
   private balls: SVGGElement[] = [];
   private capTurns = 0;
-  private glassTurns = 0;
+  private krakenReady = false;
+  private krakenSeen: boolean | null = null;
   private sealHelp = '';
+  private maelHelp = '';
   private muted = false;
   private qualityPref = 'auto';
   private q = <T extends Element>(s: string) => this.root.querySelector(s) as T;
@@ -89,7 +98,18 @@ export class Hud {
       <header class="rail top">
         <div class="turn"><button id="menuBtn" class="mini" aria-expanded="false" aria-controls="menu">Settings</button></div>
         <h1 class="title"><span>The Sunken Covenant</span></h1>
-        <div class="foe"><span id="foeNote"></span></div>
+        <div class="foe"><span id="foeNote"></span>
+          <div class="mael" id="mael" hidden tabindex="0" aria-label="Maelstrom">
+            <svg viewBox="0 0 100 100" aria-hidden="true">
+              <defs><radialGradient id="maelBrass" cx=".35" cy=".3" r=".9"><stop offset="0" stop-color="#f6dc95"/><stop offset=".45" stop-color="#b08d3c"/><stop offset="1" stop-color="#4a3710"/></radialGradient></defs>
+              <circle cx="50" cy="50" r="48" fill="url(#maelBrass)" stroke="#2a1e08" stroke-width="1.5"/>
+              <circle cx="50" cy="50" r="39" fill="#0e1517" stroke="#2a1e08" stroke-width="2"/>
+              <g class="swirl">${[0, 72, 144, 216, 288].map((a) => `<path d="M50 50 C 50 34, 66 26, 80 34" transform="rotate(${a} 50 50)" fill="none" stroke="#5f8a8f" stroke-width="2.4" stroke-linecap="round" opacity=".75"/>`).join('')}</g>
+              ${[0, 1, 2, 3, 4].map((k) => { const a = (-90 - 48 + k * 24) * Math.PI / 180; return `<circle class="notch" cx="${(50 + 43.5 * Math.cos(a)).toFixed(1)}" cy="${(50 + 43.5 * Math.sin(a)).toFixed(1)}" r="3.2"/>`; }).join('')}
+            </svg>
+            <b></b><small></small>
+          </div>
+        </div>
         <div class="status" role="status"><b id="turnTitle"></b><span id="turnSub"></span><em id="turnWx"></em><div class="objective" id="objective" hidden></div><p id="placeHint"></p></div>
       </header>
       <div class="menu card" id="menu" hidden>
@@ -98,7 +118,8 @@ export class Hud {
         <div class="seg" data-pref="sound" role="radiogroup" aria-label="Sound"><button data-v="on" role="radio">On</button><button data-v="off" role="radio">Off</button></div>
         <p class="opt">3D quality</p>
         <div class="seg" data-pref="quality" role="radiogroup" aria-label="3D quality"><button data-v="auto" role="radio">Auto</button><button data-v="high" role="radio">High</button><button data-v="low" role="radio">Low</button></div>
-        <div class="debug" hidden><p class="opt">Debug</p><div class="seg three"><button type="button" data-cheat="gold">+100 gold</button><button type="button" data-cheat="seals">+3 seals</button><button type="button" data-cheat="ap">+3 AP</button></div></div>
+        <div class="debug" hidden><p class="opt">Debug</p><div class="seg three"><button type="button" data-cheat="gold">+100 gold</button><button type="button" data-cheat="seals">+3 seals</button><button type="button" data-cheat="ap">+3 AP</button></div>
+          <p class="opt">Sky</p><div class="seg three" data-pref="sky"><button type="button" data-v="sun">Sun rays</button><button type="button" data-v="aurora">Aurora</button><button type="button" data-v="clear">Clear</button></div></div>
         <p class="meta">Auto steps down by itself if the game runs slowly. Low drops shadows, glow and the print grade.</p>
       </div>
       <div class="shopTip" id="shopTip" role="tooltip" hidden></div>
@@ -141,8 +162,15 @@ export class Hud {
       <div class="role" hidden><div class="card"><svg class="medal" viewBox="0 0 100 100"></svg><p class="meta" id="roleTitle"></p><h2 id="roleName"></h2><p id="roleMission"></p><p class="pw"><b id="rolePower"></b> <span id="rolePowerText"></span></p><button class="plaque" id="roleOk">To your station</button></div></div>
       <div class="over" hidden><div class="card"><h2 id="overTitle"></h2><p id="overText"></p><p id="overVerify" class="meta"></p><button class="plaque" id="leave">Back to port</button></div></div>`;
     this.telegraph(this.q('.telegraph'));
-    // Turning the glass ends the turn: it flips over before the turn passes.
-    this.q<HTMLElement>('#endTurn').onclick = () => { const g = this.q<HTMLElement>('#endTurn img'); g.style.transform = `rotate(${++this.glassTurns * 180}deg)`; on.endTurn(); };
+    // The action points sit under the turn header, where the eye goes as a turn begins.
+    this.q('#turnSub').after(this.q('#apSeals'));
+    // Setting the glass down ends the turn: it is tapped onto the desk and goes dull until your turn comes back.
+    this.q<HTMLElement>('#endTurn').onclick = () => {
+      this.q<HTMLElement>('#endTurn img').animate([{ transform: 'none' }, { transform: 'translateY(5px) scale(.97)' }, { transform: 'none' }], { duration: 260, easing: 'ease-out' });
+      on.endTurn();
+    };
+    // Clicking the covenant's seals, once three are lit, takes up the Kraken's card.
+    this.q<HTMLElement>('#seals').onclick = () => { if (this.krakenReady) on.mode('kraken'); };
     this.root.querySelectorAll<HTMLElement>('.order').forEach((b) => (b.onclick = () => on.mode(b.dataset.order as Mode)));
     this.q<HTMLElement>('#ready').onclick = () => { this.spin('#ready'); on.ready(); };
     this.q<HTMLElement>('#leave').onclick = () => on.leave();
@@ -156,6 +184,7 @@ export class Hud {
     // Debug tools, only when the address carries ?debug=true.
     if (new URLSearchParams(location.search).get('debug') === 'true' && on.cheat) {
       this.q<HTMLElement>('#menu .debug').hidden = false;
+      installTuner(this.root);
       this.root.querySelectorAll<HTMLElement>('[data-cheat]').forEach((b) => (b.onclick = () => on.cheat!(b.dataset.cheat as 'gold' | 'seals' | 'ap')));
     }
     menu.onclick = (e) => {
@@ -164,6 +193,7 @@ export class Hud {
       const pref = b.parentElement!.dataset.pref, v = b.dataset.v!;
       if (pref === 'sound' && (v === 'off') !== this.muted) this.muted = on.mute();
       if (pref === 'quality') { on.quality(v as 'auto' | 'high' | 'low'); this.qualityPref = v; }
+      if (pref === 'sky') on.sky?.(v as 'sun' | 'aurora' | 'clear');
       this.paintPrefs();
     };
     // The quartermaster explains each item on hover: what it does, its price, and why you cannot buy it yet.
@@ -187,6 +217,14 @@ export class Hud {
       tip.style.left = panel.right + 10 + 'px'; tip.style.top = r.top - 6 + 'px'; tip.hidden = false;
     };
     seals.addEventListener('pointerenter', showSeals); seals.addEventListener('focus', showSeals);
+    const mael = this.q<HTMLElement>('#mael');
+    const showMael = () => {
+      tip.innerHTML = `<b>The maelstrom</b><span class="cost">The sea closes in</span><p>${esc(this.maelHelp)}</p>`;
+      const r = mael.getBoundingClientRect(); tip.hidden = false;
+      tip.style.left = Math.max(8, r.right - tip.offsetWidth) + 'px'; tip.style.top = r.bottom + 8 + 'px';
+    };
+    mael.addEventListener('pointerenter', showMael); mael.addEventListener('focus', showMael);
+    mael.addEventListener('pointerleave', () => { tip.hidden = true; }); mael.addEventListener('blur', () => { tip.hidden = true; });
     seals.addEventListener('pointerleave', () => { tip.hidden = true; }); seals.addEventListener('blur', () => { tip.hidden = true; });
     // Each ship's sections in Your fleet name her and her speciality.
     const fleet = this.q<HTMLElement>('#fleet');
@@ -288,12 +326,27 @@ export class Hud {
     labels.forEach((t) => s.appendChild(t));
   }
 
+  /** The Kraken's card comes into the hand like any other, with a little ink and a few bubbles about it. */
+  private playKraken(card: HTMLElement) {
+    const r = card.getBoundingClientRect();
+    const fx = this.root.appendChild(document.createElement('div'));
+    fx.className = 'kfx';
+    Object.assign(fx.style, { left: `${r.left - r.width * 0.5}px`, top: `${r.top - r.height * 0.4}px`, width: `${r.width * 2}px`, height: `${r.height * 1.4}px` });
+    const many = (n: number, html: () => string) => Array.from({ length: n }, html).join('');
+    fx.innerHTML = many(14, () => `<i class="drop" style="--a:${rnd(180, 360)}deg;--d:${rnd(40, 95)}px;--s:${rnd(3, 7)}px"></i>`)
+      + many(12, () => `<i class="bub" style="--x:${rnd(30, 70)}%;--d:${rnd(70, 150)}px;--s:${rnd(4, 9)}px"></i>`);
+    fx.querySelectorAll<HTMLElement>('.drop').forEach((d) => d.animate([{ transform: 'rotate(var(--a)) translateX(0) scale(1)', opacity: 0 }, { opacity: 1, offset: .08 }, { transform: 'rotate(var(--a)) translateX(var(--d)) scale(.3)', opacity: 0 }], { duration: rnd(650, 1000), delay: rnd(0, 250), easing: 'cubic-bezier(.1,.7,.3,1)', fill: 'both' }));
+    fx.querySelectorAll<HTMLElement>('.bub').forEach((d) => d.animate([{ transform: 'translateY(0) scale(.4)', opacity: 0 }, { opacity: .9, offset: .15 }, { transform: `translate(${rnd(-10, 10)}px, calc(var(--d) * -1)) scale(1)`, opacity: 0 }], { duration: rnd(900, 1500), delay: rnd(0, 600), easing: 'ease-out', fill: 'both' }));
+    card.animate([{ filter: 'drop-shadow(0 0 0 #b8312a)' }, { filter: 'drop-shadow(0 0 14px #b8312a)', offset: .3 }, { filter: 'drop-shadow(0 0 0 #b8312a)' }], { duration: 1400 });
+    void Promise.all(fx.getAnimations({ subtree: true }).map((an) => an.finished)).catch(() => undefined).then(() => fx.remove());
+  }
+
   /** Show the saved settings in the menu. */
   setPrefs(muted: boolean, quality: string) { this.muted = muted; this.qualityPref = quality; this.paintPrefs(); }
   private paintPrefs() {
     this.root.querySelectorAll<HTMLElement>('#menu .seg button').forEach((b) => {
       const pref = b.parentElement!.dataset.pref, v = b.dataset.v;
-      const on = pref === 'sound' ? (v === 'off') === this.muted : v === this.qualityPref;
+      const on = pref === 'sound' ? (v === 'off') === this.muted : pref === 'quality' ? v === this.qualityPref : false;
       b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on));
     });
   }
@@ -373,8 +426,9 @@ export class Hud {
     this.balls.forEach((b, k) => b.classList.toggle('spent', !(mine && k < p.ap)));
     this.q<HTMLButtonElement>('#endTurn').disabled = !c.can();
     const noteBtn = this.q<HTMLButtonElement>('#noteBtn');
-    noteBtn.disabled = !(p.phase === 'battle' && mine && !p.noteSent);
-    noteBtn.title = p.noteSent && mine ? 'One bottle a turn: you have cast yours.' : mine ? 'Send the other captain a short note.' : 'You may cast a bottle on your own turn.';
+    const cast = !!p.bottle?.[c.me];
+    noteBtn.disabled = !(p.phase === 'battle' && !cast);
+    noteBtn.title = cast ? 'One bottle a turn: yours is cast. You may cast another once your next turn begins.' : mine ? 'Send the other captain a short note.' : 'You did not cast a bottle on your turn: you may still send one now.';
     if (noteBtn.disabled) { this.q<HTMLElement>('#compose').hidden = true; noteBtn.setAttribute('aria-expanded', 'false'); }
     this.q<HTMLButtonElement>('#ready').disabled = me.ready;
     this.q('#placeHint').innerHTML = p.phase !== 'placement' ? '' : me.ready ? 'Fleet committed. Waiting for the other captain…' : 'Click a ship to lift it, move it over your waters and click again to set it down. <kbd>R</kbd> to rotate it.';
@@ -453,6 +507,12 @@ export class Hud {
       was.style.transition = ''; requestAnimationFrame(() => was.classList.remove('on'));
     }
     this.root.querySelectorAll<HTMLElement>('.order').forEach((b) => b.classList.toggle('on', b.dataset.order === mode));
+    // The Kraken's card makes an entrance the first time it comes into the hand.
+    const kcard = cards.find((el) => el.dataset.tool === 'kraken');
+    if (this.krakenSeen === false && kcard) requestAnimationFrame(() => this.playKraken(kcard));
+    this.krakenSeen = !!kcard;
+    this.krakenReady = !!kcard && c.canKraken();
+    this.q('#seals').classList.toggle('ready', this.krakenReady);
     const shownAp = Math.max(3, mine ? p.ap : 0);
     this.q('#apSeals').innerHTML = Array.from({ length: shownAp }, (_, k) => `<i class="${mine && k < p.ap ? '' : 'spent'}"></i>`).join('');
 
@@ -466,11 +526,17 @@ export class Hud {
       parts.push(`<span><b>Season closes</b>${p.phase === 'battle' ? `in ${left} round${left === 1 ? '' : 's'}` : `after round ${SEASON}`}</span>`);
     }
     if (p.kraken) parts.push(`<span><b>The Kraken</b>holds ${p.kraken.side === c.me ? 'your' : 'enemy'} ships</span>`);
-    // The maelstrom's countdown is always in sight, so captains can plan their moves around it.
-    if (p.mode === 'classic' && p.phase === 'battle') {
-      const left = maelstromIn(p), ringTxt = p.ring ? `${p.ring} ring${p.ring === 1 ? '' : 's'} drowned · ` : '';
-      parts.push(left === null ? `<span class="mael"><b>Maelstrom</b>spent — the middle 6×6 remains</span>`
-        : `<span class="mael${left === 1 ? ' soon' : ''}"><b>Maelstrom</b>${ringTxt}${left === 1 ? 'the next ring goes under <u>next round</u>' : `${p.ring ? 'next ring' : 'rises'} in <u>${left} rounds</u>`}</span>`);
+    // The maelstrom gauge: a brass instrument whose whirlpool turns faster as the next ring nears.
+    const g = this.q<HTMLElement>('#mael'), left = maelstromIn(p);
+    g.hidden = p.mode !== 'classic' || p.phase !== 'battle';
+    if (!g.hidden) {
+      g.classList.toggle('soon', left === 1); g.classList.toggle('spent', left === null);
+      g.querySelector('b')!.textContent = left === null ? '—' : String(left);
+      g.querySelector('small')!.textContent = left === null ? 'spent' : left === 1 ? 'next round' : 'rounds';
+      g.querySelectorAll('.notch').forEach((n, k) => n.classList.toggle('lit', k < p.ring));
+      g.style.setProperty('--spin', `${left === null ? 0 : Math.max(1.2, Math.min(14, left * 0.9))}s`);
+      this.maelHelp = left === null ? 'The maelstrom is spent: five rings have gone under and the middle 6×6 of each chart remains.'
+        : `From round 20 the maelstrom swallows the outer ring of both charts every other round, sinking whatever lies there, until the middle 6×6 remains. ${p.ring} of 5 rings drowned. ${left === 1 ? 'The next ring goes under at the start of the next round — the marked squares.' : `The next ring goes under in ${left} rounds.`}`;
     }
     obj.hidden = !parts.length || p.phase === 'over';
     obj.innerHTML = parts.join('');

@@ -291,6 +291,7 @@ export class SeaScene {
   private seas: Record<Side, Sea>;
   private shadowPlanes = [] as THREE.Mesh[];
   private sun = new THREE.DirectionalLight(0xffe2a8, 1.7);
+  private hemi = new THREE.HemisphereLight(0xfff1cf, 0x2a2116, 2.0);
   private ships = new Map<string, ShipObj>();
   private flames: THREE.Object3D[] = [];
   private embers: THREE.Vector3[] = [];
@@ -323,7 +324,7 @@ export class SeaScene {
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = this.quality === 'high';
     this.scene.background = new THREE.Color(C.ink);
-    this.scene.add(new THREE.HemisphereLight(0xfff1cf, 0x2a2116, 2.0));
+    this.scene.add(this.hemi);
     this.sun.position.set(-9, 16, 8);
     this.sun.castShadow = this.quality === 'high';
     this.sun.shadow.mapSize.set(2048, 2048);
@@ -499,7 +500,12 @@ export class SeaScene {
   }
 
   /** Warm light on your turn, colder on the enemy's. */
-  setTurn(mine: boolean) { this.post?.grade.set(mine ? 1.04 : 0.8, mine ? 1 : 0.86, mine ? 0.94 : 0.96); }
+  /** A strong gust across the charts, to show plainly which way the wind blows. */
+  blow() { this.weather.blow(); }
+  /** Debug: call up a sky now, or clear it. */
+  sky(what: 'sun' | 'aurora' | 'clear') { this.weather.force(what); }
+  private turnGrade = new THREE.Vector3(1.04, 1, 0.94);
+  setTurn(mine: boolean) { this.turnGrade.set(mine ? 1.04 : 0.8, mine ? 1 : 0.86, mine ? 0.94 : 0.96); }
 
   /** A message in a bottle crosses from one chart to the other. Resolves when it lands. */
   bottle(to: Side, stay: boolean): Promise<void> {
@@ -736,8 +742,14 @@ export class SeaScene {
       }
       this.seas[side].setHulls(list);
     }
+    this.seas.own.setGust(this.weather.gust); this.seas.enemy.setGust(this.weather.gust);
     this.seas.own.update(dt, t); this.seas.enemy.update(dt, t);
     this.weather.update(dt, t, this.camera);
+    // Under the northern lights the whole table goes dim and a little blue.
+    const night = this.weather.night;
+    this.hemi.intensity = 2.0 * (1 - 0.5 * night); this.sun.intensity = 1.7 * (1 - 0.65 * night);
+    this.hemi.color.setRGB(1, 0.945 - 0.15 * night, 0.81 + 0.1 * night);
+    this.post?.grade.copy(this.turnGrade).multiply(new THREE.Vector3(1 - 0.42 * night, 1 - 0.32 * night, 1 - 0.18 * night));
     for (const b of [...this.bottles]) {
       const k = Math.min(1, (t - b.t0) / b.dur);
       if (k < 1) {
@@ -994,6 +1006,8 @@ export class SeaScene {
     this.stormy = !!st && v.pub.phase === 'battle';
     this.weather.setCharts(origin.own, origin.enemy);
     this.weather.setStorm(this.stormy ? st!.row : null);
+    this.weather.setWind(v.pub.wind ?? 0);
+    for (const sd of ['own', 'enemy'] as const) this.seas[sd].setWind(v.pub.wind ?? 0);
     this.rain(this.stormy);
     this.ambience(v.pub.phase !== 'over');
     for (const side of ['own', 'enemy'] as Side[]) {
