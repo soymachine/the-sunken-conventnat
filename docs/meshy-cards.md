@@ -121,13 +121,14 @@ light. Photorealistic. No text, no letters, no numbers, no logos.
 
 ## 6. Order cards: Fire, Sail and Turn
 
-Same base prompt as the other card pictures (section 2):
+Same base prompt as the other card pictures (section 2). The arrows are symbols, not lettering, so the
+"no text" line still applies:
 
 | Card | `[SCENE]` |
 |---|---|
 | Fire | a gun crew at a ship's cannon touching the slow match to the touch-hole, a burst of flame and smoke from the muzzle |
-| Sail | a ship running before the wind under full sail, her bow cutting a white wave, a gull alongside |
-| Turn | a helmsman heaving on the great double ship's wheel, the ship heeling as she comes about |
+| Sail | a ship running before the wind under full sail, her bow cutting a white wave, a gull alongside; across the foreground a bold engraved straight arrow pointing forward, drawn like a chart's ink symbol, clearly showing movement ahead |
+| Turn | a helmsman heaving on the great double ship's wheel, the ship heeling as she comes about; around the wheel a bold engraved curved arrow sweeping a quarter circle, drawn like a chart's ink symbol, clearly showing rotation |
 
 ## 7. The desk along the bottom of the screen
 
