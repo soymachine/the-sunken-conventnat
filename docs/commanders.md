@@ -53,8 +53,11 @@ choosing what to make.
 
 - **Power: Squall.** For 1 AP, the enemy's whole fleet is driven **one square** in a direction the Stormcaller
   chooses, as a Sea Current would push it.
-  - Ships blocked by the edge or another ship stay put.
+  - A ship that cannot run (blocked by the edge, drowned water or another ship) is **driven onto what stopped
+    her**: her leading section takes a hit, answered by her captain like a shot.
   - A ship is never pushed into drowned water.
+  - The squall's spray **veils the Stormcaller's own waters**: the enemy's next spyglass or Long Glass shows
+    nothing.
   - Three times per battle.
   - The enemy moves their own hidden ships, and the move is checked at the end.
 - **Second use of the same card:** for 1 AP, the Stormcaller may instead **choose the wind** for the current round.
@@ -70,9 +73,8 @@ choosing what to make.
 
 > "Count the masts before you count the guns."
 
-- **Power: Soundings.** For no AP, the Spymaster learns how many enemy **ships** (not sections) have at least
-  one section in a chosen **row or column**.
-  - A fog bank hides it, as it hides a spyglass.
+- **Power: Soundings.** For no AP, the Spymaster learns whether **any** enemy ship has a section in a chosen
+  **row or column**. The answer is only "some" or "none", not how many.
   - Once every five rounds.
 - **Passive:** the Spymaster sees the round number each enemy treasure was set down, which helps guess where
   enemy ships sailed.
@@ -158,7 +160,37 @@ The five powers are now in the rules engine (`src/game/engine.ts`) and the machi
 Powers used per battle, on average: Tidewarden 1.8, Stormcaller 6.7 (squalls and gales), Spymaster 4.7,
 Gunmaster 3.0, Deepspeaker 1.5 (Krakens).
 
-### Reading the numbers
+### Passes 8 to 10: the Stormcaller and the Spymaster
+
+- **Spymaster:**
+  - soundings now say only "some" or "none";
+  - a control run with the soundings switched off put him at 48–53 % against everyone, so his edge came from
+    the soundings and not from his economy;
+  - once every three rounds he still won 56 % on average; every five rounds is kept;
+  - every six rounds changed nothing.
+- **Stormcaller:**
+  - the veil alone barely helped (46 %);
+  - crashing ships driven onto the edge, the rim or each other brought him to 50.5 %;
+  - the machine now also squalls now and then, not only before a ring.
+
+**Final table (pass 9, the values above):**
+
+|             | none | Tidewarden | Stormcaller | Spymaster | Gunmaster | Deepspeaker | average |
+|-------------|------|------------|-------------|-----------|-----------|-------------|---------|
+| none        | —    | 52 %       | 49 %        | 49 %      | 49 %      | 52 %        | 50.2 %  |
+| Tidewarden  | 48 % | —          | 49 %        | 42 %      | 48 %      | 50 %        | 47.5 %  |
+| Stormcaller | 51 % | 51 %       | —           | 49 %      | 47 %      | 54 %        | 50.5 %  |
+| Spymaster   | 51 % | 58 %       | 51 %        | —         | 56 %      | 54 %        | 53.8 %  |
+| Gunmaster   | 51 % | 52 %       | 53 %        | 44 %      | —         | 53 %        | 50.6 %  |
+| Deepspeaker | 48 % | 50 %       | 46 %        | 46 %      | 47 %      | —           | 47.3 %  |
+
+- **Within 45–55 % on average:** all five commanders.
+- **The one matchup still outside:** Spymaster against Tidewarden, at 58 %. The Tidewarden delays the rings, the
+  longer battle gives the Spymaster more soundings, and the Tidewarden has the lowest average (47.5 %).
+- **Next:** a small boost for the Tidewarden is the obvious next step, for example a third Bind, or Bind from round
+  12.
+
+### Reading the numbers (pass 7)
 
 - **Within the target (45–55 %):** the Tidewarden, Gunmaster and Deepspeaker, against everyone.
 - **Still off:**

@@ -85,6 +85,8 @@ export interface SidePub {
   soundings?: { axis: 'row' | 'col'; i: number; count: number; round: number }[];
   /** Squalls this captain has sent against the enemy fleet (public: everyone saw the sky). */
   squalls?: { dir: number; round: number }[];
+  /** The Stormcaller's squall also veils his own waters: the enemy's next spyglass or Long Glass sees only spray. */
+  veil?: boolean;
 }
 export interface Treasure { side: 0 | 1; x: number; y: number; value: number; kind: 'gold' | 'seal' }
 export interface Pub {
@@ -286,9 +288,9 @@ export function reduce(p: Pub, m: Msg): boolean {
     if (!p.pending || m.by === p.current) return false;
     p.pending = false;
     if (m.t === 'powerResult') { p.reckon = { col: m.col, round: p.round }; return true; }
-    if (m.t === 'scanResult') { mine.scans.push({ x: m.x, y: m.y, count: m.count, round: p.round }); return true; }
+    if (m.t === 'scanResult') { mine.scans.push({ x: m.x, y: m.y, count: m.count, round: p.round }); mine.veil = false; return true; }
     // The answer belongs to the captain who looked (the one whose turn it is).
-    if (m.t === 'peekResult') { (p.sides[p.current].peeks ??= []).push({ x: m.x, y: m.y, ships: m.ships || [], fog: !!m.fog, round: p.round }); return true; }
+    if (m.t === 'peekResult') { mine.veil = false; (p.sides[p.current].peeks ??= []).push({ x: m.x, y: m.y, ships: m.ships || [], fog: !!m.fog, round: p.round }); return true; }
     applyResults(p, m.by, m.results || [], true);
     if (p.strike) { p.strike = undefined; if (p.kraken && p.kraken.left <= 0 && !p.kraken.linger) p.kraken = undefined; }
     if (m.lost && (p.phase as Pub['phase']) !== 'over') { p.phase = 'over'; p.winner = foe; p.reason = 'fleet'; }
@@ -351,6 +353,8 @@ export function reduce(p: Pub, m: Msg): boolean {
       if (mine.cmd !== 'stormcaller' || (mine.cmdUses ?? 0) >= CMD_USES.stormcaller || !(m.dir >= 0 && m.dir <= 3) || !spend(SQUALL_AP)) return false;
       mine.cmdUses = (mine.cmdUses ?? 0) + 1;
       (mine.squalls ??= []).push({ dir: m.dir, round: p.round });
+      mine.veil = true;
+      p.pending = true; // the enemy answers with the damage of ships driven onto the edge, the rim or each other
       return true;
     case 'gale':
       if (mine.cmd !== 'stormcaller' || p.round - (mine.galeAt ?? -99) < GALE_EVERY || !(m.wind >= 0 && m.wind <= 3) || !spend(1)) return false;
@@ -558,20 +562,31 @@ export class Client {
     }
     if (m.t === 'peek' && theirs) {
       const cells: XY[] = [[m.x, m.y], [m.x + 1, m.y], [m.x, m.y + 1], [m.x + 1, m.y + 1]];
-      const fog = this.side.fogs.some((f) => cells.some(([a, b]) => inZone(f.x, f.y, a, b)));
+      const fog = this.side.fogs.some((f) => cells.some(([a, b]) => inZone(f.x, f.y, a, b))) || !!this.side.veil;
       this.send({ t: 'peekResult', x: m.x, y: m.y, ships: fog ? [] : peekShips(this.ships, m.x, m.y), fog });
     }
     if (m.t === 'squall' && theirs) {
       // A squall drives my fleet a square; ships held, blocked, or that would enter drowned water stay put.
       const [fx, fy] = [[1, 0], [0, 1], [-1, 0], [0, -1]][m.dir];
+      const before = new Map(this.ships.map((s) => [s.id, `${s.x},${s.y}`]));
       driftFleet(this.ships, m.dir, (s) => this.held(s.id) || shipCells({ ...s, x: s.x + fx, y: s.y + fy }).some(([x, y]) => !safe(p.ring, x, y)));
+      // A ship that could not run before the squall is driven onto what stopped her: her leading section is struck.
+      const crashed: XY[] = [];
+      for (const s of this.ships) {
+        if (s.sunk || this.held(s.id) || before.get(s.id) !== `${s.x},${s.y}`) continue;
+        crashed.push(shipCells(s).reduce((a, c) => (c[0] * fx + c[1] * fy > a[0] * fx + a[1] * fy ? c : a)));
+      }
+      const r = resolveAttack(this.ships, crashed, false);
+      if (r.results.some((c) => c.r === 'hit' || c.r === 'sunk')) { this.hurt = true; if (this.order?.id === 'unscathed') this.order.n = 0; }
+      this.send({ t: 'result', results: r.results, chained: false, lost: r.lost });
     }
     if (m.t === 'sound' && theirs) {
-      const count = this.ships.filter((s) => !s.sunk && shipCells(s).some(([x, y]) => (m.axis === 'row' ? y : x) === m.i)).length;
-      this.send({ t: 'soundResult', axis: m.axis, i: m.i, count });
+      // A sounding tells only whether any ship lies on the line (1) or none does (0).
+      const any = this.ships.some((s) => !s.sunk && shipCells(s).some(([x, y]) => (m.axis === 'row' ? y : x) === m.i));
+      this.send({ t: 'soundResult', axis: m.axis, i: m.i, count: any ? 1 : 0 });
     }
     if (m.t === 'scan' && theirs) {
-      const fogged = this.side.fogs.some((f) => inZone(f.x, f.y, m.x, m.y));
+      const fogged = this.side.fogs.some((f) => inZone(f.x, f.y, m.x, m.y)) || !!this.side.veil;
       this.send({ t: 'scanResult', x: m.x, y: m.y, count: fogged ? -1 : countScan(this.ships, m.x, m.y) });
     }
     if (m.t === 'result' && theirs && this.order) {

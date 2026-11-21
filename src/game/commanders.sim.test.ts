@@ -35,8 +35,10 @@ describe.skipIf(!process.env.SIM)('commander balance', () => {
     };
     let seed = 1;
     const t0 = Date.now();
+    const only = (process.env.ONLY || '').split(',').filter(Boolean);
     for (let i = 0; i < picks.length; i++) for (let j = i; j < picks.length; j++) {
       const A = picks[i], B = picks[j];
+      if (only.length && !only.includes(A ?? 'none') && !only.includes(B ?? 'none')) continue;
       let aw = 0, bw = 0, stalls = 0, rounds = 0;
       for (let g = 0; g < G; g++) {
         // Half the games each way round, so neither commander always moves first.

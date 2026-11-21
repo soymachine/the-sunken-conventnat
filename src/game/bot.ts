@@ -185,7 +185,7 @@ function commander(c: Client, rnd: Rnd, best: { x: number; y: number; v: number 
       if (stuck) return c.gale(headingOf(stuck));
     }
     // Just before a ring closes, drive the enemy towards the edge nearest what is known of them.
-    if (c.canSquall() && maelstromIn(p) === 1) {
+    if (c.canSquall() && (maelstromIn(p) === 1 || (p.round >= 4 && rnd() < 0.12))) {
       const live = foe.shots.filter((s) => s.result !== 'miss' && !s.sunk);
       const cx = live.length ? live.reduce((a, s) => a + s.x, 0) / live.length : rnd() * N, cy = live.length ? live.reduce((a, s) => a + s.y, 0) / live.length : rnd() * N;
       const d = [N - 1 - cx, N - 1 - cy, cx, cy]; // distance to the east, south, west and north edges
