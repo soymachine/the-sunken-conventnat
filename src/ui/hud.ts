@@ -34,9 +34,9 @@ const CARD_KIND: Record<string, string> = { fire: 'shot', broadside: 'shot', cha
 const CARD_ART = new Set(['fire', 'sail', 'turn', 'broadside', 'chain', 'spy', 'spyglass', 'longglass', 'fireship', 'fog', 'shipwright', 'winds', 'current', 'pact', 'kraken']);
 /** What each ship's trait means, for the fleet's tooltips. */
 const TRAIT_HELP: Record<string, string> = {
-  Broadside: 'can fire a Broadside: three squares in a row.', 'Chain shot': 'can fire Chain shot: a hit pins the ship.',
-  Armour: 'armoured: the first hit glances off. Steam: the wind does not slow her.', Swift: 'swift: sails two squares instead of one.',
-  Spyglass: "carries the Cutter's Glass: counts hulls in a 5×5 patch.", Cargo: 'carries the cargo the Corsair plunders.',
+  Broadside: 'fires three squares in a row.', 'Chain shot': 'a hit pins the enemy ship for a turn.',
+  Armour: 'the first hit glances off her iron plate; under steam, the wind never stops her.', Swift: 'sails two squares instead of one.',
+  Spyglass: "the Cutter's Glass counts hulls in a 5×5 patch of enemy water.", Cargo: 'she carries the cargo the Corsair plunders.',
 };
 const TOOL_HELP: Record<string, { ship?: string; text: string }> = {
   broadside: { ship: 'Ship of the Line', text: 'Fire three squares in a row at once. Press R to swing the line between across and down.' },
@@ -180,6 +180,16 @@ export class Hud {
     };
     seals.addEventListener('pointerenter', showSeals); seals.addEventListener('focus', showSeals);
     seals.addEventListener('pointerleave', () => { tip.hidden = true; }); seals.addEventListener('blur', () => { tip.hidden = true; });
+    // Each ship's sections in Your fleet name her and her speciality.
+    const fleet = this.q<HTMLElement>('#fleet');
+    fleet.addEventListener('pointerover', (e) => {
+      const li = (e.target as Element).closest<HTMLElement>('li[data-cls]');
+      if (!li) return;
+      tip.innerHTML = `<b>${esc(li.dataset.cls!)}</b><span class="cost">${esc(li.dataset.state!)}</span><p>${esc(li.dataset.trait!)}</p>`;
+      const r = li.getBoundingClientRect(), panel = li.closest('.card')!.getBoundingClientRect();
+      tip.style.left = panel.right + 10 + 'px'; tip.style.top = r.top - 30 + 'px'; tip.hidden = false;
+    });
+    fleet.addEventListener('pointerleave', () => { tip.hidden = true; });
     this.q<HTMLElement>('#shop').onclick = (e) => { const b = (e.target as Element).closest('button'); if (b && !b.classList.contains('off')) on.buy(b.dataset.item as Item); };
     // The message in a bottle: a small sheet to write on, sealed and cast with one button.
     const compose = this.q<HTMLFormElement>('#compose'), noteBtn = this.q<HTMLElement>('#noteBtn'), noteText = this.q<HTMLTextAreaElement>('#noteText');
@@ -202,7 +212,7 @@ export class Hud {
       tip.innerHTML = `<b>${esc(b.dataset.name!)}</b><span class="cost">${b.dataset.ap} AP</span><p>${esc(b.dataset.help!)}</p>${b.dataset.why ? `<p class="why">${esc(b.dataset.why)}</p>` : ''}`;
       tip.hidden = false;
       // Above the card once it has risen out of the hand.
-      const r = b.getBoundingClientRect(), w = tip.offsetWidth, risen = innerHeight + 58 - 151 - 62;
+      const r = b.getBoundingClientRect(), w = tip.offsetWidth, risen = innerHeight + 46 - 151 - 62 - 24;
       tip.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left + r.width / 2 - w / 2)) + 'px';
       tip.style.top = risen - tip.offsetHeight - 14 + 'px';
     });
@@ -385,8 +395,10 @@ export class Hud {
     this.q('#fleet').innerHTML = c.ships.map((s) => {
       const f = FLEETS[role].find((q) => q.kind === s.kind)!;
       const pips = s.hits.map((h, i) => `<i class="${s.floods?.[i] ? 'flood' : h ? 'hit' : ''}"></i>`).join('');
-      const tip = `${s.cls} — ${TRAIT_HELP[f.trait] ?? f.trait}${s.chained ? ' Pinned by chain shot this turn.' : ''}${s.sunk ? ' Sunk.' : ''}`;
-      return `<li class="${s.sunk ? 'sunk' : ''}${s.chained ? ' pinned' : ''}" title="${esc(tip)}"><span class="pips">${pips}</span></li>`;
+      const hurt = s.hits.filter(Boolean).length, holed = (s.floods || []).filter(Boolean).length;
+      const state = s.sunk ? 'Sunk' : s.chained ? 'Pinned by chain shot' : holed ? `${hurt} hit · ${holed} holed` : hurt ? `${hurt} of ${s.len} sections hit` : 'Sound';
+      const trait = TRAIT_HELP[f.trait] ?? f.trait;
+      return `<li class="${s.sunk ? 'sunk' : ''}${s.chained ? ' pinned' : ''}" data-cls="${esc(s.cls)}" data-state="${esc(state)}" data-trait="${esc(f.trait + ': ' + trait)}"><span class="pips">${pips}</span></li>`;
     }).join('');
 
     const belt: string[] = [];

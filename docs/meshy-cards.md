@@ -142,3 +142,28 @@ the full width near the top edge. Even, soft light with no shadows or vignette, 
 seam. Straight-on orthographic top view, no perspective. Photorealistic. No objects, no text, no letters.
 Wide format, about four times wider than tall.
 ```
+
+## 8. Bottle and hourglass resting on the desk (with perspective)
+
+Both stand on the desk at the bottom corners, seen a little from above as if from the captain's chair, so they
+need their contact shadow baked in and a gentle three-quarter view.
+
+**Message in a bottle**
+```
+A single antique message-in-a-bottle standing upright on a dark polished mahogany table, seen from slightly
+above at a gentle three-quarter angle as if from a chair at the table, so the bottle's base ellipse and the
+table's surface recede towards the back: dark green hand-blown glass with small bubbles, a cork stopper sealed
+with dripping red wax, a rolled ivory parchment tied with red thread visible inside. A soft contact shadow
+under the bottle on the wood. Only a small patch of tabletop around its base, fading to pure black at the
+edges of the frame. Warm candle light from the upper left. Photorealistic. No text, no letters, no labels.
+```
+
+**Ship's hourglass**
+```
+A single ship's sand glass standing upright on a dark polished mahogany table, seen from slightly above at a
+gentle three-quarter angle as if from a chair at the table, so its round end plates show as ellipses and the
+table recedes towards the back: two clear glass bulbs with fine pale sand, most of it in the lower bulb and a
+thin stream falling, held between turned oak end plates joined by three slender brass pillars. A soft contact
+shadow under it on the wood. Only a small patch of tabletop around its base, fading to pure black at the edges
+of the frame. Warm candle light from the upper left. Photorealistic. No text, no letters.
+```

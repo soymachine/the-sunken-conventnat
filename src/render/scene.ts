@@ -144,6 +144,25 @@ function bottleModel(): THREE.Group {
   return g;
 }
 
+/* ---------- scan buoy ---------- */
+const buoyMats = { red: new THREE.MeshStandardMaterial({ color: 0x9a2a17, roughness: 0.6 }), white: new THREE.MeshStandardMaterial({ color: 0xe8dcc0, roughness: 0.6 }), iron: new THREE.MeshStandardMaterial({ color: 0x2a2724, roughness: 0.5, metalness: 0.4 }) };
+const buoyGeo = { body: new THREE.CylinderGeometry(0.13, 0.2, 0.26, 14), band: new THREE.CylinderGeometry(0.135, 0.15, 0.08, 14), top: new THREE.ConeGeometry(0.1, 0.18, 12), pole: new THREE.CylinderGeometry(0.012, 0.012, 0.3, 6) };
+/** A little red-and-white buoy carrying the spyglass's number on a flag that always faces the captain. */
+function buoy(text: string): THREE.Group {
+  const g = new THREE.Group(), inner = new THREE.Group();
+  const body = new THREE.Mesh(buoyGeo.body, buoyMats.red); body.position.y = 0.13;
+  const band = new THREE.Mesh(buoyGeo.band, buoyMats.white); band.position.y = 0.2;
+  const top = new THREE.Mesh(buoyGeo.top, buoyMats.red); top.position.y = 0.35;
+  const pole = new THREE.Mesh(buoyGeo.pole, buoyMats.iron); pole.position.y = 0.55;
+  for (const m of [body, band, top]) m.castShadow = true;
+  const sign = new THREE.Sprite(new THREE.SpriteMaterial({ map: (label(text, '#d9a441').material as THREE.MeshBasicMaterial).map, depthWrite: false }));
+  sign.scale.setScalar(0.62); sign.position.y = 0.95;
+  inner.add(body, band, top, pole, sign);
+  g.add(inner);
+  g.userData.inner = inner; g.userData.spin = 0;
+  return g;
+}
+
 /* ---------- treasure ---------- */
 const glowTex = sprite((g) => {
   const r = g.createRadialGradient(64, 64, 0, 64, 64, 64);
@@ -865,14 +884,16 @@ export class SeaScene {
     }
     for (const sc of p.scans) {
       if (round - sc.round > 4) continue;
-      const at = cellCenter({ side, x: sc.x, y: sc.y });
       // The patch's outline is drawn into the sea, so the swell cannot hide it.
       boxes.push({ x0: sc.x - ZONE, y0: sc.y - ZONE, x1: sc.x + ZONE + 1, y1: sc.y + ZONE + 1, color: side === 'enemy' ? C.amber : C.wax, opacity: 0.9 });
       // Only my own readings carry a number; where the enemy scanned me, the box alone says so.
+      // The reading floats on a small buoy moored at the patch's top-left corner, between squares, where no shot lands.
       if (side === 'enemy') {
-        const l = label(sc.count < 0 ? '?' : String(sc.count), '#d9a441');
-        l.position.set(at.x, 0.085, at.z);
-        this.marks.add(l);
+        const corner = cellCenter({ side, x: sc.x - ZONE, y: sc.y - ZONE }).add(new THREE.Vector3(-0.5, 0, -0.5));
+        const b = buoy(sc.count < 0 ? '?' : String(sc.count));
+        b.position.set(corner.x, 0.05, corner.z);
+        this.marks.add(b);
+        this.glints.push(b);
       }
     }
     this.seas[side].setBoxes(boxes);
@@ -1168,20 +1189,9 @@ export class SeaScene {
 
   /** A spyglass sweeping its 5×5 patch. */
   sweep(c: Cell): Promise<void> {
-    const at = cellCenter(c);
-    const m = new THREE.Mesh(G.beam, new THREE.MeshBasicMaterial({ color: c.side === 'enemy' ? C.amber : C.wax, transparent: true, opacity: 0.55, depthWrite: false }));
-    this.misc.add(m);
+    this.seas[c.side].scan(c.x, c.y, this.time, Sea.scanStyle, c.side === 'enemy' ? 0xffd27a : C.wax);
     this.sound('glass');
-    const t0 = performance.now();
-    return new Promise((res) => {
-      const step = () => {
-        const u = Math.min(1, (performance.now() - t0) / 650);
-        m.position.set(at.x - ZONE - 0.25 + u * (2 * ZONE + 0.5), 0.14, at.z);
-        (m.material as THREE.MeshBasicMaterial).opacity = 0.6 * Math.sin(u * Math.PI);
-        if (u < 1) requestAnimationFrame(step); else { this.misc.remove(m); res(); }
-      };
-      step();
-    });
+    return new Promise((res) => setTimeout(res, 1450));
   }
 
   coins(c: Cell, mine = true) { this.fx.coins(cellCenter(c).setY(0.4)); this.sound(mine ? 'treasure' : 'coin'); }

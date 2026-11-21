@@ -429,3 +429,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); out
 .bottom::before { content: ""; position: absolute; left: -30%; right: -30%; top: 0; bottom: -40%; z-index: -1; transform: rotateX(28deg); transform-origin: 50% 100%;
   background: linear-gradient(rgba(13, 11, 8, .55), transparent 40%, rgba(255, 214, 150, .06)), url('/ui/desk.jpg') center top / 900px auto repeat-x, #3b1a10; }
 .battle .say, .battle .watch, .belt { z-index: 2; }
+
+.belt .ocard.ocard.k-kraken .nm { color: #d9b766; }
+/* A chosen card grows a little; the desk stands taller. */
+.belt .ocard.on { transform: translateY(var(--y)) rotate(var(--r)) translateY(-62px) scale(1.12); }
+.belt .ocard:active { transform: translateY(var(--y)) rotate(var(--r)) translateY(-62px) scale(1.14); }
+.bottom { height: 150px; }
+.belt { bottom: -34px; }

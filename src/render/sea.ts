@@ -108,6 +108,9 @@ uniform float uTime, uEnemy, uNight, uRing, uFlash;
 uniform float uDoom, uDoomStyle;
 // The Long Glass: uPeek = (left, top, start time, strength 0..1) of a 2×2 patch, in chart squares.
 uniform vec4 uPeek;
+// A scan in progress: uScan = (centre x, centre y, start time, style 1 sweep / 2 sonar / 3 lens), over a 5×5 patch.
+uniform vec4 uScan;
+uniform vec3 uScanCol;
 // Squares tinted on the chart (aim, spyglass patch, placement shadow) and outlined boxes (scans), drawn
 // in the sea itself so they always follow the swell.
 uniform sampler2D uHl;
@@ -304,6 +307,32 @@ void main() {
       float d = max(abs(p.x - bc.x) - bh.x, abs(p.y - bc.y) - bh.y);
       col = mix(col, uBoxCol[i].rgb, uBoxCol[i].a * smoothstep(0.06, 0.0, abs(d)));
     }
+    if (uScan.w > 0.0) {
+      float st = uTime - uScan.z, life = clamp(st / 1.5, 0.0, 1.0);
+      vec2 d = p - (uScan.xy + 0.5);
+      float inBox = step(max(abs(d.x), abs(d.y)), 2.5), fade = smoothstep(1.0, 0.8, life);
+      float glow = 0.0;
+      if (uScan.w < 1.5) {
+        // 1 · Sweep: a beam turns once round the patch like a lighthouse's, leaving a fading trail.
+        float ang = atan(d.y, d.x), head = -3.14159 + life * 6.28318;
+        float behind = mod(head - ang, 6.28318);
+        glow = inBox * exp(-behind * 2.2) * step(behind, 6.0) * smoothstep(0.0, 0.6, length(d));
+        glow += inBox * smoothstep(0.05, 0.0, abs(behind - 0.0)) * 0.6;
+      } else if (uScan.w < 2.5) {
+        // 2 · Sonar: three rings spread from the centre and die at the patch's edge.
+        float r = length(d);
+        for (int k = 0; k < 3; k++) { float rr = (life * 1.6 - float(k) * 0.28) * 3.6; glow += smoothstep(0.12, 0.0, abs(r - rr)) * step(0.0, rr) * (1.0 - clamp(rr / 3.6, 0.0, 1.0)); }
+        glow *= inBox;
+      } else {
+        // 3 · Lens: a bright bar travels down the patch, and the squares it has passed are inked in hatching.
+        float bar = -2.5 + life * 5.6;
+        glow = inBox * smoothstep(0.25, 0.0, abs(d.y - bar));
+        float passed = inBox * step(d.y, bar) * smoothstep(0.55, 0.85, sin((p.x - p.y) * 30.0));
+        col = mix(col, uScanCol * 0.35, passed * 0.35 * fade);
+      }
+      col = mix(col, uScanCol, clamp(glow, 0.0, 1.0) * 0.75 * fade);
+      if (st > 1.6) glow = 0.0;
+    }
     // The Kraken turns the chart to night: paper goes dark, ink glows amber.
     float lum = dot(col, vec3(0.3, 0.59, 0.11));
     vec3 night = mix(vec3(0.4, 0.24, 0.05), vec3(0.012, 0.01, 0.008), smoothstep(0.0, 0.07, lum));
@@ -347,7 +376,7 @@ export class Sea {
     this.tex.magFilter = this.tex.minFilter = THREE.LinearFilter;
     this.mat = new THREE.ShaderMaterial({
       vertexShader: VERT, fragmentShader: FRAG,
-      uniforms: { uMap: { value: chartTexture(enemy) }, uEnergy: { value: this.tex }, uTime: { value: 0 }, uEnemy: { value: enemy ? 1 : 0 }, uN: { value: N }, uNight: { value: 0 }, uRing: { value: 0 }, uDoom: { value: 0 }, uDoomStyle: { value: Sea.doomStyle }, uFlash: { value: 0 }, uStorm: { value: new THREE.Vector2(0, 0) }, uTide: { value: new THREE.Vector4(1, 0, -99, 0) }, uPeek: { value: new THREE.Vector4(0, 0, 0, 0) }, uHl: { value: this.hlTex }, uBox: { value: Array.from({ length: 8 }, () => new THREE.Vector4()) }, uBoxCol: { value: Array.from({ length: 8 }, () => new THREE.Vector4()) }, uBoxN: { value: 0 },
+      uniforms: { uMap: { value: chartTexture(enemy) }, uEnergy: { value: this.tex }, uTime: { value: 0 }, uEnemy: { value: enemy ? 1 : 0 }, uN: { value: N }, uNight: { value: 0 }, uRing: { value: 0 }, uDoom: { value: 0 }, uDoomStyle: { value: Sea.doomStyle }, uFlash: { value: 0 }, uStorm: { value: new THREE.Vector2(0, 0) }, uTide: { value: new THREE.Vector4(1, 0, -99, 0) }, uPeek: { value: new THREE.Vector4(0, 0, 0, 0) }, uScan: { value: new THREE.Vector4(0, 0, -99, 0) }, uScanCol: { value: new THREE.Color(1, 0.8, 0.4) }, uHl: { value: this.hlTex }, uBox: { value: Array.from({ length: 8 }, () => new THREE.Vector4()) }, uBoxCol: { value: Array.from({ length: 8 }, () => new THREE.Vector4()) }, uBoxN: { value: 0 },
         uHull: { value: Array.from({ length: 14 }, () => new THREE.Vector4()) }, uHull2: { value: Array.from({ length: 14 }, () => new THREE.Vector4()) }, uHullN: { value: 0 }, uWake: { value: Sea.wake } },
     });
     const geo = new THREE.PlaneGeometry(N + 1, N + 1, 96, 96);
@@ -399,6 +428,13 @@ export class Sea {
   }
   private peekWant = 0;
 
+  /** Play a scan over the 5×5 patch centred on (x, y) from time t. */
+  scan(x: number, y: number, t: number, style: number, color: number) {
+    (this.mat.uniforms.uScan.value as THREE.Vector4).set(x, y, t, style);
+    (this.mat.uniforms.uScanCol.value as THREE.Color).setHex(color);
+  }
+  static scanStyle = 1;
+
   /** Send a tide wave across the chart in direction (dx, dy), starting at time t. */
   tide(dx: number, dy: number, t: number) { (this.mat.uniforms.uTide.value as THREE.Vector4).set(dx, dy, t, 1); }
 
@@ -413,6 +449,7 @@ export class Sea {
     const pk = u.uPeek.value as THREE.Vector4;
     pk.w += (this.peekWant - pk.w) * Math.min(1, dt * (this.peekWant ? 6 : 2.5));
     if (pk.w < 0.01 && !this.peekWant) pk.w = 0;
+    const sc = u.uScan.value as THREE.Vector4; if (sc.w && t - sc.z > 1.7) sc.w = 0;
     const td = u.uTide.value as THREE.Vector4;
     if (td.w && t - td.z > 18) td.w = 0;
   }
