@@ -118,3 +118,26 @@ and empty, with no marks, no stains, no map, no lines. Straight-on orthographic 
 no curl, no shadow, filling about 90% of the frame. Isolated on a solid pure black background. Soft even
 light. Photorealistic. No text, no letters, no numbers, no logos.
 ```
+
+## 6. Order cards: Fire, Sail and Turn
+
+Same base prompt as the other card pictures (section 2):
+
+| Card | `[SCENE]` |
+|---|---|
+| Fire | a gun crew at a ship's cannon touching the slow match to the touch-hole, a burst of flame and smoke from the muzzle |
+| Sail | a ship running before the wind under full sail, her bow cutting a white wave, a gull alongside |
+| Turn | a helmsman heaving on the great double ship's wheel, the ship heeling as she comes about |
+
+## 7. The desk along the bottom of the screen
+
+Different from the top bar's oak planks: a captain's chart table of darker wood with brass.
+
+```
+A seamless, tileable texture of an old captain's chart table seen straight from above: dark polished
+mahogany boards running horizontally, worn smooth and slightly glossy, with fine grain, small dents and
+scratches, faint rings left by mugs and a few drops of old candle wax, and a narrow inlaid brass strip running
+the full width near the top edge. Even, soft light with no shadows or vignette, so the edges tile without a
+seam. Straight-on orthographic top view, no perspective. Photorealistic. No objects, no text, no letters.
+Wide format, about four times wider than tall.
+```

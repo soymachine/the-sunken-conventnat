@@ -389,3 +389,27 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); out
 .shopTip p { color: #2b1a0b; }
 .shopTip p.why { color: var(--wax); border-top-color: rgba(107, 82, 51, .35); }
 #tip { max-width: 230px; color: #2b1a0b; }
+
+/* ---------- desk v2: a wooden desk along the bottom, all orders in the hand, upright bottle ---------- */
+.bottom { background: linear-gradient(rgba(255, 214, 150, .1), transparent 30%, rgba(13, 11, 8, .5)), url('/ui/desk.jpg') center top / 720px repeat-x, #3b2716; border-top: 2px solid var(--brass); box-shadow: 0 -10px 24px rgba(0, 0, 0, .65); height: 118px; }
+.battle .say { position: absolute; left: 10px; bottom: 0; padding: 0; }
+.bottleBtn { flex-direction: row; align-items: flex-end; gap: 0; }
+.bottleBtn img { width: auto; height: 150px; transform: none; animation: none !important; }
+.bottleBtn:hover:not(:disabled) img, .bottleBtn[aria-expanded="true"] img { transform: none; }
+.bottleBtn span { writing-mode: vertical-rl; transform: rotate(180deg); padding-bottom: 12px; }
+.belt { bottom: -46px; }
+#fleet { display: flex; flex-direction: column; gap: 7px; margin-top: 2px; }
+#fleet li { display: block; padding: 0; cursor: help; }
+#fleet li .pips { gap: 3px; }
+#fleet li .pips i { width: 14px; height: 14px; }
+#fleet li.sunk .pips { opacity: .35; }
+#fleet li.pinned .pips i { box-shadow: 0 0 0 1.5px var(--wax); }
+/* Your fleet in one row: each ship's sections, a gap between ships. */
+#fleet { flex-direction: row; flex-wrap: wrap; gap: 6px 11px; align-items: center; }
+#fleet li .pips { gap: 2px; }
+#fleet li .pips i { width: 11px; height: 14px; }
+/* The glass and the seals keep the right-hand corner of the desk. */
+.battle .watch { position: absolute; right: 14px; bottom: 0; z-index: 4; }
+#fleet { flex-wrap: nowrap; gap: 8px; }
+#fleet li .pips { gap: 1.5px; }
+#fleet li .pips i { width: 8px; height: 14px; }
