@@ -60,6 +60,8 @@ export interface HudHandlers {
   mute(): boolean;
   quality(q: 'auto' | 'high' | 'low'): void;
   note(text: string): void;
+  /** Debug only (?debug=true): grant doubloons, seals or action points to try the cards. */
+  cheat?(what: 'gold' | 'seals' | 'ap'): void;
   letterRead(): void;
   buy(item: Item): void;
   endTurn(): void;
@@ -96,6 +98,7 @@ export class Hud {
         <div class="seg" data-pref="sound" role="radiogroup" aria-label="Sound"><button data-v="on" role="radio">On</button><button data-v="off" role="radio">Off</button></div>
         <p class="opt">3D quality</p>
         <div class="seg" data-pref="quality" role="radiogroup" aria-label="3D quality"><button data-v="auto" role="radio">Auto</button><button data-v="high" role="radio">High</button><button data-v="low" role="radio">Low</button></div>
+        <div class="debug" hidden><p class="opt">Debug</p><div class="seg three"><button type="button" data-cheat="gold">+100 gold</button><button type="button" data-cheat="seals">+3 seals</button><button type="button" data-cheat="ap">+3 AP</button></div></div>
         <p class="meta">Auto steps down by itself if the game runs slowly. Low drops shadows, glow and the print grade.</p>
       </div>
       <div class="shopTip" id="shopTip" role="tooltip" hidden></div>
@@ -150,6 +153,11 @@ export class Hud {
     menuBtn.onclick = (e) => { e.stopPropagation(); show(menu.hidden === true); };
     addEventListener('pointerdown', (e) => { if (!menu.hidden && !menu.contains(e.target as Node) && e.target !== menuBtn) show(false); });
     addEventListener('keydown', (e) => { if (e.key === 'Escape') { show(false); this.shipMenu(null); } });
+    // Debug tools, only when the address carries ?debug=true.
+    if (new URLSearchParams(location.search).get('debug') === 'true' && on.cheat) {
+      this.q<HTMLElement>('#menu .debug').hidden = false;
+      this.root.querySelectorAll<HTMLElement>('[data-cheat]').forEach((b) => (b.onclick = () => on.cheat!(b.dataset.cheat as 'gold' | 'seals' | 'ap')));
+    }
     menu.onclick = (e) => {
       const b = (e.target as Element).closest<HTMLElement>('.seg button');
       if (!b) return;

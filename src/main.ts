@@ -55,6 +55,19 @@ const hud = new Hud({
   mode: (m) => { sfx.play('click'); setMode(m); },
   mute: () => sfx.toggle(),
   quality: (q) => scene.setQuality(q),
+  // Debug only: changes this browser's view of the game, for trying cards; never use it in a real match.
+  cheat: (what) => {
+    // Both copies of the game must agree, so this only works against the machine (whose copy lives here too).
+    const bot = (session as { bot?: Client } | null)?.bot;
+    if (!bot) { hud.log('Debug tools work only against the machine.', 'bad'); return; }
+    for (const pub of [c.pub, bot.pub]) {
+      if (what === 'gold') pub.sides[c.me].doubloons += 100;
+      if (what === 'seals') pub.sides[c.me].seals += 3;
+      if (what === 'ap' && pub.current === c.me) pub.ap += 3;
+    }
+    hud.log(`Debug: ${what === 'gold' ? '+100 doubloons' : what === 'seals' ? '+3 seals' : '+3 action points'}.`);
+    refresh();
+  },
   note: (text) => { if (!c.note(text)) hud.log('One bottle a turn, and only on your own turn.', 'bad'); },
   letterRead: () => scene.clearBottles(),
   buy: (item) => { if (c.buy(item)) setMode(item === 'winds' ? mode : item); },

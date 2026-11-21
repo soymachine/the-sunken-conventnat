@@ -442,3 +442,6 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); out
 .glass img { height: 150px; }
 .bottom::before { background: linear-gradient(rgba(13, 11, 8, .5), transparent 40%, rgba(255, 214, 150, .05)), url('/ui/desk.jpg') center top / 1216px auto repeat-x, #3b1a10; }
 .belt .ocard { transition: transform .35s cubic-bezier(.2, .8, .3, 1.15), box-shadow .3s, filter .25s; }
+
+.menu .seg.three { display: grid; grid-template-columns: 1fr 1fr 1fr; }
+.menu .debug .seg button { font-size: 9.5px; letter-spacing: .04em; }
