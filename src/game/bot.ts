@@ -2,8 +2,8 @@
 // opponent would: its own fleet and the public state.
 import { Client } from './engine';
 import { ITEMS, Item } from './powerups';
-import { SEASON, inStorm } from './engine';
-import { MAELSTROM_ROUND, N, Rnd, Ship, Way, ZONE, ahead, headingOf, inBoard, inZone, safe, shipCells, turned } from './rules';
+import { SEASON, inStorm, maelstromIn, roleOf } from './engine';
+import { FLEETS, MAELSTROM_ROUND, N, Rnd, Ship, Way, ZONE, ahead, becalmed, headingOf, inBoard, inZone, safe, shipCells, turned } from './rules';
 
 const WAYS: Way[] = ['right', 'left'];
 
@@ -47,6 +47,19 @@ function scoreGrid(c: Client, rnd: Rnd): number[][] {
     }
     const rk = c.pub.reckon;
     if (rk) { const age = round - rk.round; if (age <= 2) for (let y = 0; y < N; y++) for (let x = rk.col - 1; x <= rk.col + 1 + age * 2; x++) bump(x, y, 3 - age); }
+  }
+  // After a squall the ships it found have been driven a square downwind: look for them there.
+  for (const q of c.side.squalls ?? []) {
+    if (round - q.round > 3) continue;
+    const [fx, fy] = [[1, 0], [0, 1], [-1, 0], [0, -1]][q.dir];
+    for (const s of foe.shots) if (s.result !== 'miss' && !s.sunk && s.round <= q.round && round - s.round <= 4) { bump(s.x + fx, s.y + fy, 7); for (const [dx, dy] of NEIGH) bump(s.x + fx + dx, s.y + fy + dy, 2); }
+  }
+  // The Spymaster's soundings: an empty line is skipped, a busy one is worth a closer look.
+  for (const sd of foe.soundings ?? []) {
+    const age = round - sd.round;
+    if (age > 5) continue;
+    const v = sd.count === 0 ? -7 : Math.min(3, sd.count * 1.1) - age * 0.4;
+    for (let k = 0; k < N; k++) sd.axis === 'row' ? bump(k, sd.i, v) : bump(sd.i, k, v);
   }
   // No gun can be laid under the storm, and nothing floats in the drowned rim.
   for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (inStorm(c.pub, y) || !safe(c.pub.ring, x, y)) score[y][x] = -1000;
@@ -98,6 +111,8 @@ export function botAct(c: Client, rnd: Rnd = Math.random): boolean {
   const lead = best.v >= 3.5;
   const clamp = (v: number) => Math.min(N - 2, Math.max(1, v));
   if (lead && c.canKraken()) return c.kraken(clamp(best.x), clamp(best.y));
+  const cmdAct = commander(c, rnd, best, lead);
+  if (cmdAct !== null) return cmdAct;
 
   // The maelstrom is coming: bring ships in from the rim before it takes them.
   if (p.mode === 'classic' && p.round >= MAELSTROM_ROUND - 3 && p.ap >= 2) {
@@ -149,6 +164,51 @@ export function botAct(c: Client, rnd: Rnd = Math.random): boolean {
     }
   }
   return c.attack('shot', best.x, best.y) || c.endTurn();
+}
+
+/** The machine's use of its commander's power, or null when it has nothing to do with it now. */
+function commander(c: Client, rnd: Rnd, best: { x: number; y: number; v: number }, lead: boolean): boolean | null {
+  const p = c.pub, me = c.side, foe = c.foeSide;
+  if (me.cmd === 'tidewarden' && c.canBind()) {
+    // Hold the sea back while its own ships are on the rim; hurry it on when it is ahead and safe.
+    const left = maelstromIn(p)!;
+    const exposed = c.ships.filter((s) => !s.sunk).reduce((a, s) => a + shipCells(s).filter(([x, y], i) => !s.hits[i] && !safe(p.ring + 1, x, y)).length, 0);
+    const mine = c.ships.reduce((a, s) => a + (s.sunk ? 0 : s.hits.filter((h) => !h).length), 0);
+    const theirs = FLEETS[roleOf(p, c.foe)].reduce((a, f) => a + f.len, 0) - foe.shots.filter((s) => s.result === 'hit').length;
+    if (left <= 2 && exposed > 0) return c.bind(true);
+    if (exposed === 0 && mine > theirs + 1) return c.bind(false);
+  }
+  if (me.cmd === 'stormcaller') {
+    // Free a square-rigged ship caught in irons by calling the wind her way.
+    if (c.canGale() && p.ap >= 2) {
+      const stuck = c.ships.find((s) => !s.sunk && (s.kind === 'line' || s.kind === 'frigate') && (becalmed(s, p.wind) ?? '').includes('into the wind'));
+      if (stuck) return c.gale(headingOf(stuck));
+    }
+    // Just before a ring closes, drive the enemy towards the edge nearest what is known of them.
+    if (c.canSquall() && maelstromIn(p) === 1) {
+      const live = foe.shots.filter((s) => s.result !== 'miss' && !s.sunk);
+      const cx = live.length ? live.reduce((a, s) => a + s.x, 0) / live.length : rnd() * N, cy = live.length ? live.reduce((a, s) => a + s.y, 0) / live.length : rnd() * N;
+      const d = [N - 1 - cx, N - 1 - cy, cx, cy]; // distance to the east, south, west and north edges
+      return c.squall(d.indexOf(Math.min(...d)));
+    }
+  }
+  if (me.cmd === 'spymaster' && !lead && c.canSound()) {
+    // Sound the row or column with the most water not yet shot at or sounded lately.
+    let pick = { axis: 'row' as 'row' | 'col', i: 0, v: -1 };
+    for (const axis of ['row', 'col'] as const) for (let i = p.ring; i < N - p.ring; i++) {
+      if ((foe.soundings ?? []).some((s) => s.axis === axis && s.i === i && p.round - s.round <= 6)) continue;
+      let v = rnd();
+      for (let k = p.ring; k < N - p.ring; k++) { const [x, y] = axis === 'row' ? [k, i] : [i, k]; if (!foe.shots.some((s) => s.x === x && s.y === y)) v++; }
+      if (v > pick.v) pick = { axis, i, v };
+    }
+    return c.sound(pick.axis, pick.i);
+  }
+  if (me.cmd === 'gunmaster' && lead && c.canDouble()) {
+    // Double-shot along a line of hits: the second ball flies on past the square aimed at.
+    const hit = foe.shots.find((s) => s.result === 'hit' && !s.sunk && p.round - s.round <= 2 && Math.abs(s.x - best.x) + Math.abs(s.y - best.y) === 1);
+    if (hit) return c.double(best.x, best.y, best.x - hit.x, best.y - hit.y);
+  }
+  return null;
 }
 
 /** Keep a bot playing. With `delay` null it acts synchronously (tests); otherwise it paces itself. */

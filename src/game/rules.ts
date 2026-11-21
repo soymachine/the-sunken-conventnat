@@ -148,11 +148,11 @@ export const WIND_NAMES = ['east', 'south', 'west', 'north'] as const;
 const RIG: Record<Kind, 'square' | 'gaff' | 'steam'> = { line: 'square', frigate: 'square', merchant: 'gaff', schooner: 'gaff', cutter: 'gaff', ironclad: 'steam' };
 
 /** How far a ship may sail ahead this turn, before anything blocks her: wind and flooding count. */
-export function sailMax(s: Ship, wind?: number): number {
+export function sailMax(s: Ship, wind?: number, fair = true): number {
   let n = s.kind === 'schooner' ? 2 : 1;
   if (wind !== undefined && wind >= 0 && RIG[s.kind] !== 'steam') {
     const h = headingOf(s);
-    if (h === wind) n += 1;
+    if (h === wind) n += fair ? 1 : 0;
     else if ((h + 2) % 4 === wind) n = RIG[s.kind] === 'gaff' ? Math.max(1, n - 1) : 0;
   }
   if (flooded(s) > 0) n -= 1;
@@ -239,10 +239,10 @@ export const bowCell = (s: Placed & Pick<Ship, 'rev'>): XY => { const cs = shipC
 export const ahead = <T extends Placed & Pick<Ship, 'rev'>>(s: T, k: number): T => { const [fx, fy] = HEAD[headingOf(s)]; return { ...s, x: s.x + fx * k, y: s.y + fy * k }; };
 
 /** How many cells a ship may sail ahead in one action (0 when blocked). Ships cannot back up. */
-export function sailReach(ships: Ship[], id: number, delta: 1 | -1 = 1, wind?: number): number {
+export function sailReach(ships: Ship[], id: number, delta: 1 | -1 = 1, wind?: number, fair = true): number {
   const s = ships.find((q) => q.id === id);
   if (!s || s.sunk || s.chained || delta !== 1) return 0;
-  const max = sailMax(s, wind), [fx, fy] = HEAD[headingOf(s)];
+  const max = sailMax(s, wind, fair), [fx, fy] = HEAD[headingOf(s)];
   let n = 0;
   for (let k = 1; k <= max; k++) {
     if (!fits(ships, { ...s, x: s.x + fx * k, y: s.y + fy * k }, s.id)) break;
@@ -252,8 +252,8 @@ export function sailReach(ships: Ship[], id: number, delta: 1 | -1 = 1, wind?: n
 }
 
 /** Sail a ship ahead. Returns the debris a damaged ship leaves behind, or null if illegal. */
-export function sailShip(ships: Ship[], id: number, delta: 1 | -1, steps: number, wind?: number): XY[] | null {
-  if (steps < 1 || steps > sailReach(ships, id, delta, wind)) return null;
+export function sailShip(ships: Ship[], id: number, delta: 1 | -1, steps: number, wind?: number, fair = true): XY[] | null {
+  if (steps < 1 || steps > sailReach(ships, id, delta, wind, fair)) return null;
   const s = ships.find((q) => q.id === id)!, [fx, fy] = HEAD[headingOf(s)];
   const debris: XY[] = [];
   for (let k = 0; k < steps; k++) {

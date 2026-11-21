@@ -4,7 +4,7 @@
 import { Order, pickOrder } from './orders';
 import { ITEMS, Item, MAX_ITEMS, START_DOUBLOONS } from './powerups';
 import {
-  AP_PER_TURN, CellResult, Dir, KRAKEN_SEALS, Kind, MAELSTROM_MAX_RING, MAELSTROM_ROUND, N, Revealed, Rnd, Role, Ship, XY, attackCells, countScan, inBoard, inKraken, inZone, legalPlacement, peekFits, safe, peekShips, randomFleet, zoneFits,
+  headingOf, AP_PER_TURN, CellResult, Dir, KRAKEN_SEALS, Kind, MAELSTROM_MAX_RING, MAELSTROM_ROUND, N, Revealed, Rnd, Role, Ship, XY, attackCells, countScan, inBoard, inKraken, inZone, legalPlacement, peekFits, safe, peekShips, randomFleet, zoneFits,
   repairShip, rimCells, resolveAttack, driftFleet, sailReach, sailShip, shipAt, shipCells, turnShip, canTurnShip, Way,
 } from './rules';
 
@@ -14,13 +14,24 @@ export const NOTE_MAX = 80;
 /** Rounds the Admiral has to bring the cargo home. */
 export const SEASON = 12;
 export const CRATES = 3;
-export type AttackSrc = 'shot' | 'broadside' | 'chain' | 'fireship';
+export type AttackSrc = 'shot' | 'broadside' | 'chain' | 'fireship' | 'double';
+/** Commanders (an option on Classic, see docs/commanders.md): each has one power and one drawback. */
+export type Cmd = 'tidewarden' | 'stormcaller' | 'spymaster' | 'gunmaster' | 'deepspeaker';
+export const CMDS: Cmd[] = ['tidewarden', 'stormcaller', 'spymaster', 'gunmaster', 'deepspeaker'];
+/** How many times each commander's main power may be used in a battle (cooldowns are in the reducer). */
+export const SQUALL_AP = 1, GALE_EVERY = 2, SOUND_EVERY = 5, SOUND_AP = 0;
+export const CMD_USES: Record<Cmd, number> = { tidewarden: 2, stormcaller: 3, spymaster: 99, gunmaster: 3, deepspeaker: 99 };
 export type Placement = Pick<Ship, 'id' | 'x' | 'y' | 'dir' | 'rev'>;
 /** Private record of a captain's hidden moves, revealed after the battle for verification. */
 export type Act = { k: 'sail'; id: number; delta: 1 | -1; steps: number } | { k: 'turn'; id: number; way: Way } | { k: 'repair'; id: number; idx: number };
 
 export type Body =
-  | { t: 'ready'; hash: string; name: string }
+  | { t: 'ready'; hash: string; name: string; cmd?: Cmd }
+  | { t: 'bind'; delay: boolean }
+  | { t: 'squall'; dir: number }
+  | { t: 'gale'; wind: number }
+  | { t: 'sound'; axis: 'row' | 'col'; i: number }
+  | { t: 'soundResult'; axis: 'row' | 'col'; i: number; count: number }
   | { t: 'attack'; src: AttackSrc; cells: XY[] }
   | { t: 'result'; results: CellResult[]; chained: boolean; lost: boolean; kraken?: true }
   | { t: 'kraken'; x: number; y: number }
@@ -65,6 +76,15 @@ export interface SidePub {
   seals: number;
   items: Item[];
   revealed?: Ship[];
+  /** This captain's commander, its main power's uses, and the rounds its cooldown powers were last used. */
+  cmd?: Cmd;
+  cmdUses?: number;
+  galeAt?: number;
+  soundAt?: number;
+  /** Soundings answered about this captain's fleet: ships with a section in a row or column. */
+  soundings?: { axis: 'row' | 'col'; i: number; count: number; round: number }[];
+  /** Squalls this captain has sent against the enemy fleet (public: everyone saw the sky). */
+  squalls?: { dir: number; round: number }[];
 }
 export interface Treasure { side: 0 | 1; x: number; y: number; value: number; kind: 'gold' | 'seal' }
 export interface Pub {
@@ -101,7 +121,9 @@ export interface Pub {
   /** Column of the merchantman as revealed by Dead Reckoning. */
   reckon?: { col: number; round: number };
   /** The Kraken, while it holds a patch of `side`'s waters. `left` strikes remain. */
-  kraken?: { side: 0 | 1; x: number; y: number; left: number; struck?: XY[] };
+  kraken?: { side: 0 | 1; x: number; y: number; left: number; struck?: XY[]; linger?: number };
+  /** The round the maelstrom swallows its next ring (default: round 20, then every other round). */
+  nextRing?: number;
   /** Cells the Kraken is striking right now, awaiting the defender's answer. */
   strike?: XY[];
   /** A storm front over `rows` rows from `row` (three, or one once the maelstrom has shrunk the charts): no shots or spyglasses there. */
@@ -117,16 +139,23 @@ export interface Pub {
  *  outside the classic battle. */
 export function maelstromIn(p: Pub): number | null {
   if (p.mode !== 'classic' || p.ring >= MAELSTROM_MAX_RING || p.phase === 'over') return null;
+  if (p.nextRing !== undefined) return Math.max(1, p.nextRing - p.round);
   let next = Math.max(MAELSTROM_ROUND, p.round + 1);
   if (next % 2) next++;
   return next - p.round;
 }
 export const inStorm = (p: Pub, y: number) => !!p.storm && y >= p.storm.row && y < p.storm.row + (p.storm.rows ?? 3);
+/** Seals the Kraken asks of this captain: two for the Deepspeaker, three for anyone else. */
+export const krakenSeals = (s: SidePub) => (s.cmd === 'deepspeaker' ? 2 : KRAKEN_SEALS);
+/** What the quartermaster charges this captain: the Spymaster pays more for glasses. */
+export const price = (s: SidePub, it: Item) => ITEMS[it].price + (s.cmd === 'spymaster' && (it === 'spyglass' || it === 'longglass') ? 10 : 0);
+/** Items a commander forswears: no glasses for the Gunmaster, no currents for the Tidewarden. */
+export const mayBuy = (s: SidePub, it: Item) => !(s.cmd === 'gunmaster' && it === 'longglass') && !(s.cmd === 'tidewarden' && it === 'current') && !(s.cmd === 'stormcaller' && it === 'winds');
 /** Water the maelstrom has not yet swallowed: the only place worth a shot. */
 export const afloat = (p: Pub, x: number, y: number) => inBoard(x, y) && safe(p.ring, x, y);
 export const roleOf = (p: Pub, who: 0 | 1): Role => (p.admiral === null ? 'classic' : p.admiral === who ? 'admiral' : 'corsair');
 
-const COST: Record<AttackSrc, number> = { shot: 1, broadside: 2, chain: 2, fireship: 2 };
+const COST: Record<AttackSrc, number> = { shot: 1, broadside: 2, chain: 2, fireship: 2, double: 2 };
 export const attackCost = (src: AttackSrc) => COST[src];
 
 export function newPub(seed: number, mode: Mode = 'classic'): Pub {
@@ -200,7 +229,7 @@ function applyResults(p: Pub, who: 0 | 1, results: CellResult[], award: boolean)
   for (const r of results) {
     mine.shots = mine.shots.filter((s) => s.x !== r.x || s.y !== r.y);
     mine.shots.push({ x: r.x, y: r.y, result: r.r === 'miss' ? 'miss' : r.r === 'clang' ? 'clang' : 'hit', round: p.round });
-    if (award && (r.r === 'hit' || r.r === 'sunk')) attacker.doubloons += 5;
+    if (award && (r.r === 'hit' || r.r === 'sunk')) attacker.doubloons += attacker.cmd === 'gunmaster' ? 10 : 5;
     if (r.cargo && p.cargo > 0) { p.cargo--; if (award) attacker.doubloons += 30; }
     if (r.r === 'sunk' && r.ship) {
       if (award) attacker.doubloons += 20;
@@ -228,6 +257,10 @@ export function reduce(p: Pub, m: Msg): boolean {
   if (m.t === 'ready') {
     if (p.phase !== 'placement' || mine.ready) return false;
     mine.ready = true; mine.hash = m.hash; mine.name = m.name;
+    if (m.cmd && p.mode === 'classic' && CMDS.includes(m.cmd)) {
+      mine.cmd = m.cmd; mine.cmdUses = 0;
+      if (m.cmd === 'spymaster') mine.doubloons = 0; // the Spymaster spends on informers, not on stores
+    }
     if (p.sides[0].ready && p.sides[1].ready) {
       p.phase = 'battle';
       for (const s of [0, 1, 0, 1] as const) spawnTreasure(p, s);
@@ -243,6 +276,12 @@ export function reduce(p: Pub, m: Msg): boolean {
     return true;
   }
 
+  if (m.t === 'soundResult') {
+    if (!p.pending || m.by === p.current) return false;
+    p.pending = false;
+    (mine.soundings ??= []).push({ axis: m.axis, i: m.i, count: m.count, round: p.round });
+    return true;
+  }
   if (m.t === 'result' || m.t === 'scanResult' || m.t === 'powerResult' || m.t === 'peekResult') {
     if (!p.pending || m.by === p.current) return false;
     p.pending = false;
@@ -251,7 +290,7 @@ export function reduce(p: Pub, m: Msg): boolean {
     // The answer belongs to the captain who looked (the one whose turn it is).
     if (m.t === 'peekResult') { (p.sides[p.current].peeks ??= []).push({ x: m.x, y: m.y, ships: m.ships || [], fog: !!m.fog, round: p.round }); return true; }
     applyResults(p, m.by, m.results || [], true);
-    if (p.strike) { p.strike = undefined; if (p.kraken && p.kraken.left <= 0) p.kraken = undefined; }
+    if (p.strike) { p.strike = undefined; if (p.kraken && p.kraken.left <= 0 && !p.kraken.linger) p.kraken = undefined; }
     if (m.lost && (p.phase as Pub['phase']) !== 'over') { p.phase = 'over'; p.winner = foe; p.reason = 'fleet'; }
     return true;
   }
@@ -274,11 +313,13 @@ export function reduce(p: Pub, m: Msg): boolean {
   };
   switch (m.t) {
     case 'attack':
+      if (m.src === 'double' && (mine.cmd !== 'gunmaster' || (mine.cmdUses ?? 0) >= CMD_USES.gunmaster)) return false;
       if (!m.cells?.length || m.cells.some(([x, y]) => inStorm(p, y) || !afloat(p, x, y)) || !spend(COST[m.src], m.src === 'fireship' ? 'fireship' : undefined)) return false;
+      if (m.src === 'double') mine.cmdUses = (mine.cmdUses ?? 0) + 1;
       p.pending = true;
       return true;
     case 'peek':
-      if (!peekFits(m.x, m.y) || inStorm(p, m.y) || inStorm(p, m.y + 1) || !spend(ITEMS.longglass.ap, 'longglass')) return false;
+      if (!peekFits(m.x, m.y) || inStorm(p, m.y) || inStorm(p, m.y + 1) || mine.cmd === 'gunmaster' || !spend(ITEMS.longglass.ap, 'longglass')) return false;
       p.pending = true;
       return true;
     case 'scan':
@@ -287,7 +328,7 @@ export function reduce(p: Pub, m: Msg): boolean {
       return true;
     case 'pact': {
       // A blood pact: a damaged ship is given to the deep, and the deep pays two seals (its toll and the pact).
-      if ((p.pacts ??= [false, false])[m.by] || !m.ship || !spend(1)) return false;
+      if ((p.pacts ??= [false, false])[m.by] || !m.ship || mine.cmd === 'deepspeaker' || !spend(1)) return false;
       p.pacts[m.by] = true;
       mine.seals += 2;
       mine.sunk.push(m.ship);
@@ -295,6 +336,29 @@ export function reduce(p: Pub, m: Msg): boolean {
     }
     case 'current':
       if (!(m.dir >= 0 && m.dir <= 3) || !spend(ITEMS.current.ap, 'current')) return false;
+      return true;
+    case 'bind': {
+      // The Tidewarden moves the maelstrom's next ring: two rounds later, or one sooner. Twice, from round 14.
+      const left = maelstromIn(p);
+      if (mine.cmd !== 'tidewarden' || (mine.cmdUses ?? 0) >= CMD_USES.tidewarden || p.round < 14 || left === null || !spend(2)) return false;
+      const next = p.round + left;
+      p.nextRing = m.delay ? next + 2 : Math.max(p.round + 1, next - 1);
+      mine.cmdUses = (mine.cmdUses ?? 0) + 1;
+      return true;
+    }
+    case 'squall':
+      // The Stormcaller drives the enemy fleet a square; its captain moves the hidden ships (see Client.react).
+      if (mine.cmd !== 'stormcaller' || (mine.cmdUses ?? 0) >= CMD_USES.stormcaller || !(m.dir >= 0 && m.dir <= 3) || !spend(SQUALL_AP)) return false;
+      mine.cmdUses = (mine.cmdUses ?? 0) + 1;
+      (mine.squalls ??= []).push({ dir: m.dir, round: p.round });
+      return true;
+    case 'gale':
+      if (mine.cmd !== 'stormcaller' || p.round - (mine.galeAt ?? -99) < GALE_EVERY || !(m.wind >= 0 && m.wind <= 3) || !spend(1)) return false;
+      mine.galeAt = p.round; p.wind = m.wind;
+      return true;
+    case 'sound':
+      if (mine.cmd !== 'spymaster' || p.round - (mine.soundAt ?? -99) < SOUND_EVERY || !(m.i >= 0 && m.i < N) || !spend(SOUND_AP)) return false;
+      mine.soundAt = p.round; p.pending = true;
       return true;
     case 'move': {
       if (!spend(1)) return false;
@@ -316,8 +380,8 @@ export function reduce(p: Pub, m: Msg): boolean {
     }
     case 'buy': {
       const it = ITEMS[m.item];
-      if (!it || mine.doubloons < it.price || mine.items.length >= MAX_ITEMS) return false;
-      mine.doubloons -= it.price;
+      if (!it || mine.doubloons < price(mine, m.item) || mine.items.length >= MAX_ITEMS || !mayBuy(mine, m.item)) return false;
+      mine.doubloons -= price(mine, m.item);
       mine.items.push(m.item);
       return true;
     }
@@ -328,9 +392,10 @@ export function reduce(p: Pub, m: Msg): boolean {
     case 'repair':
       return spend(ITEMS.shipwright.ap, 'shipwright');
     case 'kraken':
-      if (!afloat(p, m.x, m.y) || mine.seals < KRAKEN_SEALS || p.kraken || !spend(3)) return false;
-      mine.seals -= KRAKEN_SEALS;
-      p.kraken = { side: foe, x: m.x, y: m.y, left: 2 };
+      if (!afloat(p, m.x, m.y) || mine.seals < krakenSeals(mine) || p.kraken || !spend(3)) return false;
+      mine.seals -= krakenSeals(mine);
+      // The Deepspeaker's Kraken strikes once, but holds its patch a turn longer.
+      p.kraken = mine.cmd === 'deepspeaker' ? { side: foe, x: m.x, y: m.y, left: 1, linger: 2 } : { side: foe, x: m.x, y: m.y, left: 2 };
       strike(p);
       return true;
     case 'power':
@@ -360,7 +425,10 @@ export function reduce(p: Pub, m: Msg): boolean {
         if (p.storm && p.round > p.storm.until) p.storm = undefined;
         if (p.round % 5 === 0) tide(p);
         // From round 20 the maelstrom swallows the outer ring of both charts every other round.
-        if (p.mode === 'classic' && p.round >= MAELSTROM_ROUND && p.round % 2 === 0 && p.ring < MAELSTROM_MAX_RING) p.ring++;
+        if (p.mode === 'classic' && p.ring < MAELSTROM_MAX_RING) {
+          const due = p.nextRing ?? (p.round >= MAELSTROM_ROUND && p.round % 2 === 0 ? p.round : Infinity);
+          if (p.round >= due) { p.ring++; p.nextRing = p.round + 2; }
+        }
         // A storm front: three rows on the open sea, a single row once the maelstrom has shrunk the charts,
         // and always over water that is still afloat.
         if (p.round % 4 === 0) {
@@ -369,7 +437,11 @@ export function reduce(p: Pub, m: Msg): boolean {
         }
       }
       // As its victim's turn ends the Kraken strikes a second time, then lets go.
-      if (p.kraken && p.kraken.side === m.by) { if (p.kraken.left > 0) strike(p); else p.kraken = undefined; }
+      if (p.kraken && p.kraken.side === m.by) {
+        if (p.kraken.left > 0) strike(p);
+        else if (p.kraken.linger && --p.kraken.linger > 0) { /* the Deepspeaker's Kraken holds on another turn */ }
+        else p.kraken = undefined;
+      }
       return true;
   }
   return false;
@@ -405,6 +477,8 @@ export class Client {
   private escort = false;
   /** How many times the merchantman has moved this turn. */
   laden = 0;
+  /** The commander this captain chose (Classic, optional). */
+  cmd?: Cmd;
   /** Rings of the maelstrom this client has already answered for. */
   private ringSeen = 0;
 
@@ -468,7 +542,15 @@ export class Client {
       this.send({ t: 'drop', id: d.id, x: at[0], y: at[1] });
     }
     if (m.t === 'ready' && p.phase === 'battle') this.newOrder();
-    if (m.t === 'attack' && theirs) {
+    if (m.t === 'attack' && theirs && m.src === 'double') {
+      // Double-shotted: the second ball flies on only if the first one hits.
+      const first = resolveAttack(this.ships, m.cells.slice(0, 1), false);
+      const hit = first.results.some((c) => c.r === 'hit' || c.r === 'sunk' || c.r === 'flood');
+      const second = hit && m.cells[1] ? resolveAttack(this.ships, m.cells.slice(1, 2), false) : null;
+      const results = [...first.results, ...(second?.results ?? [])], lost = this.ships.every((s) => s.sunk);
+      if (results.some((c) => c.r === 'hit' || c.r === 'sunk')) { this.hurt = true; if (this.order?.id === 'unscathed') this.order.n = 0; }
+      this.send({ t: 'result', results, chained: false, lost });
+    } else if (m.t === 'attack' && theirs) {
       const { shielded, ...r } = resolveAttack(this.ships, m.cells, m.src === 'chain', this.escort);
       if (shielded) this.escort = false;
       if (r.results.some((c) => c.r === 'hit' || c.r === 'sunk')) { this.hurt = true; if (this.order?.id === 'unscathed') this.order.n = 0; }
@@ -478,6 +560,15 @@ export class Client {
       const cells: XY[] = [[m.x, m.y], [m.x + 1, m.y], [m.x, m.y + 1], [m.x + 1, m.y + 1]];
       const fog = this.side.fogs.some((f) => cells.some(([a, b]) => inZone(f.x, f.y, a, b)));
       this.send({ t: 'peekResult', x: m.x, y: m.y, ships: fog ? [] : peekShips(this.ships, m.x, m.y), fog });
+    }
+    if (m.t === 'squall' && theirs) {
+      // A squall drives my fleet a square; ships held, blocked, or that would enter drowned water stay put.
+      const [fx, fy] = [[1, 0], [0, 1], [-1, 0], [0, -1]][m.dir];
+      driftFleet(this.ships, m.dir, (s) => this.held(s.id) || shipCells({ ...s, x: s.x + fx, y: s.y + fy }).some(([x, y]) => !safe(p.ring, x, y)));
+    }
+    if (m.t === 'sound' && theirs) {
+      const count = this.ships.filter((s) => !s.sunk && shipCells(s).some(([x, y]) => (m.axis === 'row' ? y : x) === m.i)).length;
+      this.send({ t: 'soundResult', axis: m.axis, i: m.i, count });
     }
     if (m.t === 'scan' && theirs) {
       const fogged = this.side.fogs.some((f) => inZone(f.x, f.y, m.x, m.y));
@@ -525,11 +616,11 @@ export class Client {
     this.inFlight++;
     const hash = await commitHash(this.initial, this.salt);
     this.inFlight--;
-    this.send({ t: 'ready', hash, name: this.name });
+    this.send({ t: 'ready', hash, name: this.name, ...(this.cmd ? { cmd: this.cmd } : {}) });
     return true;
   }
 
-  attack(src: AttackSrc, x: number, y: number, dir: Dir = 'h'): boolean {
+  attack(src: Exclude<AttackSrc, 'double'>, x: number, y: number, dir: Dir = 'h'): boolean {
     if (!afloat(this.pub, x, y) || !this.can(COST[src]) || inStorm(this.pub, y)) return false;
     if (src === 'broadside' && !this.alive('line')) return false;
     if (src === 'chain' && !this.alive('frigate')) return false;
@@ -547,6 +638,7 @@ export class Client {
 
   /** Look through the Long Glass at the 2×2 patch of enemy water whose top-left square is (x, y). */
   peek(x: number, y: number): boolean {
+    if (this.side.cmd === 'gunmaster') return false;
     if (!peekFits(x, y) || !this.can(ITEMS.longglass.ap) || !this.has('longglass') || inStorm(this.pub, y) || inStorm(this.pub, y + 1)) return false;
     this.send({ t: 'peek', x, y });
     return true;
@@ -583,10 +675,17 @@ export class Client {
     const k = this.pub.kraken, s = this.ships.find((q) => q.id === id);
     return !!k && k.side === this.me && !!s && !s.sunk && shipCells(s).some(([x, y]) => inKraken(k.x, k.y, x, y));
   }
-  reach(id: number, delta: 1 | -1 = 1) { return this.can(1) && !this.held(id) ? sailReach(this.ships, id, delta, this.pub.wind) : 0; }
+  /** Every ship gains a square from a fair wind. */
+  private get fair() { return true; }
+  /** The wind this captain's ships feel: the Stormcaller's are never caught in irons (a head wind counts as calm). */
+  windFor(id: number) {
+    const w = this.pub.wind, s = this.ships.find((q) => q.id === id);
+    return this.side.cmd === 'stormcaller' && s && w !== undefined && w >= 0 && (headingOf(s) + 2) % 4 === w ? -1 : w;
+  }
+  reach(id: number, delta: 1 | -1 = 1) { return this.can(1) && !this.held(id) ? sailReach(this.ships, id, delta, this.windFor(id), this.fair) : 0; }
   sail(id: number, delta: 1 | -1, steps = this.reach(id, delta)): boolean {
     if (!this.can(1) || this.held(id)) return false;
-    const from = this.middle(id), debris = sailShip(this.ships, id, delta, steps, this.pub.wind);
+    const from = this.middle(id), debris = sailShip(this.ships, id, delta, steps, this.windFor(id), this.fair);
     if (!debris) return false;
     this.acts.push({ k: 'sail', id, delta, steps });
     this.moved(id, 'sail', debris, from);
@@ -604,7 +703,7 @@ export class Client {
 
   /** A blood pact needs a damaged ship that is not the merchantman nor the last afloat, once a battle. */
   canPact(id?: number): boolean {
-    if (!this.can(1) || this.pub.pacts?.[this.me]) return false;
+    if (!this.can(1) || this.pub.pacts?.[this.me] || this.side.cmd === 'deepspeaker') return false;
     const afloat = this.ships.filter((s) => !s.sunk);
     const ok = (s: Ship) => !s.sunk && s.kind !== 'merchant' && s.hits.some(Boolean) && afloat.length > 1;
     return id === undefined ? afloat.some(ok) : afloat.some((s) => s.id === id && ok(s));
@@ -625,7 +724,7 @@ export class Client {
     return true;
   }
 
-  canBuy(item: Item) { return this.can() && this.side.doubloons >= ITEMS[item].price && this.side.items.length < MAX_ITEMS; }
+  canBuy(item: Item) { return this.can() && this.side.doubloons >= price(this.side, item) && this.side.items.length < MAX_ITEMS && mayBuy(this.side, item); }
   buy(item: Item): boolean { if (!this.canBuy(item)) return false; this.send({ t: 'buy', item }); return true; }
 
   fog(x: number, y: number): boolean {
@@ -652,7 +751,27 @@ export class Client {
   }
 
   /** Three seals and three action points wake the Kraken under a 3×3 patch of enemy water. */
-  canKraken() { return this.can(3) && this.side.seals >= KRAKEN_SEALS && !this.pub.kraken; }
+  canKraken() { return this.can(3) && this.side.seals >= krakenSeals(this.side) && !this.pub.kraken; }
+
+  /* ---------- commanders ---------- */
+  private uses() { return this.side.cmdUses ?? 0; }
+  canBind() { return this.side.cmd === 'tidewarden' && this.uses() < CMD_USES.tidewarden && this.pub.round >= 14 && maelstromIn(this.pub) !== null && this.can(2); }
+  bind(delay: boolean): boolean { if (!this.canBind()) return false; this.send({ t: 'bind', delay }); return true; }
+  canSquall() { return this.side.cmd === 'stormcaller' && this.uses() < CMD_USES.stormcaller && this.can(SQUALL_AP); }
+  squall(dir: number): boolean { if (!this.canSquall() || !(dir >= 0 && dir <= 3)) return false; this.send({ t: 'squall', dir }); return true; }
+  canGale() { return this.side.cmd === 'stormcaller' && this.pub.round - (this.side.galeAt ?? -99) >= GALE_EVERY && this.can(1); }
+  gale(wind: number): boolean { if (!this.canGale() || !(wind >= 0 && wind <= 3)) return false; this.send({ t: 'gale', wind }); return true; }
+  canSound() { return this.side.cmd === 'spymaster' && this.pub.round - (this.side.soundAt ?? -99) >= SOUND_EVERY && this.can(Math.max(1, SOUND_AP)); }
+  sound(axis: 'row' | 'col', i: number): boolean { if (!this.canSound() || !(i >= 0 && i < N)) return false; this.send({ t: 'sound', axis, i }); return true; }
+  canDouble() { return this.side.cmd === 'gunmaster' && this.uses() < CMD_USES.gunmaster && this.can(2); }
+  /** Double-shotted: fire at (x, y); if it hits, a second ball strikes one square further by (dx, dy). */
+  double(x: number, y: number, dx: number, dy: number): boolean {
+    if (!this.canDouble() || !afloat(this.pub, x, y) || inStorm(this.pub, y)) return false;
+    const cells: XY[] = [[x, y]];
+    if (afloat(this.pub, x + dx, y + dy) && !inStorm(this.pub, y + dy)) cells.push([x + dx, y + dy]);
+    this.send({ t: 'attack', src: 'double', cells });
+    return true;
+  }
   kraken(x: number, y: number): boolean {
     if (!afloat(this.pub, x, y) || !this.canKraken()) return false;
     this.send({ t: 'kraken', x, y });

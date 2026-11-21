@@ -51,17 +51,18 @@ choosing what to make.
 
 > "Every sail on this sea answers to me."
 
-- **Power: Squall.** For 3 AP, the enemy's whole fleet is driven **one square** in a direction the Stormcaller
+- **Power: Squall.** For 1 AP, the enemy's whole fleet is driven **one square** in a direction the Stormcaller
   chooses, as a Sea Current would push it.
   - Ships blocked by the edge or another ship stay put.
   - A ship is never pushed into drowned water.
-  - Twice per battle.
+  - Three times per battle.
   - The enemy moves their own hidden ships, and the move is checked at the end.
 - **Second use of the same card:** for 1 AP, the Stormcaller may instead **choose the wind** for the current round.
-  - Once every four rounds.
+  - Once every two rounds.
   - Never a flat calm.
-- **Drawback:** the Stormcaller's own square-rigged ships also lose a square when sailing **across** the wind,
-  not only into it.
+- **Passive:** the Stormcaller's ships are never caught in irons. A head wind counts as a calm for them.
+- **Drawback:** the Stormcaller may not buy **Trade Winds**. (The first idea, losing a square across the wind, was
+  too heavy in the simulations.)
 - **Why it is fair:** a squall pushes ships but does not show where they are. It is strong only after scans or
   hits have given the Stormcaller a picture of the enemy's waters.
 
@@ -69,10 +70,10 @@ choosing what to make.
 
 > "Count the masts before you count the guns."
 
-- **Power: Soundings.** For 1 AP, the Spymaster learns how many enemy **ships** (not sections) have at least one
-  section in a chosen **row or column**.
+- **Power: Soundings.** For no AP, the Spymaster learns how many enemy **ships** (not sections) have at least
+  one section in a chosen **row or column**.
   - A fog bank hides it, as it hides a spyglass.
-  - Once every three rounds.
+  - Once every five rounds.
 - **Passive:** the Spymaster sees the round number each enemy treasure was set down, which helps guess where
   enemy ships sailed.
 - **Drawback:**
@@ -89,11 +90,11 @@ choosing what to make.
   - The captain picks the direction when aiming.
   - Three times per battle.
 - **Passive:** a hit pays **10 doubloons** instead of 5.
-- **Drawback:** the Gunmaster can never use the **Long Glass** or the **Cutter's Glass**. Their gunners fire by
-  instinct, not by spyglass.
+- **Drawback:** the Gunmaster can never use the **Long Glass**. (With no glass at all he won only 37 % in the
+  simulations.)
 - **Why it is fair:**
   - the second shot only comes after a hit, so the power rewards good aim rather than replacing it;
-  - giving up scouting is a real cost on a 16 × 16 chart.
+  - giving up the Long Glass costs the surest way to find a ship's exact squares.
 
 ### 5. The Deepspeaker: priest of the covenant
 
@@ -113,6 +114,70 @@ choosing what to make.
 - **Power:** every wreck of a sunk ship (theirs or yours) yields treasure once a ship sails onto it.
 - **Drawback:** the Salvager's own sunk ships give the enemy that treasure too.
 - **Use:** an alternative if one of the five proves hard to balance.
+
+## Simulation results (the machine against itself)
+
+The five powers are now in the rules engine (`src/game/engine.ts`) and the machine knows how to use them
+(`src/game/bot.ts`). They are not offered in the game yet.
+
+- **The run:** `src/game/commanders.sim.test.ts` plays every pairing, including "no commander", 1,000 games
+  each, half from each seat: 21,000 games, about 3½ minutes.
+  ```bash
+  SIM=1 GAMES=1000 npx vitest run src/game/commanders.sim.test.ts
+  ```
+- **Noise:** with 1,000 games a result is good to about ±3 points.
+- **Result:** no game stalled; battles average 24–28 rounds.
+
+### What changed over seven passes
+
+1. **First pass:** the Gunmaster won only 37 % against a captain with no commander. With no glass at all he
+   could not find anything to double-shot. He keeps the spyglass and the Cutter's glass now, and gives up only
+   the Long Glass.
+2. **Stormcaller, still weak:**
+   - Squall went from 3 AP to 2, then to 1, and from two uses to three.
+   - Gale went from every four rounds to every two.
+   - The drawback "no square from a fair wind" became "may not buy Trade Winds".
+   - He gained a passive: his ships are never caught in irons (a head wind counts as a calm for them).
+   - The machine now looks for the ships a square downwind after a squall, as a person would.
+3. **Spymaster's soundings:**
+   - at 1 AP they cost a shot and lost games (44 %);
+   - free every two rounds they were too strong (63 % against the Tidewarden);
+   - they settle at **free, once every five rounds**.
+
+### Win rate of the row's commander against the column's (pass 7)
+
+|             | none | Tidewarden | Stormcaller | Spymaster | Gunmaster | Deepspeaker | average |
+|-------------|------|------------|-------------|-----------|-----------|-------------|---------|
+| none        | —    | 52 %       | 53 %        | 49 %      | 49 %      | 52 %        | 50.9 %  |
+| Tidewarden  | 48 % | —          | 53 %        | 42 %      | 48 %      | 50 %        | 48.2 %  |
+| Stormcaller | 47 % | 47 %       | —           | 40 %      | 42 %      | 48 %        | 44.9 %  |
+| Spymaster   | 51 % | 58 %       | 60 %        | —         | 56 %      | 56 %        | 56.3 %  |
+| Gunmaster   | 51 % | 52 %       | 58 %        | 44 %      | —         | 53 %        | 51.4 %  |
+| Deepspeaker | 48 % | 50 %       | 52 %        | 44 %      | 47 %      | —           | 48.2 %  |
+
+Powers used per battle, on average: Tidewarden 1.8, Stormcaller 6.7 (squalls and gales), Spymaster 4.7,
+Gunmaster 3.0, Deepspeaker 1.5 (Krakens).
+
+### Reading the numbers
+
+- **Within the target (45–55 %):** the Tidewarden, Gunmaster and Deepspeaker, against everyone.
+- **Still off:**
+  - the **Stormcaller** is the weakest, at 45 % on average and 40 % against the Spymaster;
+  - the **Spymaster** is the strongest against other commanders, at about 56 %.
+- **Next steps:**
+  - for the Spymaster, a sounding that reports only "none" or "some";
+  - for the Stormcaller, a squall that also hides his own fleet from the next spyglass.
+- **No commander at all:** about even with every commander. The powers trade value; they do not add it.
+- **Caveat:** these are the machine's numbers. The machine is a decent hunter but a poor sailor. It moves little,
+  so the powers that move ships (Squall, Gale) are surely worth more to a person than they are here.
+  Playtests should confirm before the numbers are trusted.
+
+### Not built yet
+
+- **The end-of-battle check:** `verify.ts` does not yet know Squall drift, Double-Shotted answers or Soundings. A
+  game with commanders would be flagged when it is checked, so this must come before commanders are offered
+  online.
+- **The interface:** the pick in the lobby, the power cards, and the portraits.
 
 ## Suggested building order
 
