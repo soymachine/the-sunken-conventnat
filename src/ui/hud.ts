@@ -1,5 +1,6 @@
 // Oak-and-brass HUD drawn with DOM + SVG over the 3D canvas.
 import { Client, SEASON, maelstromIn, roleOf } from '../game/engine';
+import { installTuner } from './tuner';
 import { ITEMS, ITEM_HELP, ITEM_IDS, Item, MAX_ITEMS } from '../game/powerups';
 import { FLEETS, KRAKEN_SEALS, N, Role, shipCells } from '../game/rules';
 
@@ -156,6 +157,7 @@ export class Hud {
     // Debug tools, only when the address carries ?debug=true.
     if (new URLSearchParams(location.search).get('debug') === 'true' && on.cheat) {
       this.q<HTMLElement>('#menu .debug').hidden = false;
+      installTuner(this.root);
       this.root.querySelectorAll<HTMLElement>('[data-cheat]').forEach((b) => (b.onclick = () => on.cheat!(b.dataset.cheat as 'gold' | 'seals' | 'ap')));
     }
     menu.onclick = (e) => {
