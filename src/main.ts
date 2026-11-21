@@ -68,6 +68,8 @@ const hud = new Hud({
     hud.log(`Debug: ${what === 'gold' ? '+100 doubloons' : what === 'seals' ? '+3 seals' : '+3 action points'}.`);
     refresh();
   },
+  sky: (what) => scene.sky(what),
+  sound: (s) => sfx.play(s),
   note: (text) => { if (!c.note(text)) hud.log('One bottle a turn, and only on your own turn.', 'bad'); },
   letterRead: () => scene.clearBottles(),
   buy: (item) => { if (c.buy(item)) setMode(item === 'winds' ? mode : item); },

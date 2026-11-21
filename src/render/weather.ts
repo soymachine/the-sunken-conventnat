@@ -340,9 +340,13 @@ class SunRays {
     this.from.set(chart.x - 9, 16, chart.z - 12);
     this.rays.forEach((r, i) => r.to.set(this.target.x + (i - 2) * 2.6, 0, this.target.z + (i % 2 ? 1.5 : -1.5)));
   }
+  private held: boolean | null = null;
+  force(on: boolean | null) { this.held = on; }
+  get shining() { return this.on > 0.05; }
   update(dt: number, t: number, cam: THREE.Camera, allowed: boolean) {
     if ((this.timer -= dt) < 0) { this.want = this.want ? 0 : 1; this.timer = this.want ? 20 + Math.random() * 20 : 45 + Math.random() * 60; }
-    this.on += ((allowed ? this.want : 0) - this.on) * Math.min(1, dt * 0.3);
+    const want = this.held !== null ? +this.held : allowed ? this.want : 0;
+    this.on += (want - this.on) * Math.min(1, dt * 0.3);
     this.group.visible = this.on > 0.01;
     if (!this.group.visible) return;
     for (const r of this.rays) {
@@ -358,6 +362,72 @@ class SunRays {
   }
 }
 
+/* ---------- the northern lights ---------- */
+// Drawn straight onto the screen: from up here the sky is out of sight, so the lights hang across the top of
+// the view and down its left side, over a table gone dim and blue.
+const AUR_VERT = /* glsl */ `
+varying vec2 vUv;
+void main() { vUv = uv; gl_Position = vec4(position.xy * 2.0, 0.0, 1.0); }`;
+const AUR_FRAG = /* glsl */ `
+uniform float uTime, uOn, uAspect;
+varying vec2 vUv;
+float hash(float p) { return fract(sin(p * 127.1) * 43758.5453); }
+float noise(float x) { float i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f); return mix(hash(i), hash(i + 1.0), f); }
+// One curtain: 'along' runs along its hem, 'up' is the distance above the hem (in screen heights).
+vec3 curtain(float along, float up, float seed, float height) {
+  float rays = 0.35 + 0.65 * noise(along * 70.0 + seed + uTime * 0.5) * noise(along * 23.0 - uTime * 0.21 + seed);
+  float folds = 0.3 + 0.7 * smoothstep(0.15, 0.85, noise(along * 5.0 + uTime * 0.06 + seed));
+  float above = smoothstep(-0.012, 0.004, up) * pow(max(0.0, 1.0 - up / height), 1.8);
+  float below = smoothstep(-0.05, 0.0, up) * (1.0 - smoothstep(-0.0, 0.004, up)) * 0.6;
+  float k = (above * rays + below) * folds;
+  float h = clamp(up / height, 0.0, 1.0);
+  vec3 col = mix(vec3(0.3, 1.0, 0.55), vec3(0.15, 0.8, 0.85), smoothstep(0.1, 0.45, h));
+  col = mix(col, vec3(0.7, 0.3, 0.9), smoothstep(0.45, 0.95, h));
+  return col * k;
+}
+void main() {
+  vec2 p = vec2(vUv.x * uAspect, vUv.y);
+  // Across the top: the hem wanders in slow waves; the curtain rises from it to the edge of the screen.
+  float hem = 0.74 + 0.05 * sin(vUv.x * 5.0 + uTime * 0.09) + 0.025 * sin(vUv.x * 13.0 - uTime * 0.16);
+  vec3 c = curtain(vUv.x, vUv.y - hem, 3.1, 0.3) * smoothstep(0.0, 0.25, vUv.x + 0.1);
+  // A fainter second fold behind it.
+  float hem2 = 0.84 + 0.04 * sin(vUv.x * 4.0 - uTime * 0.07 + 2.0);
+  c += 0.55 * curtain(vUv.x * 1.3, vUv.y - hem2, 9.7, 0.22);
+  // Down the left: a curtain whose hem runs top to bottom, its rays reaching out to the left edge.
+  float hemL = 0.23 + 0.035 * sin(vUv.y * 6.0 + uTime * 0.11) + 0.02 * sin(vUv.y * 15.0 - uTime * 0.2);
+  c += 0.9 * curtain(vUv.y * 0.9, (hemL - vUv.x) * uAspect * 0.55, 5.3, 0.13) * smoothstep(0.05, 0.4, vUv.y);
+  gl_FragColor = vec4(c * uOn * 0.75, 1.0);
+}`;
+const DIM_FRAG = /* glsl */ `
+uniform float uOn;
+varying vec2 vUv;
+void main() {
+  // Darker towards the top and the left, where the lights hang.
+  float k = 0.32 + 0.22 * smoothstep(0.4, 1.0, vUv.y) + 0.12 * smoothstep(0.5, 0.0, vUv.x);
+  gl_FragColor = vec4(0.01, 0.03, 0.07, k * uOn);
+}`;
+
+class Aurora {
+  group = new THREE.Group();
+  private mat = new THREE.ShaderMaterial({ vertexShader: AUR_VERT, fragmentShader: AUR_FRAG, transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending,
+    uniforms: { uTime: { value: 0 }, uOn: { value: 0 }, uAspect: { value: 1.6 } } });
+  private dim = new THREE.ShaderMaterial({ vertexShader: AUR_VERT, fragmentShader: DIM_FRAG, transparent: true, depthWrite: false, depthTest: false,
+    uniforms: { uOn: { value: 0 } } });
+  on = 0;
+  want = 0;
+  constructor() {
+    const quad = (mat: THREE.Material, order: number) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat); m.frustumCulled = false; m.renderOrder = order; this.group.add(m); };
+    quad(this.dim, 50); quad(this.mat, 51);
+    this.group.visible = false;
+  }
+  update(dt: number, t: number, aspect: number) {
+    this.on += (this.want - this.on) * Math.min(1, dt * 0.35);
+    this.group.visible = this.on > 0.01;
+    this.mat.uniforms.uTime.value = t; this.mat.uniforms.uOn.value = this.on; this.mat.uniforms.uAspect.value = aspect;
+    this.dim.uniforms.uOn.value = this.on;
+  }
+}
+
 /* ---------- the lot ---------- */
 export class Weather {
   group = new THREE.Group();
@@ -366,9 +436,13 @@ export class Weather {
   private mist = new Mist();
   private gulls = new Gulls();
   private sun = new SunRays();
+  private aurora = new Aurora();
   private stormy = false;
+  /** Debug: hold one sky (or none) instead of letting them come and go. */
+  private forced: 'sun' | 'aurora' | 'clear' | null = null;
+  private auroraTimer = 70 + Math.random() * 60;
   constructor() {
-    this.group.add(this.rain[0].mesh, this.rain[1].mesh, this.bolt.group, this.mist.mesh, this.gulls.group, this.sun.group);
+    this.group.add(this.rain[0].mesh, this.rain[1].mesh, this.bolt.group, this.mist.mesh, this.gulls.group, this.sun.group, this.aurora.group);
   }
   /** Where the two charts lie (their top-left corners in the world). */
   private charts: { x: number; z: number }[] = [];
@@ -379,6 +453,10 @@ export class Weather {
     const x0 = Math.min(a.x, b.x) - 2, z0 = Math.min(a.z, b.z) - 2, x1 = Math.max(a.x, b.x) + N + 2, z1 = Math.max(a.z, b.z) + N + 2;
     this.mist.cover(x0, z0, x1 - x0, z1 - z0);
   }
+  /** Debug: show the shafts of sun or the aurora now, or clear the sky; null lets them come and go again. */
+  force(sky: 'sun' | 'aurora' | 'clear' | null) { this.forced = sky; this.sun.force(sky === null ? null : sky === 'sun'); }
+  /** How dark the aurora has made the night (0 by day, 1 at its height). */
+  get night() { return this.aurora.on; }
   /** A storm front over three rows from `row`, on both charts; null when the sky clears. */
   setStorm(row: number | null) {
     this.stormy = row !== null;
@@ -390,7 +468,15 @@ export class Weather {
     this.bolt.update(dt);
     this.mist.update(t, this.stormy ? 0.32 : 0.2);
     this.gulls.update(dt, t, this.stormy);
-    if (this.charts.length) this.sun.update(dt, t, cam, !this.stormy);
+    if (this.charts.length) this.sun.update(dt, t, cam, !this.stormy && this.aurora.on < 0.05);
+    // Now and then, while no storm blows and no sun breaks through, the northern lights come out for a while.
+    if ((this.auroraTimer -= dt) < 0) {
+      this.aurora.want = this.aurora.want ? 0 : 1;
+      this.auroraTimer = this.aurora.want ? 30 + Math.random() * 20 : 90 + Math.random() * 90;
+    }
+    if (this.forced) this.aurora.want = this.forced === 'aurora' ? 1 : 0;
+    else if (this.stormy || this.sun.shining) this.aurora.want = 0;
+    this.aurora.update(dt, t, (cam as THREE.PerspectiveCamera).aspect ?? 1.6);
   }
   /** The gulls are overhead (so they may cry). */
   get gullsHere() { return this.gulls.here; }

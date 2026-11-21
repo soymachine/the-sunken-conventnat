@@ -54,6 +54,40 @@ function svg<K extends keyof SVGElementTagNameMap>(p: Element, tag: K, a: Record
   p.appendChild(e);
   return e;
 }
+type KrakenIntro = 'embrace' | 'depths';
+type ApMode = 'desk' | 'head' | 'glass';
+const load = (k: string) => { try { return localStorage.getItem(k); } catch { return null; } };
+const store = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* storage unavailable */ } };
+const rnd = (a: number, b: number) => a + Math.random() * (b - a);
+
+/** A tapered tentacle along a Catmull-Rom curve through `pts`: its outline, its centre line and its suckers. */
+function tentacle(pts: [number, number][], w0: number) {
+  const P = (i: number) => pts[Math.max(0, Math.min(pts.length - 1, i))];
+  const line: [number, number][] = [];
+  for (let i = 0; i < pts.length - 1; i++) for (let k = 0; k < 8; k++) {
+    const t = k / 8, [p0, p1, p2, p3] = [P(i - 1), P(i), P(i + 1), P(i + 2)];
+    const f = (a: number, b: number, c: number, d: number) => 0.5 * (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t * t + (-a + 3 * b - 3 * c + d) * t * t * t);
+    line.push([f(p0[0], p1[0], p2[0], p3[0]), f(p0[1], p1[1], p2[1], p3[1])]);
+  }
+  line.push(pts[pts.length - 1]);
+  const n = line.length, L: string[] = [], R: string[] = [], dots: string[] = [];
+  line.forEach(([x, y], i) => {
+    const [ax, ay] = line[Math.max(0, i - 1)], [bx, by] = line[Math.min(n - 1, i + 1)];
+    let nx = -(by - ay), ny = bx - ax; const l = Math.hypot(nx, ny) || 1; nx /= l; ny /= l;
+    const w = w0 * Math.pow(1 - i / n, 0.85) + 0.6;
+    L.push(`${(x + nx * w).toFixed(1)},${(y + ny * w).toFixed(1)}`); R.unshift(`${(x - nx * w).toFixed(1)},${(y - ny * w).toFixed(1)}`);
+    if (i % 3 === 1 && i < n - 4) dots.push(`<circle cx="${(x + nx * w * 0.45).toFixed(1)}" cy="${(y + ny * w * 0.45).toFixed(1)}" r="${(w * 0.32).toFixed(1)}"/>`);
+  });
+  return { body: `M${L.join(' L')} L${R.join(' L')} Z`, spine: `M${line.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' L')}`, dots: dots.join('') };
+}
+// Tentacles in the card's frame: the card is 100 × 157 at (60, 30) inside a 220 × 270 box; they rise from below.
+const ARMS: { pts: [number, number][]; w: number; at: number }[] = [
+  { pts: [[22, 300], [30, 220], [44, 140], [52, 80], [60, 40], [82, 24], [97, 40], [88, 56], [76, 49]], w: 9, at: 0 },
+  { pts: [[198, 300], [190, 220], [176, 140], [168, 80], [160, 40], [138, 24], [123, 40], [132, 56], [144, 49]], w: 9, at: 90 },
+  { pts: [[70, 300], [76, 240], [102, 206], [142, 186], [166, 160], [160, 140], [146, 146]], w: 7.5, at: 180 },
+  { pts: [[160, 300], [150, 250], [126, 228], [96, 214], [70, 200], [62, 182], [74, 176]], w: 6.5, at: 260 },
+];
+
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
 export interface HudHandlers {
@@ -63,6 +97,10 @@ export interface HudHandlers {
   note(text: string): void;
   /** Debug only (?debug=true): grant doubloons, seals or action points to try the cards. */
   cheat?(what: 'gold' | 'seals' | 'ap'): void;
+  /** Debug only: call up a sky (shafts of sun, an aurora) or clear it. */
+  sky?(what: 'sun' | 'aurora' | 'clear'): void;
+  /** A sound for the HUD's own flourishes. */
+  sound?(name: 'roar' | 'splash'): void;
   letterRead(): void;
   buy(item: Item): void;
   endTurn(): void;
@@ -78,7 +116,9 @@ export class Hud {
   private sectors: [SVGPathElement, SVGTextElement][] = [];
   private balls: SVGGElement[] = [];
   private capTurns = 0;
-  private glassTurns = 0;
+  private krakenReady = false;
+  private krakenSeen: boolean | null = null;
+  private krakenIntro: { t0: number; style: KrakenIntro } | null = null;
   private sealHelp = '';
   private maelHelp = '';
   private muted = false;
@@ -111,7 +151,10 @@ export class Hud {
         <div class="seg" data-pref="sound" role="radiogroup" aria-label="Sound"><button data-v="on" role="radio">On</button><button data-v="off" role="radio">Off</button></div>
         <p class="opt">3D quality</p>
         <div class="seg" data-pref="quality" role="radiogroup" aria-label="3D quality"><button data-v="auto" role="radio">Auto</button><button data-v="high" role="radio">High</button><button data-v="low" role="radio">Low</button></div>
-        <div class="debug" hidden><p class="opt">Debug</p><div class="seg three"><button type="button" data-cheat="gold">+100 gold</button><button type="button" data-cheat="seals">+3 seals</button><button type="button" data-cheat="ap">+3 AP</button></div></div>
+        <div class="debug" hidden><p class="opt">Debug</p><div class="seg three"><button type="button" data-cheat="gold">+100 gold</button><button type="button" data-cheat="seals">+3 seals</button><button type="button" data-cheat="ap">+3 AP</button></div>
+          <p class="opt">Kraken card entrance</p><div class="seg three" data-pref="kintro"><button type="button" data-v="embrace">Embrace</button><button type="button" data-v="depths">Depths</button><button type="button" data-v="play">Play</button></div>
+          <p class="opt">Action points</p><div class="seg three" data-pref="ap"><button type="button" data-v="desk">Desk</button><button type="button" data-v="head">Header</button><button type="button" data-v="glass">Glass</button></div>
+          <p class="opt">Sky</p><div class="seg three" data-pref="sky"><button type="button" data-v="sun">Sun rays</button><button type="button" data-v="aurora">Aurora</button><button type="button" data-v="clear">Clear</button></div></div>
         <p class="meta">Auto steps down by itself if the game runs slowly. Low drops shadows, glow and the print grade.</p>
       </div>
       <div class="shopTip" id="shopTip" role="tooltip" hidden></div>
@@ -154,8 +197,14 @@ export class Hud {
       <div class="role" hidden><div class="card"><svg class="medal" viewBox="0 0 100 100"></svg><p class="meta" id="roleTitle"></p><h2 id="roleName"></h2><p id="roleMission"></p><p class="pw"><b id="rolePower"></b> <span id="rolePowerText"></span></p><button class="plaque" id="roleOk">To your station</button></div></div>
       <div class="over" hidden><div class="card"><h2 id="overTitle"></h2><p id="overText"></p><p id="overVerify" class="meta"></p><button class="plaque" id="leave">Back to port</button></div></div>`;
     this.telegraph(this.q('.telegraph'));
-    // Turning the glass ends the turn: it flips over before the turn passes.
-    this.q<HTMLElement>('#endTurn').onclick = () => { const g = this.q<HTMLElement>('#endTurn img'); g.style.transform = `rotate(${++this.glassTurns * 180}deg)`; on.endTurn(); };
+    this.placeAp();
+    // Setting the glass down ends the turn: it is tapped onto the desk and goes dull until your turn comes back.
+    this.q<HTMLElement>('#endTurn').onclick = () => {
+      this.q<HTMLElement>('#endTurn img').animate([{ transform: 'none' }, { transform: 'translateY(5px) scale(.97)' }, { transform: 'none' }], { duration: 260, easing: 'ease-out' });
+      on.endTurn();
+    };
+    // Clicking the covenant's seals, once three are lit, takes up the Kraken's card.
+    this.q<HTMLElement>('#seals').onclick = () => { if (this.krakenReady) on.mode('kraken'); };
     this.root.querySelectorAll<HTMLElement>('.order').forEach((b) => (b.onclick = () => on.mode(b.dataset.order as Mode)));
     this.q<HTMLElement>('#ready').onclick = () => { this.spin('#ready'); on.ready(); };
     this.q<HTMLElement>('#leave').onclick = () => on.leave();
@@ -178,6 +227,9 @@ export class Hud {
       const pref = b.parentElement!.dataset.pref, v = b.dataset.v!;
       if (pref === 'sound' && (v === 'off') !== this.muted) this.muted = on.mute();
       if (pref === 'quality') { on.quality(v as 'auto' | 'high' | 'low'); this.qualityPref = v; }
+      if (pref === 'kintro') { if (v === 'play') this.playKraken(); else { this.kStyle = v as KrakenIntro; store('tsc:krakenIntro', v); } }
+      if (pref === 'ap') { this.apMode = v as ApMode; store('tsc:apSpot', v); this.placeAp(); }
+      if (pref === 'sky') on.sky?.(v as 'sun' | 'aurora' | 'clear');
       this.paintPrefs();
     };
     // The quartermaster explains each item on hover: what it does, its price, and why you cannot buy it yet.
@@ -310,12 +362,82 @@ export class Hud {
     labels.forEach((t) => s.appendChild(t));
   }
 
+  private kStyle: KrakenIntro = load('tsc:krakenIntro') === 'depths' ? 'depths' : 'embrace';
+  private apMode: ApMode = (['desk', 'head', 'glass'] as const).find((m) => m === load('tsc:apSpot')) ?? 'desk';
+  /** The action points sit where the player chose (debug): on the desk by the hand, under the turn header, or by the glass. */
+  private placeAp() {
+    const ap = this.q<HTMLElement>('#apSeals');
+    const home = this.apMode === 'head' ? this.q<HTMLElement>('#hud .status') : this.apMode === 'glass' ? this.q<HTMLElement>('.battle .watch') : this.q<HTMLElement>('.battle');
+    if (this.apMode === 'head') this.q('#turnSub').after(ap); else if (ap.parentElement !== home) home.appendChild(ap);
+    this.root.classList.remove('ap-desk', 'ap-head', 'ap-glass'); this.root.classList.add('ap-' + this.apMode);
+    this.paintPrefs();
+  }
+
+  /** The Kraken's card arrives: dragged up from the deep by its arms (Embrace) or surfacing from a pool of ink (Depths). */
+  private playKraken() {
+    const card = this.root.querySelector<HTMLElement>('#belt .ocard[data-tool="kraken"]');
+    if (!card) { this.log('The Kraken\'s card is not in your hand (debug: +3 seals).'); return; }
+    this.krakenIntro = { t0: performance.now(), style: this.kStyle };
+    const r = card.getBoundingClientRect(), k = r.width / 100;
+    const fx = this.root.appendChild(document.createElement('div'));
+    fx.className = 'kfx ' + this.kStyle;
+    Object.assign(fx.style, { left: `${r.left - 60 * k}px`, top: `${r.top - 30 * k}px`, width: `${220 * k}px`, height: `${270 * k}px` });
+    const ink = (n: number, html: (i: number) => string) => Array.from({ length: n }, (_, i) => html(i)).join('');
+    if (this.kStyle === 'embrace') {
+      const arms = ARMS.map((a) => ({ ...a, ...tentacle(a.pts, a.w) }));
+      fx.innerHTML = `<svg viewBox="0 0 220 270" preserveAspectRatio="none"><defs>
+          <linearGradient id="kSkin" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#1b0b12"/><stop offset=".6" stop-color="#5a1c24"/><stop offset="1" stop-color="#8a2f2a"/></linearGradient>
+          ${arms.map((a, i) => `<mask id="kArm${i}" maskUnits="userSpaceOnUse" x="0" y="0" width="220" height="320"><path d="${a.spine}" pathLength="1" fill="none" stroke="#fff" stroke-width="30" stroke-linecap="round" stroke-dasharray="1 1"/></mask>`).join('')}
+        </defs>${arms.map((a, i) => `<g class="arm" mask="url(#kArm${i})"><path d="${a.body}" fill="url(#kSkin)" stroke="#0b0508" stroke-width=".8"/><g fill="#d9a08c" stroke="#5a1c24" stroke-width=".5">${a.dots}</g></g>`).join('')}</svg>
+        ${ink(18, () => `<i class="drop" style="--a:${rnd(0, 360)}deg;--d:${rnd(60, 150) * k}px;--s:${rnd(3, 8)}px"></i>`)}
+        ${ink(12, () => `<i class="bub" style="--x:${rnd(20, 80)}%;--d:${rnd(80, 190) * k}px;--s:${rnd(3, 7)}px"></i>`)}`;
+      fx.querySelectorAll<SVGPathElement>('mask path').forEach((m, i) => {
+        const at = ARMS[i].at;
+        m.animate([{ strokeDashoffset: 1, offset: 0 }, { strokeDashoffset: 1, offset: at / 2300 }, { strokeDashoffset: 0, offset: (at + 650) / 2300, easing: 'ease-in' },
+          { strokeDashoffset: 0, offset: (1450 + at / 3) / 2300, easing: 'cubic-bezier(.5,0,.8,.4)' }, { strokeDashoffset: 1, offset: 1 }], { duration: 2300, fill: 'both' });
+      });
+      fx.querySelectorAll<SVGGElement>('.arm').forEach((g, i) => g.animate([{ transform: 'none' }, { transform: `rotate(${i % 2 ? -1.5 : 1.5}deg)`, offset: .55 }, { transform: 'none', offset: .65 }, { transform: 'translateY(30px)' }], { duration: 2300, fill: 'both' }));
+      this.particles(fx, 950);
+    } else {
+      fx.innerHTML = `<b class="pool"></b>${ink(16, () => `<i class="bub" style="--x:${rnd(25, 75)}%;--d:${rnd(110, 230) * k}px;--s:${rnd(5, 12)}px"></i>`)}
+        ${ink(10, () => `<i class="drip" style="--x:${rnd(32, 68)}%;--d:${rnd(30, 70) * k}px;--s:${rnd(3, 6)}px"></i>`)}`;
+      fx.querySelector('.pool')!.animate([{ transform: 'translateX(-50%) scale(0, 0)', opacity: 0 }, { transform: 'translateX(-50%) scale(1, 1)', opacity: 1, offset: .25 }, { transform: 'translateX(-50%) scale(1.15, 1.1)', opacity: 1, offset: .7 }, { transform: 'translateX(-50%) scale(1.3, 1.2)', opacity: 0 }], { duration: 2200, fill: 'both', easing: 'ease-out' });
+      this.particles(fx, 0);
+    }
+    this.on.sound?.('roar');
+    this.animateKraken(card);
+    void Promise.all(fx.getAnimations({ subtree: true }).map((a) => a.finished)).catch(() => undefined).then(() => fx.remove());
+  }
+  /** Bubbles rise, ink flies and drips; each particle's path comes from its CSS variables. */
+  private particles(fx: HTMLElement, at: number) {
+    fx.querySelectorAll<HTMLElement>('.drop').forEach((d) => d.animate([{ transform: 'rotate(var(--a)) translateX(0) scale(1)', opacity: 0 }, { opacity: 1, offset: .05 }, { transform: 'rotate(var(--a)) translateX(var(--d)) scale(.4)', opacity: 0 }], { duration: rnd(600, 950), delay: at + rnd(0, 120), easing: 'cubic-bezier(.1,.7,.3,1)', fill: 'both' }));
+    fx.querySelectorAll<HTMLElement>('.bub').forEach((d) => d.animate([{ transform: 'translateY(0) scale(.4)', opacity: 0 }, { opacity: .9, offset: .15 }, { transform: 'translate(6px, calc(var(--d) * -1)) scale(1)', opacity: 0 }], { duration: rnd(900, 1500), delay: at + rnd(0, 700), easing: 'ease-out', fill: 'both' }));
+    fx.querySelectorAll<HTMLElement>('.drip').forEach((d) => d.animate([{ transform: 'translateY(0) scaleY(.6)', opacity: 0 }, { opacity: 1, offset: .1 }, { transform: 'translateY(var(--d)) scaleY(1.4)', opacity: 0 }], { duration: rnd(600, 900), delay: 1100 + rnd(0, 600), easing: 'ease-in', fill: 'both' }));
+  }
+  /** The card's own part, picked up again where it was if the hand is redrawn mid-way. */
+  private animateKraken(card: HTMLElement) {
+    const it = this.krakenIntro!, dur = it.style === 'embrace' ? 2300 : 2200, t = performance.now() - it.t0;
+    if (t >= dur) { this.krakenIntro = null; return; }
+    const keys: Keyframe[] = it.style === 'embrace'
+      ? [{ translate: '0 230px', rotate: '-8deg', opacity: 0, filter: 'brightness(.4)' }, { translate: '0 200px', opacity: 1, offset: .12 },
+        { translate: '0 -34px', rotate: '3deg', filter: 'brightness(.8) drop-shadow(0 0 0 #b8312a)', offset: .4, easing: 'cubic-bezier(.3,1.5,.5,1)' },
+        { translate: '0 0', rotate: '-1.5deg', filter: 'brightness(1.15) drop-shadow(0 0 16px #b8312a)', offset: .5 },
+        { translate: '0 -3px', rotate: '1deg', offset: .56 }, { translate: '0 0', rotate: '0deg', offset: .62 },
+        { translate: '0 0', rotate: '0deg', opacity: 1, filter: 'brightness(1) drop-shadow(0 0 0 #b8312a)' }]
+      : [{ translate: '0 150px', scale: '1 .7', opacity: 0, filter: 'brightness(0)' }, { translate: '0 120px', opacity: 1, offset: .22 },
+        { translate: '0 -22px', scale: '1 1.04', filter: 'brightness(.3)', offset: .5, easing: 'cubic-bezier(.3,1.4,.5,1)' },
+        { translate: '0 4px', scale: '1 .98', filter: 'brightness(.75) drop-shadow(0 0 12px #b8312a)', offset: .62 },
+        { translate: '0 0', scale: '1 1', opacity: 1, filter: 'brightness(1) drop-shadow(0 0 0 #b8312a)' }];
+    card.animate(keys, { duration: dur, fill: 'backwards' }).currentTime = t;
+  }
+
   /** Show the saved settings in the menu. */
   setPrefs(muted: boolean, quality: string) { this.muted = muted; this.qualityPref = quality; this.paintPrefs(); }
   private paintPrefs() {
     this.root.querySelectorAll<HTMLElement>('#menu .seg button').forEach((b) => {
       const pref = b.parentElement!.dataset.pref, v = b.dataset.v;
-      const on = pref === 'sound' ? (v === 'off') === this.muted : v === this.qualityPref;
+      const on = pref === 'sound' ? (v === 'off') === this.muted : pref === 'quality' ? v === this.qualityPref
+        : pref === 'kintro' ? v === this.kStyle : pref === 'ap' ? v === this.apMode : false;
       b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on));
     });
   }
@@ -475,6 +597,13 @@ export class Hud {
       was.style.transition = ''; requestAnimationFrame(() => was.classList.remove('on'));
     }
     this.root.querySelectorAll<HTMLElement>('.order').forEach((b) => b.classList.toggle('on', b.dataset.order === mode));
+    // The Kraken's card makes an entrance the first time it comes into the hand.
+    const kcard = cards.find((el) => el.dataset.tool === 'kraken');
+    if (this.krakenSeen === false && kcard && !this.krakenIntro) this.playKraken();
+    this.krakenSeen = !!kcard;
+    if (kcard && this.krakenIntro) this.animateKraken(kcard);
+    this.krakenReady = !!kcard && c.canKraken();
+    this.q('#seals').classList.toggle('ready', this.krakenReady);
     const shownAp = Math.max(3, mine ? p.ap : 0);
     this.q('#apSeals').innerHTML = Array.from({ length: shownAp }, (_, k) => `<i class="${mine && k < p.ap ? '' : 'spent'}"></i>`).join('');
 
