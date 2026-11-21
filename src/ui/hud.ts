@@ -104,7 +104,7 @@ export class Hud {
             <img class="face" src="/ui/mael_face.webp" alt="" draggable="false">
             <img class="swirl" src="/ui/mael_swirl.webp" alt="" draggable="false">
             <img class="bezel" src="/ui/mael_bezel.webp" alt="" draggable="false">
-            ${[0, 1, 2, 3, 4].map((k) => { const a = (90 + 48 - k * 24) * Math.PI / 180; return `<i class="notch" style="left:${(50 + 43 * Math.cos(a)).toFixed(1)}%;top:${(50 + 43 * Math.sin(a)).toFixed(1)}%"></i>`; }).join('')}
+            ${[0, 1, 2, 3, 4].map((k) => { const a = (90 + 48 - k * 24) * Math.PI / 180; return `<i class="notch" style="left:${(50 + 43 * Math.cos(a)).toFixed(1)}%;top:calc(50% + var(--lamp-dir, 1) * ${(43 * Math.sin(a)).toFixed(1)}%)"></i>`; }).join('')}
             <b></b><small></small>
           </div>
         </div>
@@ -541,7 +541,8 @@ export class Hud {
     if (!g.hidden) {
       g.classList.toggle('soon', left === 1); g.classList.toggle('spent', left === null);
       g.querySelector('b')!.textContent = left === null ? '—' : String(left);
-      g.querySelector('small')!.textContent = left === null ? 'spent' : left === 1 ? 'next round' : 'rounds';
+      g.querySelector('small')!.innerHTML = left === null ? 'spent' : left === 1 ? 'next<br>round' : 'rounds';
+      g.classList.toggle('two', left === 1);
       g.querySelectorAll('.notch').forEach((n, k) => n.classList.toggle('lit', k < p.ring));
       g.style.setProperty('--spin', `${left === null ? 0 : Math.max(1.2, Math.min(14, left * 0.9))}s`);
       this.maelHelp = left === null ? 'The maelstrom is spent: five rings have gone under and the middle 6×6 of each chart remains.'

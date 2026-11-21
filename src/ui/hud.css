@@ -422,7 +422,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); out
 .belt .ocard.ocard.k-move .nm { color: #0f2e30; }
 .belt .ocard.ocard.k-kraken .nm { color: #f3d9c8; text-shadow: 0 1px 2px #000; }
 /* A card rises along its own tilt instead of straightening up. */
-.belt .ocard:hover, .belt .ocard:focus-visible { transform: translateY(var(--y)) rotate(var(--r)) translateY(-62px) scale(1.06); }
+.belt .ocard:hover, .belt .ocard:focus-visible { transform: translateY(var(--y)) rotate(var(--r)) translateY(calc(-1 * var(--card-lift))) scale(1.06); }
 .belt .ocard.on { transform: translateY(var(--y)) rotate(var(--r)) translateY(-62px); }
 /* The desk recedes towards a vanishing point in the middle of the screen, just a little. */
 .bottom { background: none; perspective: 520px; perspective-origin: 50% -140%; }
@@ -432,8 +432,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); out
 
 .belt .ocard.ocard.k-kraken .nm { color: #d9b766; }
 /* A chosen card grows a little; the desk stands taller. */
-.belt .ocard.on { transform: translateY(var(--y)) rotate(var(--r)) translateY(-62px) scale(1.12); }
-.belt .ocard:active { transform: translateY(var(--y)) rotate(var(--r)) translateY(-62px) scale(1.14); }
+.belt .ocard.on { transform: translateY(var(--y)) rotate(var(--r)) translateY(calc(-1 * var(--card-lift))) scale(1.12); }
+.belt .ocard:active { transform: translateY(var(--y)) rotate(var(--r)) translateY(calc(-1 * var(--card-lift))) scale(1.14); }
 .bottom { height: 150px; }
 .belt { bottom: -34px; }
 
@@ -521,11 +521,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); out
 #hud .status .apSeals i { width: 24px; height: 24px; }
 
 /* ---------- the hand sits higher, so each card's name shows; a raised card keeps the spot it rose from ---------- */
-.belt { bottom: 0; }
-.belt .ocard::after { content: ''; position: absolute; left: 0; right: 0; top: 100%; height: 72px; }
+.belt { bottom: var(--belt-y); }
+.belt .ocard::after { content: ''; position: absolute; left: 0; right: 0; top: 100%; height: calc(var(--card-lift) + 10px); }
 
 /* ---------- 0.18: the maelstrom gauge, a brass instrument hung from the beam over the table ---------- */
-.mael { position: fixed; right: 262px; top: 92px; width: 96px; height: 96px; margin: 0; filter: drop-shadow(0 6px 8px rgba(0, 0, 0, .75)); }
+.mael { position: fixed; right: var(--mael-x); top: var(--mael-y); width: 96px; height: 96px; margin: 0; filter: drop-shadow(0 6px 8px rgba(0, 0, 0, .75)); }
 .mael img { position: absolute; display: block; pointer-events: none; user-select: none; }
 .mael .face { inset: 9%; width: 82%; height: 82%; }
 .mael .swirl { inset: 16%; width: 68%; height: 68%; opacity: .5; mix-blend-mode: screen; transform-origin: 50% 50%; animation: maelSpin var(--spin, 8s) linear infinite; }
@@ -536,3 +536,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); out
 .mael .notch.lit { background-image: url('/ui/mael_lamp_on.webp'); filter: drop-shadow(0 0 4px rgba(255, 60, 40, .9)); }
 .mael b { top: 25px; font-size: 27px; z-index: 1; }
 .mael small { top: 55px; font-size: 7.5px; z-index: 1; color: #bcd6d6; }
+
+/* ---------- 0.19: tunable in debug; "next round" in two amber lines ---------- */
+:root { --belt-y: 0px; --card-lift: 62px; --mael-x: 262px; --mael-y: 92px; --lamp-dir: 1; }
+.mael small { color: #e8b04a; font-size: 8px; line-height: 1.15; text-shadow: 0 1px 2px #000, 0 0 4px #000; }
+.mael.two b { top: 19px; }
+.mael.two small { top: 50px; font-size: 8.5px; color: #ffb07a; }

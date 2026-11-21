@@ -11,17 +11,26 @@ const KNOBS: Knob[] = [
   { v: '--desk-shade', label: 'Back shade', min: 0, max: 1, step: 0.05, unit: '', def: 0.5 },
   { v: '--bottle-h', label: 'Bottle size', min: 60, max: 320, step: 2, unit: 'px', def: 150 },
   { v: '--glass-h', label: 'Glass size', min: 60, max: 320, step: 2, unit: 'px', def: 132 },
+  { v: '--belt-y', label: 'Cards at rest (Y)', min: -120, max: 80, step: 2, unit: 'px', def: 0 },
+  { v: '--card-lift', label: 'Card raised (Y)', min: 0, max: 200, step: 2, unit: 'px', def: 62 },
+  { v: '--mael-x', label: 'Maelstrom gauge (X from right)', min: 0, max: 1200, step: 2, unit: 'px', def: 262 },
+  { v: '--mael-y', label: 'Maelstrom gauge (Y)', min: 0, max: 600, step: 2, unit: 'px', def: 92 },
+  { v: '--lamp-dir', label: 'Gauge lamps: top (-1) / bottom (1)', min: -1, max: 1, step: 2, unit: '', def: 1 },
+  { v: '--wind', label: 'Wind strength', min: 0, max: 3, step: 0.1, unit: '', def: 1 },
 ];
 const MOVES: Record<string, { x: string; y: string; def: [number, number]; fromRight?: boolean }> = {
   bottle: { x: '--bottle-x', y: '--bottle-y', def: [14, 6] },
   glass: { x: '--glass-x', y: '--glass-y', def: [74, 22], fromRight: true },
 };
 
+/** Knobs that are not only CSS (the wind) are passed on to the game through this event. */
+const tuned = (v: string, n: number) => dispatchEvent(new CustomEvent('tsc:tune', { detail: { v, n } }));
+
 export function installTuner(hud: HTMLElement) {
   const root = document.documentElement.style;
   let saved: Record<string, string> = {};
   try { saved = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch { /* storage unavailable */ }
-  for (const [k, v] of Object.entries(saved)) root.setProperty(k, v);
+  for (const [k, v] of Object.entries(saved)) { root.setProperty(k, v); queueMicrotask(() => tuned(k, parseFloat(v))); }
   const val = (k: string) => getComputedStyle(document.documentElement).getPropertyValue(k).trim();
   const save = () => {
     const all: Record<string, string> = {};
@@ -40,7 +49,7 @@ export function installTuner(hud: HTMLElement) {
   panel.querySelectorAll<HTMLInputElement>('input[type=range]').forEach((inp) => {
     const k = KNOBS.find((q) => q.v === inp.dataset.v)!, o = inp.nextElementSibling as HTMLOutputElement;
     inp.value = String(parseFloat(val(k.v)) || k.def); o.textContent = inp.value + k.unit;
-    inp.oninput = () => { root.setProperty(k.v, inp.value + k.unit); o.textContent = inp.value + k.unit; save(); };
+    inp.oninput = () => { root.setProperty(k.v, inp.value + k.unit); o.textContent = inp.value + k.unit; save(); tuned(k.v, +inp.value); };
   });
   panel.querySelector<HTMLElement>('[data-act=close]')!.onclick = () => { panel.hidden = true; hud.classList.remove('arrange'); };
   panel.querySelector<HTMLElement>('[data-act=arrange]')!.onclick = (e) => {
@@ -52,7 +61,7 @@ export function installTuner(hud: HTMLElement) {
     navigator.clipboard?.writeText(out.value).catch(() => { /* the text stays selected for copying by hand */ });
   };
   panel.querySelector<HTMLElement>('[data-act=reset]')!.onclick = () => {
-    for (const k of KNOBS) root.removeProperty(k.v);
+    for (const k of KNOBS) { root.removeProperty(k.v); tuned(k.v, k.def); }
     for (const m of Object.values(MOVES)) { root.removeProperty(m.x); root.removeProperty(m.y); }
     try { localStorage.removeItem(KEY); } catch { /* ignore */ }
     panel.querySelectorAll<HTMLInputElement>('input[type=range]').forEach((inp) => { const k = KNOBS.find((q) => q.v === inp.dataset.v)!; inp.value = String(k.def); (inp.nextElementSibling as HTMLOutputElement).textContent = k.def + k.unit; });

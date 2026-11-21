@@ -500,6 +500,8 @@ export class SeaScene {
   }
 
   /** Warm light on your turn, colder on the enemy's. */
+  /** Debug: how strongly the wind shows (streaks and the drift of the strokes on the water). */
+  setWindStrength(k: number) { this.weather.windStrength = k; Sea.windStrength = k; }
   /** A strong gust across the charts, to show plainly which way the wind blows. */
   blow() { this.weather.blow(); }
   /** Debug: call up a sky now, or clear it. */

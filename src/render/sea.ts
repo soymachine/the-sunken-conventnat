@@ -128,7 +128,7 @@ ${TIDE}
 uniform vec2 uStorm;
 // Where the wind blows towards on the chart (x east, y south), and how hard it is gusting.
 uniform vec2 uWind;
-uniform float uGust;
+uniform float uGust, uDrift;
 varying vec2 vUv;
 varying float vShade;
 const vec3 INK = vec3(0.004, 0.003, 0.002);
@@ -165,7 +165,7 @@ void main() {
     float lens = uPeek.w * box * smoothstep(front, front - 0.25, rr);
     // The engraved wave strokes lie along the wind and run downwind with it, faster in a gust.
     vec2 wd = normalize(uWind + vec2(1e-4, 0.0)), wp = vec2(-dot(p, wd), dot(p, vec2(-wd.y, wd.x)));
-    float drift = uTime * (0.9 + 1.4 * uGust);
+    float drift = uDrift; // integrated frame by frame, so a gust speeds the strokes up without a jump
     float ink = strokes(wp, uTime, 1.0, drift) * 0.62 + strokes(wp + 7.3, uTime * 0.7, 0.55, drift * 0.8) * 0.34;
     float hatch = 0.5 + 0.5 * sin((p.x + p.y) * 21.0 + fbm(p * 1.3 + uTime * 0.04) * 7.0);
     ink += uEnemy * smoothstep(0.6, 0.95, hatch) * 0.3 * (1.0 - lens);
@@ -348,6 +348,13 @@ void main() {
   #include <colorspace_fragment>
 }`;
 
+/** Turn angle `a` towards `to` by at most `step` radians, the short way round (a half turn goes clockwise). */
+export function turnToward(a: number, to: number, step: number) {
+  let d = ((to - a) % (2 * Math.PI) + 3 * Math.PI) % (2 * Math.PI) - Math.PI;
+  if (d <= -Math.PI + 1e-6) d = Math.PI;
+  return Math.abs(d) <= step ? to : a + Math.sign(d) * step;
+}
+
 export class Sea {
   mesh: THREE.Mesh;
   private mat: THREE.ShaderMaterial;
@@ -382,7 +389,7 @@ export class Sea {
     this.tex.magFilter = this.tex.minFilter = THREE.LinearFilter;
     this.mat = new THREE.ShaderMaterial({
       vertexShader: VERT, fragmentShader: FRAG,
-      uniforms: { uMap: { value: chartTexture(enemy) }, uEnergy: { value: this.tex }, uTime: { value: 0 }, uEnemy: { value: enemy ? 1 : 0 }, uN: { value: N }, uNight: { value: 0 }, uRing: { value: 0 }, uDoom: { value: 0 }, uDoomStyle: { value: Sea.doomStyle }, uFlash: { value: 0 }, uStorm: { value: new THREE.Vector2(0, 0) }, uWind: { value: new THREE.Vector2(1, 0) }, uGust: { value: 0 }, uTide: { value: new THREE.Vector4(1, 0, -99, 0) }, uPeek: { value: new THREE.Vector4(0, 0, 0, 0) }, uScan: { value: new THREE.Vector4(0, 0, -99, 0) }, uScanCol: { value: new THREE.Color(1, 0.8, 0.4) }, uHl: { value: this.hlTex }, uBox: { value: Array.from({ length: 8 }, () => new THREE.Vector4()) }, uBoxCol: { value: Array.from({ length: 8 }, () => new THREE.Vector4()) }, uBoxN: { value: 0 },
+      uniforms: { uMap: { value: chartTexture(enemy) }, uEnergy: { value: this.tex }, uTime: { value: 0 }, uEnemy: { value: enemy ? 1 : 0 }, uN: { value: N }, uNight: { value: 0 }, uRing: { value: 0 }, uDoom: { value: 0 }, uDoomStyle: { value: Sea.doomStyle }, uFlash: { value: 0 }, uStorm: { value: new THREE.Vector2(0, 0) }, uWind: { value: new THREE.Vector2(1, 0) }, uGust: { value: 0 }, uDrift: { value: 0 }, uTide: { value: new THREE.Vector4(1, 0, -99, 0) }, uPeek: { value: new THREE.Vector4(0, 0, 0, 0) }, uScan: { value: new THREE.Vector4(0, 0, -99, 0) }, uScanCol: { value: new THREE.Color(1, 0.8, 0.4) }, uHl: { value: this.hlTex }, uBox: { value: Array.from({ length: 8 }, () => new THREE.Vector4()) }, uBoxCol: { value: Array.from({ length: 8 }, () => new THREE.Vector4()) }, uBoxN: { value: 0 },
         uHull: { value: Array.from({ length: 14 }, () => new THREE.Vector4()) }, uHull2: { value: Array.from({ length: 14 }, () => new THREE.Vector4()) }, uHullN: { value: 0 }, uWake: { value: Sea.wake } },
     });
     const geo = new THREE.PlaneGeometry(N + 1, N + 1, 96, 96);
@@ -420,9 +427,11 @@ export class Sea {
 
   /** Target darkness of this chart (1 while the Kraken holds it). */
   night = 0;
-  private windTo = new THREE.Vector2(1, 0);
+  private windAng = 0; private windTo = 0; private drift = 0;
+  /** How strongly the wind shows on the water (debug), 1 by default. */
+  static windStrength = 1;
   /** Where the wind blows towards: a heading (0 east, 1 south, 2 west, 3 north); the strokes swing round to it. */
-  setWind(h: number) { this.windTo.set([1, 0, -1, 0][h], [0, 1, 0, -1][h]); }
+  setWind(h: number) { this.windTo = h * Math.PI / 2; }
   setGust(g: number) { this.mat.uniforms.uGust.value = g; }
   /** The storm front: its first row and how many rows it covers (none when `row` is null). */
   setStorm(row: number | null, rows = 3) { (this.mat.uniforms.uStorm.value as THREE.Vector2).set(row ?? 0, row === null ? 0 : rows); }
@@ -450,7 +459,11 @@ export class Sea {
   tide(dx: number, dy: number, t: number) { (this.mat.uniforms.uTide.value as THREE.Vector4).set(dx, dy, t, 1); }
 
   update(dt: number, t: number) {
-    (this.mat.uniforms.uWind.value as THREE.Vector2).lerp(this.windTo, Math.min(1, dt * 0.8));
+    // Swing round the short way (never through a standstill), and drift at a speed that follows the gusts.
+    this.windAng = turnToward(this.windAng, this.windTo, dt * 1.2);
+    (this.mat.uniforms.uWind.value as THREE.Vector2).set(Math.cos(this.windAng), Math.sin(this.windAng));
+    this.drift += dt * (0.9 + 1.4 * this.mat.uniforms.uGust.value) * Sea.windStrength;
+    this.mat.uniforms.uDrift.value = this.drift;
     const k = Math.exp(-dt * 0.8);
     for (let i = 0; i < this.energy.length; i++) { this.energy[i] *= k; this.bytes[i] = this.energy[i] * 255; }
     this.tex.needsUpdate = true;

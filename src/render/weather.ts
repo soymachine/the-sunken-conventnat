@@ -1,6 +1,7 @@
 // Weather over the charts: rain under the storm front, lightning, drifting sea mist and gulls.
 // Everything that moves in numbers (rain, mist) is animated on the GPU from a time uniform.
 import * as THREE from 'three';
+import { turnToward } from './sea';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { N } from '../game/rules';
 
@@ -366,22 +367,22 @@ class SunRays {
 const WIND_VERT = /* glsl */ `
 attribute vec4 seed;   // where across the area (x, z), speed, phase
 attribute vec2 corner; // along the streak (0 tail .. 1 head), across it (-1 .. 1)
-uniform float uTime, uGust;
+uniform float uTime, uGust, uStrength;
 uniform vec2 uDir;     // where the wind blows towards, on the water
+uniform vec2 uShift;   // how far the air has run so far (integrated frame by frame, so gusts and veers never jump)
 uniform vec4 uArea;    // x0, z0, width, depth
 varying float vA; varying vec2 vC;
 void main() {
   vec2 side = vec2(-uDir.y, uDir.x);
-  float sp = seed.z * (1.0 + 1.6 * uGust);
   // Each streak runs downwind across the area and wraps round, living a short while each pass.
-  vec2 o = seed.xy * uArea.zw + uDir * uTime * sp * 2.2;
+  vec2 o = seed.xy * uArea.zw + uShift * seed.z * 2.2;
   o = mod(o, uArea.zw);
   float life = fract(uTime * 0.35 * seed.z + seed.w);
   float len = (0.7 + 1.4 * seed.z) * (1.0 + 0.9 * uGust);
   vec2 xz = uArea.xy + o + uDir * (corner.x - 1.0) * len + side * corner.y * 0.045 * (1.0 + uGust);
   // A slight lift and waver so they read as moving air.
   float y = 0.35 + 0.12 * sin(seed.w * 20.0 + uTime * 1.3) + 0.05 * sin(corner.x * 3.0 + uTime * 4.0 + seed.w * 9.0);
-  vA = sin(life * 3.14159) * (0.35 + 0.4 * uGust);
+  vA = sin(life * 3.14159) * (0.35 + 0.4 * uGust) * min(1.5, uStrength);
   // Fade out near the edges of the area so the wrap is never seen.
   vec2 e = min(o, uArea.zw - o);
   vA *= smoothstep(0.0, 1.5, min(e.x, e.y));
@@ -401,7 +402,9 @@ class WindStreaks {
   mesh: THREE.Mesh;
   private mat: THREE.ShaderMaterial;
   private dir = new THREE.Vector2(1, 0);
-  private want = new THREE.Vector2(1, 0);
+  private ang = 0; private angTo = 0;
+  /** How strong the wind shows (debug): speed and brightness of the streaks. */
+  strength = 1;
   private gust = 0;
   private nextGust = 6 + Math.random() * 8;
   private forced = 0;
@@ -416,22 +419,24 @@ class WindStreaks {
     g.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(count * 12), 3));
     g.setAttribute('seed', new THREE.Float32BufferAttribute(seed, 4)); g.setAttribute('corner', new THREE.Float32BufferAttribute(corner, 2)); g.setIndex(idx);
     this.mat = new THREE.ShaderMaterial({ vertexShader: WIND_VERT, fragmentShader: WIND_FRAG, transparent: true, depthWrite: false, side: THREE.DoubleSide,
-      uniforms: { uTime: { value: 0 }, uGust: { value: 0 }, uDir: { value: this.dir }, uArea: { value: new THREE.Vector4(0, 0, 1, 1) } } });
+      uniforms: { uTime: { value: 0 }, uGust: { value: 0 }, uStrength: { value: 1 }, uShift: { value: new THREE.Vector2() }, uDir: { value: this.dir }, uArea: { value: new THREE.Vector4(0, 0, 1, 1) } } });
     this.mesh = new THREE.Mesh(g, this.mat); this.mesh.frustumCulled = false; this.mesh.renderOrder = 6;
   }
   cover(x: number, z: number, w: number, d: number) { (this.mat.uniforms.uArea.value as THREE.Vector4).set(x, z, w, d); }
   /** Where the wind blows towards: a heading (0 east, 1 south, 2 west, 3 north). */
-  setWind(h: number) { this.want.set([1, 0, -1, 0][h], [0, 1, 0, -1][h]); }
+  setWind(h: number) { this.angTo = h * Math.PI / 2; }
   /** A strong gust now (e.g. when a ship is caught in irons). */
   blow() { this.forced = 2.5; }
   update(dt: number, t: number, stormy: boolean) {
     // The streaks swing round smoothly when the wind veers.
-    this.dir.lerp(this.want, Math.min(1, dt * 1.5)).normalize();
+    this.ang = turnToward(this.ang, this.angTo, dt * 1.2);
+    this.dir.set(Math.cos(this.ang), Math.sin(this.ang));
     if ((this.nextGust -= dt) < 0) this.nextGust = 7 + Math.random() * 10;
     const gusting = this.nextGust < 2.2 || this.forced > 0 || stormy;
     this.forced = Math.max(0, this.forced - dt);
     this.gust += ((gusting ? 1 : 0) - this.gust) * Math.min(1, dt * 2.5);
-    this.mat.uniforms.uTime.value = t; this.mat.uniforms.uGust.value = this.gust;
+    this.mat.uniforms.uTime.value = t; this.mat.uniforms.uGust.value = this.gust; this.mat.uniforms.uStrength.value = this.strength;
+    (this.mat.uniforms.uShift.value as THREE.Vector2).addScaledVector(this.dir, dt * (1 + 1.6 * this.gust) * this.strength);
   }
   get gustLevel() { return this.gust; }
 }
@@ -546,6 +551,8 @@ export class Weather {
   }
   strike(at: THREE.Vector3) { this.bolt.strike(at); }
   setWind(h: number) { this.wind.setWind(h); }
+  /** Debug: how strongly the wind shows. */
+  set windStrength(k: number) { this.wind.strength = k; }
   /** A strong gust, to show the wind plainly. */
   blow() { this.wind.blow(); }
   /** How hard the wind is gusting now (0 to 1). */
