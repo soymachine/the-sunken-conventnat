@@ -4,7 +4,7 @@
 import { Order, pickOrder } from './orders';
 import { ITEMS, Item, MAX_ITEMS, START_DOUBLOONS } from './powerups';
 import {
-  AP_PER_TURN, CellResult, Dir, KRAKEN_SEALS, Kind, MAELSTROM_MAX_RING, MAELSTROM_ROUND, N, Revealed, Rnd, Role, Ship, XY, attackCells, countScan, inBoard, inKraken, inZone, legalPlacement, peekFits, peekShips, randomFleet, zoneFits,
+  AP_PER_TURN, CellResult, Dir, KRAKEN_SEALS, Kind, MAELSTROM_MAX_RING, MAELSTROM_ROUND, N, Revealed, Rnd, Role, Ship, XY, attackCells, countScan, inBoard, inKraken, inZone, legalPlacement, peekFits, safe, peekShips, randomFleet, zoneFits,
   repairShip, rimCells, resolveAttack, driftFleet, sailReach, sailShip, shipAt, shipCells, turnShip, canTurnShip, Way,
 } from './rules';
 
@@ -32,6 +32,7 @@ export type Body =
   | { t: 'scanResult'; x: number; y: number; count: number }
   | { t: 'peek'; x: number; y: number }
   | { t: 'note'; text: string }
+  | { t: 'drop'; id: number; x: number; y: number }
   | { t: 'pact'; ship: Revealed }
   | { t: 'current'; dir: number }
   | { t: 'peekResult'; x: number; y: number; ships: Revealed[]; fog: boolean }
@@ -79,6 +80,9 @@ export interface Pub {
   wind?: number;
   /** Each captain may seal one blood pact a battle. */
   pacts?: [boolean, boolean];
+  /** Treasure owed to a side's waters, waiting for its owner to place it clear of their hidden ships. */
+  due?: { id: number; side: 0 | 1; kind: 'gold' | 'seal'; value: number }[];
+  dueSeq?: number;
   /** A message in a bottle was already cast this turn. */
   noteSent?: boolean;
   /** Every note cast so far, oldest first. */
@@ -135,15 +139,29 @@ function rand(p: Pub): number {
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 }
 
+/** Treasure surfaces in a side's waters. Only its owner knows where their ships lie, so the owner places it
+ *  (on the first free square of a sequence drawn from their secret salt) and the place is checked at the end. */
 function spawnTreasure(p: Pub, side: 0 | 1, kind: 'gold' | 'seal' = 'gold') {
-  if (p.treasures.filter((t) => t.side === side && t.kind === kind).length >= (kind === 'gold' ? 3 : 1)) return;
-  for (let tries = 0; tries < 50; tries++) {
-    const x = Math.floor(rand(p) * N), y = Math.floor(rand(p) * N);
-    if (p.treasures.some((t) => t.side === side && t.x === x && t.y === y)) continue;
-    if (p.sides[side].sunk.some((s) => shipCells(s).some(([a, b]) => a === x && b === y))) continue;
-    p.treasures.push({ side, x, y, kind, value: kind === 'seal' ? 0 : [20, 30, 40][Math.floor(rand(p) * 3)] });
-    return;
+  const owed = (p.due || []).filter((d) => d.side === side && d.kind === kind).length;
+  if (p.treasures.filter((t) => t.side === side && t.kind === kind).length + owed >= (kind === 'gold' ? 3 : 1)) return;
+  const id = (p.dueSeq = (p.dueSeq || 0) + 1);
+  (p.due ??= []).push({ id, side, kind, value: kind === 'seal' ? 0 : [20, 30, 40][Math.floor(rand(p) * 3)] });
+}
+
+/** Where `side` must place owed treasure `id`: the first square of their salted sequence that is on the chart,
+ *  inside the maelstrom, and clear of their ships, their treasure and their wrecks. */
+export function dropSquare(p: Pub, side: 0 | 1, id: number, salt: string, ships: Ship[]): XY | null {
+  const taken = (x: number, y: number) => ships.some((s) => !s.sunk && shipCells(s).some(([a, b]) => a === x && b === y))
+    || p.treasures.some((t) => t.side === side && t.x === x && t.y === y)
+    || p.sides[side].sunk.some((s) => shipCells(s).some(([a, b]) => a === x && b === y));
+  for (let k = 0; k < 400; k++) {
+    let h = 2166136261;
+    for (const ch of `${salt}:${id}:${k}`) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+    h >>>= 0;
+    const x = h % N, y = Math.floor(h / N) % N;
+    if (safe(p.ring, x, y) && !taken(x, y)) return [x, y];
   }
+  return null;
 }
 
 /** The Kraken lashes three cells of its patch; the defender must answer. */
@@ -192,6 +210,13 @@ const take = (items: Item[], it: Item) => { const i = items.indexOf(it); if (i >
 /** Apply one message to the public state. Returns false when the message is not legal right now. */
 export function reduce(p: Pub, m: Msg): boolean {
   const mine = p.sides[m.by], foe = (1 - m.by) as 0 | 1;
+  if (m.t === 'drop') {
+    const i = (p.due || []).findIndex((d) => d.id === m.id && d.side === m.by);
+    if (i < 0 || !inBoard(m.x, m.y) || p.treasures.some((t) => t.side === m.by && t.x === m.x && t.y === m.y)) return false;
+    const d = p.due!.splice(i, 1)[0];
+    p.treasures.push({ side: d.side, x: m.x, y: m.y, kind: d.kind, value: d.value });
+    return true;
+  }
   if (m.t === 'ready') {
     if (p.phase !== 'placement' || mine.ready) return false;
     mine.ready = true; mine.hash = m.hash; mine.name = m.name;
@@ -417,8 +442,17 @@ export class Client {
     this.newOrder(o);
   }
 
+  private dropsSent = new Set<number>();
   private react(m: Msg) {
     const p = this.pub, theirs = m.by !== this.me;
+    // Place any treasure owed to my waters, clear of my ships.
+    for (const d of p.due || []) {
+      if (d.side !== this.me || this.dropsSent.has(d.id)) continue;
+      const at = dropSquare(p, this.me, d.id, this.salt, this.ships);
+      if (!at) continue;
+      this.dropsSent.add(d.id);
+      this.send({ t: 'drop', id: d.id, x: at[0], y: at[1] });
+    }
     if (m.t === 'ready' && p.phase === 'battle') this.newOrder();
     if (m.t === 'attack' && theirs) {
       const { shielded, ...r } = resolveAttack(this.ships, m.cells, m.src === 'chain', this.escort);

@@ -167,3 +167,34 @@ thin stream falling, held between turned oak end plates joined by three slender 
 shadow under it on the wood. Only a small patch of tabletop around its base, fading to pure black at the edges
 of the frame. Warm candle light from the upper left. Photorealistic. No text, no letters.
 ```
+
+## 9. Bottle and hourglass matching the desk's vanishing point (transparent background)
+
+The desk recedes towards a vanishing point in the middle of the screen, a little above the desk. The bottle
+stands in the bottom-left corner, so it is seen from slightly above and from its right (the camera is towards
+the centre of the screen); the hourglass stands in the bottom-right corner, seen from slightly above and from
+its left. No table in the picture: only the object and a faint shadow, on transparency.
+
+**Bottle (bottom-left corner)**
+```
+A single antique message-in-a-bottle standing upright, seen from slightly above (about 20 degrees down) and
+turned a little so we look at it from its right-hand side, as if the viewer sits up and to the right of it:
+the base and the cork show as gentle ellipses, the vertical lines of the bottle lean very slightly towards the
+upper right, towards a vanishing point beyond the top-right of the frame. Dark green hand-blown glass with small
+bubbles, cork sealed with dripping red wax, a rolled ivory parchment tied with red thread inside. Only the
+bottle and a very soft contact shadow directly beneath it; no table, no floor, no backdrop. Transparent
+background, PNG with alpha. Warm light from the upper left. Photorealistic. No text, no letters, no labels.
+```
+
+**Hourglass (bottom-right corner)**
+```
+A single ship's sand glass standing upright, seen from slightly above (about 20 degrees down) and turned a
+little so we look at it from its left-hand side, as if the viewer sits up and to the left of it: the round end
+plates show as gentle ellipses, the brass pillars lean very slightly towards the upper left, towards a
+vanishing point beyond the top-left of the frame. Two clear glass bulbs with fine pale sand mostly in the lower
+bulb, turned oak end plates, three slender brass pillars. Only the hourglass and a very soft contact shadow
+directly beneath it; no table, no floor, no backdrop. Transparent background, PNG with alpha. Warm light from
+the upper left. Photorealistic. No text, no letters.
+```
+
+If Meshy cannot give transparency, ask for "isolated on a solid pure black background" instead and I cut it out.
