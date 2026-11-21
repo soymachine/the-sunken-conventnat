@@ -1,7 +1,7 @@
 // three.js view of the two sea charts. Ships are persistent objects that glide,
 // ride the swell and sink; everything else is rebuilt from the public state.
 import * as THREE from 'three';
-import { Pub, SidePub } from '../game/engine';
+import { Pub, SidePub, maelstromIn } from '../game/engine';
 import { Kind, N, START_COLS, Ship, ShotOutcome, ZONE, headingOf, shipCells } from '../game/rules';
 import { Fx } from './fx';
 import { Kraken } from './kraken';
@@ -977,7 +977,7 @@ export class SeaScene {
     this.ambience(v.pub.phase !== 'over');
     for (const side of ['own', 'enemy'] as Side[]) {
       this.seas[side].setStorm(st ? st.row : null);
-      this.seas[side].setRing(v.pub.ring);
+      this.seas[side].setRing(v.pub.ring, maelstromIn(v.pub) === 1 ? v.pub.ring + 1 : 0);
       if (st) for (let i = 0; i < 9; i++) {
         const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: puffTex, color: 0x241d14, transparent: true, opacity: 0.85, depthWrite: false }));
         s.scale.set(5, 3.2, 1);

@@ -1,5 +1,5 @@
 // Oak-and-brass HUD drawn with DOM + SVG over the 3D canvas.
-import { Client, SEASON, roleOf } from '../game/engine';
+import { Client, SEASON, maelstromIn, roleOf } from '../game/engine';
 import { ITEMS, ITEM_HELP, ITEM_IDS, Item, MAX_ITEMS } from '../game/powerups';
 import { FLEETS, KRAKEN_SEALS, N, Role, shipCells } from '../game/rules';
 
@@ -29,7 +29,13 @@ export const TOOLS: Record<'broadside' | 'chain' | 'spy', { name: string; ap: nu
 
 /** What each special action above the helm does, told in full for its tooltip. */
 /** Cards that have their own picture in public/ui/cards/. */
-const CARD_ART = new Set(['broadside', 'chain', 'spy', 'spyglass', 'longglass', 'fireship', 'fog', 'shipwright', 'winds', 'current', 'pact', 'kraken']);
+const CARD_ART = new Set(['fire', 'sail', 'turn', 'broadside', 'chain', 'spy', 'spyglass', 'longglass', 'fireship', 'fog', 'shipwright', 'winds', 'current', 'pact', 'kraken']);
+/** What each ship's trait means, for the fleet's tooltips. */
+const TRAIT_HELP: Record<string, string> = {
+  Broadside: 'can fire a Broadside: three squares in a row.', 'Chain shot': 'can fire Chain shot: a hit pins the ship.',
+  Armour: 'armoured: the first hit glances off. Steam: the wind does not slow her.', Swift: 'swift: sails two squares instead of one.',
+  Spyglass: "carries the Cutter's Glass: counts hulls in a 5×5 patch.", Cargo: 'carries the cargo the Corsair plunders.',
+};
 const TOOL_HELP: Record<string, { ship?: string; text: string }> = {
   broadside: { ship: 'Ship of the Line', text: 'Fire three squares in a row at once. Press R to swing the line between across and down.' },
   chain: { ship: 'Frigate', text: 'A single shot of chained balls: a ship it hits is pinned and cannot sail or turn on her next turn.' },
@@ -114,12 +120,7 @@ export class Hud {
       <footer class="rail bottom">
         <div class="battle">
           <div class="say"><p id="hint"></p>
-            <div class="orders" role="group" aria-label="Orders">
-              <button class="order" data-order="fire" aria-label="Fire, 1 AP"><img src="/ui/tool_fire.webp" alt="" draggable="false"><span>Fire</span><i class="cost">1</i></button>
-              <button class="order" data-order="sail" aria-label="Sail, 1 AP"><img src="/ui/tool_sail.webp" alt="" draggable="false"><span>Sail</span><i class="cost">1</i></button>
-              <button class="order" data-order="turn" aria-label="Turn, 1 AP"><img src="/ui/tool_turn.webp" alt="" draggable="false"><span>Turn</span><i class="cost">1</i></button>
-            </div>
-            <button class="bottleBtn" id="noteBtn" aria-expanded="false" aria-controls="compose"><img src="/ui/bottle.webp" alt="" draggable="false"><span>Cast a bottle</span></button></div>
+            <button class="bottleBtn" id="noteBtn" aria-expanded="false" aria-controls="compose"><img src="/ui/bottle_up.webp" alt="" draggable="false"><span>Cast a bottle</span></button></div>
           <div class="helm">
             <svg class="telegraph" viewBox="${TG.view}" role="group" aria-label="Orders and action points"></svg>
           </div>
@@ -185,22 +186,6 @@ export class Hud {
       if (open) { const r = noteBtn.getBoundingClientRect(); compose.style.left = Math.max(12, r.left) + 'px'; compose.style.bottom = innerHeight - r.top + 12 + 'px'; noteText.focus(); }
     };
     noteBtn.onclick = () => showCompose(compose.hidden === true);
-    // The bottle bobs on a sine wave while the pointer rests on it: the swell builds up gently to
-    // 20 px each way and holds there; on leaving it dies away just as gently until the bottle is still.
-    const bottle = noteBtn.querySelector('img')!, calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
-    let amp = 0, phase = 0, over = false, last = 0, running = false;
-    const swell = (now: number) => {
-      const dt = Math.min(0.05, (now - last) / 1000); last = now;
-      const want = over && !(noteBtn as HTMLButtonElement).disabled ? 20 : 0;
-      amp += (want - amp) * (1 - Math.exp(-dt * 1.8));
-      phase += dt * Math.PI * 2 / 1.7;
-      if (want === 0 && amp < 0.15) { amp = 0; bottle.style.transform = ''; running = false; return; }
-      bottle.style.transform = `translateY(${(-amp * Math.sin(phase)).toFixed(2)}px)`;
-      requestAnimationFrame(swell);
-    };
-    const wake = () => { if (!running && !calm) { running = true; last = performance.now(); requestAnimationFrame(swell); } };
-    noteBtn.addEventListener('pointerenter', () => { over = true; wake(); });
-    noteBtn.addEventListener('pointerleave', () => { over = false; wake(); });
     noteText.oninput = () => { this.q('#noteCount').textContent = `${noteText.value.length} / 80`; };
     noteText.onkeydown = (e) => { e.stopPropagation(); if (e.key === 'Escape') showCompose(false); };
     this.q<HTMLElement>('#noteCancel').onclick = () => showCompose(false);
@@ -344,6 +329,11 @@ export class Hud {
 
   update(c: Client, mode: Mode, note = '') {
     const p = c.pub, me = c.side, foe = c.foeSide, mine = c.myTurn;
+    // When the battle opens the desk is laid out piece by piece instead of appearing all at once.
+    if (p.phase === 'battle' && this.root.dataset.phase !== 'battle') {
+      this.root.classList.remove('deal'); void this.root.offsetWidth; this.root.classList.add('deal');
+      setTimeout(() => this.root.classList.remove('deal'), 2600);
+    }
     this.root.dataset.phase = p.phase;
     const i = mode === 'fire' ? 0 : mode === 'sail' ? 1 : mode === 'turn' ? 2 : 3, span = 180 / SECTORS.length;
     const mid = ((180 - span * i - span / 2) * Math.PI) / 180;
@@ -393,10 +383,12 @@ export class Hud {
     this.q('#fleet').innerHTML = c.ships.map((s) => {
       const f = FLEETS[role].find((q) => q.kind === s.kind)!;
       const pips = s.hits.map((h, i) => `<i class="${s.floods?.[i] ? 'flood' : h ? 'hit' : ''}"></i>`).join('');
-      return `<li class="${s.sunk ? 'sunk' : ''}"><span>${s.cls}<em>${s.chained ? 'pinned by chain' : f.trait}</em></span><span class="pips">${pips}</span></li>`;
+      const tip = `${s.cls} — ${TRAIT_HELP[f.trait] ?? f.trait}${s.chained ? ' Pinned by chain shot this turn.' : ''}${s.sunk ? ' Sunk.' : ''}`;
+      return `<li class="${s.sunk ? 'sunk' : ''}${s.chained ? ' pinned' : ''}" title="${esc(tip)}"><span class="pips">${pips}</span></li>`;
     }).join('');
 
     const belt: string[] = [];
+    let orderCards: string[] = [];
     if (p.phase === 'battle') {
       // Each action carries its own explanation and, when it cannot be used, the reason why.
       const tool = (id: Mode, name: string, ap: number, ok: boolean, help: string, why = '') => {
@@ -405,6 +397,12 @@ export class Hud {
         const art = CARD_ART.has(id) ? `background-image:url(/ui/cards/${id}.webp)` : '';
         belt.push(`<button data-tool="${id}" data-name="${esc(name)}" data-ap="${ap}" data-help="${esc(help)}" data-why="${ok ? '' : esc(why)}" class="ocard${mode === id ? ' on' : ''}${ok ? '' : ' off'}${art ? '' : ' noart'}" aria-disabled="${!ok}" aria-label="${esc(name)}, ${ap} AP"><span class="art" style="${art}"></span><span class="nm">${name.replace(/ ×\d+$/, '')}</span>${/×\d+$/.test(name) ? `<span class="many">${name.match(/×\d+$/)![0]}</span>` : ''}<span class="cost">${ap}</span></button>`);
       };
+      // Fire, Sail and Turn are cards too; they always sit in the middle of the hand (placed below).
+      orderCards = [];
+      const order = (id: 'fire' | 'sail' | 'turn', name: string, help: string) => { const at = belt.length; tool(id, name, 1, mine && c.can(1), help); orderCards.push(belt.splice(at, 1)[0]); };
+      order('sail', 'Sail', 'Pick one of your ships, then a square ahead of her bow. With the wind she makes a square more; square-rigged ships cannot sail into it.');
+      order('fire', 'Fire', 'One shot at a square of enemy water.');
+      order('turn', 'Turn', 'Pick one of your ships and swing her bow a quarter to port or starboard about her middle. Ships with two hits cannot turn.');
       const sunk = (kind: 'line' | 'frigate' | 'cutter', cls: string) => (c.alive(kind) ? '' : `Your ${cls} has been sunk.`);
       tool('broadside', TOOLS.broadside.name, 2, c.can(2) && c.alive('line'), `${TOOL_HELP.broadside.text} Needs your Ship of the Line afloat.`, sunk('line', 'Ship of the Line'));
       tool('chain', TOOLS.chain.name, 2, c.can(2) && c.alive('frigate'), `${TOOL_HELP.chain.text} Needs your Frigate afloat.`, sunk('frigate', 'Frigate'));
@@ -417,6 +415,9 @@ export class Hud {
       if (!p.pacts?.[c.me] && c.ships.some((s) => !s.sunk && s.hits.some(Boolean) && s.kind !== 'merchant')) tool('pact', 'Blood Pact', 1, c.canPact(), TOOL_HELP.pact.text, c.ships.filter((s) => !s.sunk).length <= 1 ? 'Your last ship cannot be given up.' : '');
       if (role !== 'classic' && !p.power[c.me]) tool('power', CAPTAINS[role].power, 1, c.canPower(), `Your captain's power. ${CAPTAINS[role].powerText}`);
     }
+    // Fire in the very middle with Sail and Turn either side, the rest of the hand split around them.
+    const half = Math.floor(belt.length / 2);
+    if (p.phase === 'battle') belt.splice(half, 0, ...orderCards);
     this.q('#belt').innerHTML = belt.join('');
     // Fan the hand: each card turns a little about a point below the table.
     const cards = [...this.root.querySelectorAll<HTMLElement>('#belt .ocard')], n = cards.length;
@@ -435,7 +436,12 @@ export class Hud {
       parts.push(`<span><b>Season closes</b>${p.phase === 'battle' ? `in ${left} round${left === 1 ? '' : 's'}` : `after round ${SEASON}`}</span>`);
     }
     if (p.kraken) parts.push(`<span><b>The Kraken</b>holds ${p.kraken.side === c.me ? 'your' : 'enemy'} ships</span>`);
-    if (p.ring) parts.push(`<span><b>Maelstrom</b>${p.ring} ring${p.ring === 1 ? '' : 's'} drowned</span>`);
+    // The maelstrom's countdown is always in sight, so captains can plan their moves around it.
+    if (p.mode === 'classic' && p.phase === 'battle') {
+      const left = maelstromIn(p), ringTxt = p.ring ? `${p.ring} ring${p.ring === 1 ? '' : 's'} drowned · ` : '';
+      parts.push(left === null ? `<span class="mael"><b>Maelstrom</b>spent — the middle 6×6 remains</span>`
+        : `<span class="mael${left === 1 ? ' soon' : ''}"><b>Maelstrom</b>${ringTxt}${left === 1 ? 'the next ring goes under <u>next round</u>' : `${p.ring ? 'next ring' : 'rises'} in <u>${left} rounds</u>`}</span>`);
+    }
     obj.hidden = !parts.length || p.phase === 'over';
     obj.innerHTML = parts.join('');
     this.q<HTMLElement>('.over').hidden = p.phase !== 'over';

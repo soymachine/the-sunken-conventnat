@@ -118,3 +118,27 @@ and empty, with no marks, no stains, no map, no lines. Straight-on orthographic 
 no curl, no shadow, filling about 90% of the frame. Isolated on a solid pure black background. Soft even
 light. Photorealistic. No text, no letters, no numbers, no logos.
 ```
+
+## 6. Order cards: Fire, Sail and Turn
+
+Same base prompt as the other card pictures (section 2). The arrows are symbols, not lettering, so the
+"no text" line still applies:
+
+| Card | `[SCENE]` |
+|---|---|
+| Fire | a single heavy naval cannon on its oak carriage filling the picture, seen close up from the side and a little from the front at the instant it fires: a great tongue of flame and a rolling cloud of smoke bursting from the muzzle, the barrel jolting back in recoil, sparks flying from the touch-hole; only the gun port's dark timbers behind it, no crew |
+| Sail | a ship running before the wind under full sail, her bow cutting a white wave, a gull alongside; across the foreground a bold engraved straight arrow pointing forward, drawn like a chart's ink symbol, clearly showing movement ahead |
+| Turn | a helmsman heaving on the great double ship's wheel, the ship heeling as she comes about; around the wheel a bold engraved curved arrow sweeping a quarter circle, drawn like a chart's ink symbol, clearly showing rotation |
+
+## 7. The desk along the bottom of the screen
+
+Different from the top bar's oak planks: a captain's chart table of darker wood with brass.
+
+```
+A seamless, tileable texture of an old captain's chart table seen straight from above: dark polished
+mahogany boards running horizontally, worn smooth and slightly glossy, with fine grain, small dents and
+scratches, faint rings left by mugs and a few drops of old candle wax, and a narrow inlaid brass strip running
+the full width near the top edge. Even, soft light with no shadows or vignette, so the edges tile without a
+seam. Straight-on orthographic top view, no perspective. Photorealistic. No objects, no text, no letters.
+Wide format, about four times wider than tall.
+```
