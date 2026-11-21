@@ -4,23 +4,38 @@ const KEY = 'tsc:deskTuning';
 
 interface Knob { v: string; label: string; min: number; max: number; step: number; unit: string; def: number }
 const KNOBS: Knob[] = [
-  { v: '--desk-persp', label: 'Perspective', min: 150, max: 2000, step: 10, unit: 'px', def: 520 },
-  { v: '--desk-oy', label: 'Vanish height', min: -400, max: 100, step: 5, unit: '%', def: -140 },
-  { v: '--desk-tilt', label: 'Tilt', min: 0, max: 70, step: 1, unit: 'deg', def: 28 },
-  { v: '--desk-tex', label: 'Texture size', min: 400, max: 3000, step: 20, unit: 'px', def: 1216 },
-  { v: '--desk-shade', label: 'Back shade', min: 0, max: 1, step: 0.05, unit: '', def: 0.5 },
-  { v: '--bottle-h', label: 'Bottle size', min: 60, max: 320, step: 2, unit: 'px', def: 150 },
-  { v: '--glass-h', label: 'Glass size', min: 60, max: 320, step: 2, unit: 'px', def: 132 },
-  { v: '--belt-y', label: 'Cards at rest (Y)', min: -120, max: 80, step: 2, unit: 'px', def: 0 },
-  { v: '--card-lift', label: 'Card raised (Y)', min: 0, max: 200, step: 2, unit: 'px', def: 62 },
-  { v: '--mael-x', label: 'Maelstrom gauge (X from right)', min: 0, max: 1200, step: 2, unit: 'px', def: 262 },
-  { v: '--mael-y', label: 'Maelstrom gauge (Y)', min: 0, max: 600, step: 2, unit: 'px', def: 92 },
-  { v: '--lamp-dir', label: 'Gauge lamps: top (-1) / bottom (1)', min: -1, max: 1, step: 2, unit: '', def: 1 },
+  { v: '--desk-persp', label: 'Perspective', min: 150, max: 2000, step: 10, unit: 'px', def: 260 },
+  { v: '--desk-oy', label: 'Vanish height', min: -400, max: 100, step: 5, unit: '%', def: -55 },
+  { v: '--desk-tilt', label: 'Tilt', min: 0, max: 70, step: 1, unit: 'deg', def: 38 },
+  { v: '--desk-tex', label: 'Texture size', min: 200, max: 3000, step: 20, unit: 'px', def: 400 },
+  { v: '--desk-shade', label: 'Back shade', min: 0, max: 1, step: 0.05, unit: '', def: 0.65 },
+  { v: '--bottle-h', label: 'Bottle size', min: 60, max: 320, step: 2, unit: 'px', def: 132 },
+  { v: '--glass-h', label: 'Glass size', min: 60, max: 320, step: 2, unit: 'px', def: 150 },
+  { v: '--belt-y', label: 'Cards at rest (Y)', min: -120, max: 80, step: 2, unit: 'px', def: 26 },
+  { v: '--card-lift', label: 'Card raised (Y)', min: 0, max: 200, step: 2, unit: 'px', def: 20 },
   { v: '--wind', label: 'Wind strength', min: 0, max: 3, step: 0.1, unit: '', def: 1 },
+  { v: '--mael-x', label: 'Gauge: X from right', min: 0, max: 1200, step: 2, unit: 'px', def: 474 },
+  { v: '--mael-y', label: 'Gauge: Y', min: 0, max: 600, step: 2, unit: 'px', def: 88 },
+  { v: '--lamp-dir', label: 'Gauge lamps: top (-1) / bottom (1)', min: -1, max: 1, step: 2, unit: '', def: -1 },
+  { v: '--lamp-x', label: 'Gauge lamps: X', min: -40, max: 40, step: 1, unit: 'px', def: 0 },
+  { v: '--lamp-y', label: 'Gauge lamps: Y', min: -40, max: 40, step: 1, unit: 'px', def: 0 },
+  { v: '--face-x', label: 'Gauge dial: X', min: -30, max: 30, step: 1, unit: 'px', def: 0 },
+  { v: '--face-y', label: 'Gauge dial: Y', min: -30, max: 30, step: 1, unit: 'px', def: 0 },
+  { v: '--mtext-x', label: 'Gauge number & text: X', min: -40, max: 40, step: 1, unit: 'px', def: 0 },
+  { v: '--mtext-y', label: 'Gauge number & text: Y', min: -40, max: 40, step: 1, unit: 'px', def: 0 },
+  { v: '--card-hue', label: 'Plain cards: hue', min: -180, max: 180, step: 2, unit: 'deg', def: 0 },
+  { v: '--card-sat', label: 'Plain cards: saturation', min: 0, max: 3, step: 0.05, unit: '', def: 1 },
+  { v: '--card-bri', label: 'Plain cards: brightness', min: 0.3, max: 1.8, step: 0.02, unit: '', def: 1 },
+  { v: '--shot-hue', label: 'Shot cards: hue', min: -180, max: 180, step: 2, unit: 'deg', def: 0 },
+  { v: '--shot-sat', label: 'Shot cards: saturation', min: 0, max: 3, step: 0.05, unit: '', def: 1 },
+  { v: '--shot-bri', label: 'Shot cards: brightness', min: 0.3, max: 1.8, step: 0.02, unit: '', def: 1 },
+  { v: '--move-hue', label: 'Move cards: hue', min: -180, max: 180, step: 2, unit: 'deg', def: 0 },
+  { v: '--move-sat', label: 'Move cards: saturation', min: 0, max: 3, step: 0.05, unit: '', def: 1 },
+  { v: '--move-bri', label: 'Move cards: brightness', min: 0.3, max: 1.8, step: 0.02, unit: '', def: 1 },
 ];
 const MOVES: Record<string, { x: string; y: string; def: [number, number]; fromRight?: boolean }> = {
-  bottle: { x: '--bottle-x', y: '--bottle-y', def: [14, 6] },
-  glass: { x: '--glass-x', y: '--glass-y', def: [74, 22], fromRight: true },
+  bottle: { x: '--bottle-x', y: '--bottle-y', def: [93, 18] },
+  glass: { x: '--glass-x', y: '--glass-y', def: [285, 6], fromRight: true },
 };
 
 /** Knobs that are not only CSS (the wind) are passed on to the game through this event. */
@@ -48,7 +63,7 @@ export function installTuner(hud: HTMLElement) {
   const out = panel.querySelector('textarea')!;
   panel.querySelectorAll<HTMLInputElement>('input[type=range]').forEach((inp) => {
     const k = KNOBS.find((q) => q.v === inp.dataset.v)!, o = inp.nextElementSibling as HTMLOutputElement;
-    inp.value = String(parseFloat(val(k.v)) || k.def); o.textContent = inp.value + k.unit;
+    const cur = parseFloat(val(k.v)); inp.value = String(Number.isNaN(cur) ? k.def : cur); o.textContent = inp.value + k.unit;
     inp.oninput = () => { root.setProperty(k.v, inp.value + k.unit); o.textContent = inp.value + k.unit; save(); tuned(k.v, +inp.value); };
   });
   panel.querySelector<HTMLElement>('[data-act=close]')!.onclick = () => { panel.hidden = true; hud.classList.remove('arrange'); };

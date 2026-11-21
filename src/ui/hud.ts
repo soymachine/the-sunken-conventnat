@@ -424,7 +424,7 @@ export class Hud {
 
     this.q('#turnTitle').textContent = p.phase === 'placement' ? 'Deploy your fleet' : p.phase === 'over' ? 'Battle over' : mine ? 'Your turn' : 'Enemy turn';
     this.q('#turnWx').textContent = p.phase === 'battle' && p.storm ? `Storm over ${(p.storm.rows ?? 3) === 1 ? `row ${p.storm.row + 1}` : `rows ${p.storm.row + 1}–${p.storm.row + (p.storm.rows ?? 3)}`} · no guns or glasses there` : '';
-    this.q('#turnSub').textContent = p.phase === 'battle' ? `Round ${p.round} · Wind ${['→ east', '↓ south', '← west', '↑ north'][p.wind ?? 0]}` : '';
+    this.q('#turnSub').textContent = p.phase === 'battle' ? `Round ${p.round} · ${(p.wind ?? 0) < 0 ? 'Flat calm' : `Wind ${['→ east', '↓ south', '← west', '↑ north'][p.wind ?? 0]}`}` : '';
     this.q('#seals').innerHTML = Array.from({ length: KRAKEN_SEALS }, (_, i) => `<i class="${i < me.seals ? 'lit' : ''}"></i>`).join('') + `<span>${me.seals >= KRAKEN_SEALS ? 'The Kraken will answer.' : `${Math.min(me.seals, KRAKEN_SEALS)} of ${KRAKEN_SEALS} seals`}</span>`;
     // The full explanation lives in the seals' tooltip; the panel keeps only what needs doing now.
     this.sealHelp = me.seals >= KRAKEN_SEALS

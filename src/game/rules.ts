@@ -150,7 +150,7 @@ const RIG: Record<Kind, 'square' | 'gaff' | 'steam'> = { line: 'square', frigate
 /** How far a ship may sail ahead this turn, before anything blocks her: wind and flooding count. */
 export function sailMax(s: Ship, wind?: number): number {
   let n = s.kind === 'schooner' ? 2 : 1;
-  if (wind !== undefined && RIG[s.kind] !== 'steam') {
+  if (wind !== undefined && wind >= 0 && RIG[s.kind] !== 'steam') {
     const h = headingOf(s);
     if (h === wind) n += 1;
     else if ((h + 2) % 4 === wind) n = RIG[s.kind] === 'gaff' ? Math.max(1, n - 1) : 0;
@@ -161,7 +161,7 @@ export function sailMax(s: Ship, wind?: number): number {
 
 /** Why a ship cannot sail ahead at all, if wind or water is the reason. */
 export function becalmed(s: Ship, wind?: number): string | null {
-  if (wind !== undefined && RIG[s.kind] === 'square' && (headingOf(s) + 2) % 4 === wind) return 'she cannot sail into the wind — turn her across it';
+  if (wind !== undefined && wind >= 0 && RIG[s.kind] === 'square' && (headingOf(s) + 2) % 4 === wind) return 'she cannot sail into the wind — turn her across it';
   if (flooded(s) > 0 && sailMax(s, wind) === 0) return 'she is holed and taking water';
   return null;
 }

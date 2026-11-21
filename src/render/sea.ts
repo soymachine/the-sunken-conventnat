@@ -427,11 +427,11 @@ export class Sea {
 
   /** Target darkness of this chart (1 while the Kraken holds it). */
   night = 0;
-  private windAng = 0; private windTo = 0; private drift = 0;
+  private windAng = 0; private windTo = 0; private drift = 0; private calm = 0; private calmTo = 0;
   /** How strongly the wind shows on the water (debug), 1 by default. */
   static windStrength = 1;
   /** Where the wind blows towards: a heading (0 east, 1 south, 2 west, 3 north); the strokes swing round to it. */
-  setWind(h: number) { this.windTo = h * Math.PI / 2; }
+  setWind(h: number) { this.calmTo = h < 0 ? 1 : 0; if (h >= 0) this.windTo = h * Math.PI / 2; }
   setGust(g: number) { this.mat.uniforms.uGust.value = g; }
   /** The storm front: its first row and how many rows it covers (none when `row` is null). */
   setStorm(row: number | null, rows = 3) { (this.mat.uniforms.uStorm.value as THREE.Vector2).set(row ?? 0, row === null ? 0 : rows); }
@@ -462,7 +462,9 @@ export class Sea {
     // Swing round the short way (never through a standstill), and drift at a speed that follows the gusts.
     this.windAng = turnToward(this.windAng, this.windTo, dt * 1.2);
     (this.mat.uniforms.uWind.value as THREE.Vector2).set(Math.cos(this.windAng), Math.sin(this.windAng));
-    this.drift += dt * (0.9 + 1.4 * this.mat.uniforms.uGust.value) * Sea.windStrength;
+    // In a flat calm the strokes barely creep.
+    this.calm += (this.calmTo - this.calm) * Math.min(1, dt * 0.8);
+    this.drift += dt * (0.9 + 1.4 * this.mat.uniforms.uGust.value) * Sea.windStrength * (1 - 0.8 * this.calm);
     this.mat.uniforms.uDrift.value = this.drift;
     const k = Math.exp(-dt * 0.8);
     for (let i = 0; i < this.energy.length; i++) { this.energy[i] *= k; this.bytes[i] = this.energy[i] * 255; }

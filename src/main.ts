@@ -368,7 +368,7 @@ function refresh() {
   scene.setTurn(c.pub.phase !== 'battle' || c.myTurn);
   // Announce each new turn once, with a ribbon across the screen.
   const turnKey = c.pub.phase === 'battle' ? `${c.pub.round}:${c.pub.current}` : '';
-  if (turnKey && turnKey !== lastTurnKey && !quiet) hud.herald(c.myTurn ? 'Your turn' : 'The enemy moves', `Round ${c.pub.round} · wind ${['east', 'south', 'west', 'north'][c.pub.wind ?? 0]}`, c.myTurn);
+  if (turnKey && turnKey !== lastTurnKey && !quiet) hud.herald(c.myTurn ? 'Your turn' : 'The enemy moves', `Round ${c.pub.round} · ${(c.pub.wind ?? 0) < 0 ? 'flat calm' : `wind ${['east', 'south', 'west', 'north'][c.pub.wind ?? 0]}`}`, c.myTurn);
   if (turnKey && turnKey !== lastTurnKey) hud.setHint(c.myTurn ? HINTS[mode] || '' : 'The enemy is at the helm. Watch your waters…');
   lastTurnKey = turnKey;
   const hl: Highlight[] = [];

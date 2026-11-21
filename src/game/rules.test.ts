@@ -531,8 +531,12 @@ describe('the covenant', () => {
   it('the wind veers each round the same for both, and the ship of the line obeys it', async () => {
     const { a, b } = await duel();
     const winds = new Set<number>();
-    for (let i = 0; i < 16; i++) { winds.add(a.pub.wind!); (a.myTurn ? a : b).endTurn(); }
+    for (let i = 0; i < 80; i++) { winds.add(a.pub.wind!); (a.myTurn ? a : b).endTurn(); }
     expect(winds.size).toBeGreaterThan(1);
+    expect(winds.has(-1)).toBe(true); // flat calms come round too
+    const line = a.ships.find((s) => s.kind === 'line')!;
+    expect(sailMax(line, -1)).toBe(1);
+    expect(becalmed(line, -1)).toBeNull();
     expect(a.pub).toEqual(b.pub);
   });
   it('a blood pact sinks a damaged ship for two seals, once a battle, and a false pact is caught', async () => {

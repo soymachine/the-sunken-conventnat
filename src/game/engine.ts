@@ -76,7 +76,7 @@ export interface Pub {
   /** An attack or scan is waiting for the defender's answer. */
   pending: boolean;
   windsUsed: boolean;
-  /** Where the wind blows this round (a heading: 0 east, 1 south, 2 west, 3 north). */
+  /** Where the wind blows this round (a heading: 0 east, 1 south, 2 west, 3 north), or -1 in a flat calm. */
   wind?: number;
   /** Each captain may seal one blood pact a battle. */
   pacts?: [boolean, boolean];
@@ -350,8 +350,9 @@ export function reduce(p: Pub, m: Msg): boolean {
       if (p.bottle) p.bottle[foe] = false;
       if (p.current === 0) {
         p.round++;
-        // The wind veers each round.
-        p.wind = Math.floor(rand(p) * 4);
+        // The wind veers each round; one round in five is a flat calm (-1), when no ship gains or loses by it.
+        const r = rand(p);
+        p.wind = r < 0.2 ? -1 : Math.min(3, Math.floor((r - 0.2) / 0.8 * 4));
         for (const s of p.sides) { s.fogs = s.fogs.filter((f) => f.until >= p.round); s.wakes = s.wakes.filter((w) => p.round - w.round <= 2); }
         if (p.mode === 'convoy' && p.round > SEASON) { p.phase = 'over'; p.winner = (1 - p.admiral!) as 0 | 1; p.reason = 'season'; return true; }
         if (p.round % 3 === 1) { spawnTreasure(p, 0); spawnTreasure(p, 1); }

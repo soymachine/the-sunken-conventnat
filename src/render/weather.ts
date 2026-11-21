@@ -402,7 +402,7 @@ class WindStreaks {
   mesh: THREE.Mesh;
   private mat: THREE.ShaderMaterial;
   private dir = new THREE.Vector2(1, 0);
-  private ang = 0; private angTo = 0;
+  private ang = 0; private angTo = 0; private calm = 0; private calmTo = 0;
   /** How strong the wind shows (debug): speed and brightness of the streaks. */
   strength = 1;
   private gust = 0;
@@ -424,7 +424,8 @@ class WindStreaks {
   }
   cover(x: number, z: number, w: number, d: number) { (this.mat.uniforms.uArea.value as THREE.Vector4).set(x, z, w, d); }
   /** Where the wind blows towards: a heading (0 east, 1 south, 2 west, 3 north). */
-  setWind(h: number) { this.angTo = h * Math.PI / 2; }
+  /** A heading (0 east, 1 south, 2 west, 3 north), or -1 for a flat calm: the streaks die away. */
+  setWind(h: number) { this.calmTo = h < 0 ? 1 : 0; if (h >= 0) this.angTo = h * Math.PI / 2; }
   /** A strong gust now (e.g. when a ship is caught in irons). */
   blow() { this.forced = 2.5; }
   update(dt: number, t: number, stormy: boolean) {
@@ -432,11 +433,12 @@ class WindStreaks {
     this.ang = turnToward(this.ang, this.angTo, dt * 1.2);
     this.dir.set(Math.cos(this.ang), Math.sin(this.ang));
     if ((this.nextGust -= dt) < 0) this.nextGust = 7 + Math.random() * 10;
-    const gusting = this.nextGust < 2.2 || this.forced > 0 || stormy;
+    this.calm += (this.calmTo - this.calm) * Math.min(1, dt * 0.8);
+    const gusting = (this.nextGust < 2.2 || this.forced > 0 || stormy) && this.calmTo === 0;
     this.forced = Math.max(0, this.forced - dt);
     this.gust += ((gusting ? 1 : 0) - this.gust) * Math.min(1, dt * 2.5);
-    this.mat.uniforms.uTime.value = t; this.mat.uniforms.uGust.value = this.gust; this.mat.uniforms.uStrength.value = this.strength;
-    (this.mat.uniforms.uShift.value as THREE.Vector2).addScaledVector(this.dir, dt * (1 + 1.6 * this.gust) * this.strength);
+    this.mat.uniforms.uTime.value = t; this.mat.uniforms.uGust.value = this.gust; this.mat.uniforms.uStrength.value = this.strength * (1 - this.calm);
+    (this.mat.uniforms.uShift.value as THREE.Vector2).addScaledVector(this.dir, dt * (1 + 1.6 * this.gust) * this.strength * (1 - 0.9 * this.calm));
   }
   get gustLevel() { return this.gust; }
 }

@@ -542,3 +542,25 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); out
 .mael small { color: #e8b04a; font-size: 8px; line-height: 1.15; text-shadow: 0 1px 2px #000, 0 0 4px #000; }
 .mael.two b { top: 19px; }
 .mael.two small { top: 50px; font-size: 8.5px; color: #ffb07a; }
+
+/* ---------- 0.20: the tuned defaults, the gauge's parts and the cards' colours can be set apart ---------- */
+:root { --desk-persp: 260px; --desk-oy: -55%; --desk-tilt: 38deg; --desk-tex: 400px; --desk-shade: .65;
+  --bottle-h: 132px; --glass-h: 150px; --belt-y: 26px; --card-lift: 20px; --mael-x: 474px; --mael-y: 88px; --lamp-dir: -1;
+  --bottle-x: 93px; --bottle-y: 18px; --glass-x: 285px; --glass-y: 6px;
+  --lamp-x: 0px; --lamp-y: 0px; --face-x: 0px; --face-y: 0px; --mtext-x: 0px; --mtext-y: 0px;
+  --card-hue: 0deg; --card-sat: 1; --card-bri: 1; --shot-hue: 0deg; --shot-sat: 1; --shot-bri: 1; --move-hue: 0deg; --move-sat: 1; --move-bri: 1; }
+.mael .notch { translate: var(--lamp-x) var(--lamp-y); }
+.mael .face, .mael .swirl { translate: var(--face-x) var(--face-y); }
+.mael b, .mael small { translate: var(--mtext-x) var(--mtext-y); }
+/* The card's paper is drawn behind its picture so it can be tinted (all but the Kraken's, which stays black). */
+.belt .ocard.ocard:not(.k-kraken) { background-image: none !important; isolation: isolate; }
+.belt .ocard.ocard:not(.k-kraken)::before { content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none;
+  background: url('/ui/card.webp') center / 100% 100% no-repeat; filter: hue-rotate(var(--card-hue)) saturate(var(--card-sat)) brightness(var(--card-bri)); }
+.belt .ocard.ocard.k-shot::before { background-image: url('/ui/card_shot.webp'); filter: hue-rotate(var(--shot-hue)) saturate(var(--shot-sat)) brightness(var(--shot-bri)); }
+.belt .ocard.ocard.k-move::before { background-image: url('/ui/card_move.webp'); filter: hue-rotate(var(--move-hue)) saturate(var(--move-sat)) brightness(var(--move-bri)); }
+.tuner { max-height: calc(100vh - 90px); overflow-y: auto; }
+
+/* ---------- the home: the crest above, the articles of engagement right below ---------- */
+#lobby .port { flex-direction: column; flex-wrap: nowrap; gap: 0; padding: 8px 0 24px; }
+#lobby .crest { width: min(400px, 70vw); margin-bottom: -26px; position: relative; z-index: 1; }
+#lobby .card { width: min(520px, 100%); padding-top: 40px; }
