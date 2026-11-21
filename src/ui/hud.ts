@@ -80,7 +80,7 @@ export class Hud {
         <div class="turn"><button id="menuBtn" class="mini" aria-expanded="false" aria-controls="menu">Settings</button></div>
         <h1 class="title"><span>The Sunken Covenant</span></h1>
         <div class="foe"><span id="foeNote"></span></div>
-        <div class="status" role="status"><b id="turnTitle"></b><span id="turnSub"></span><p id="placeHint"></p></div>
+        <div class="status" role="status"><b id="turnTitle"></b><span id="turnSub"></span><em id="turnWx"></em><div class="objective" id="objective" hidden></div><p id="placeHint"></p></div>
       </header>
       <div class="menu card" id="menu" hidden>
         <h2>Settings</h2>
@@ -91,6 +91,7 @@ export class Hud {
         <p class="meta">Auto steps down by itself if the game runs slowly. Low drops shadows, glow and the print grade.</p>
       </div>
       <div class="shopTip" id="shopTip" role="tooltip" hidden></div>
+      <div class="shipMenu" id="shipMenu" hidden><button type="button"></button></div>
       <form class="compose card" id="compose" hidden>
         <h2>A message in a bottle</h2>
         <label for="noteText" class="meta">One a turn, for the other captain's eyes. It costs nothing.</label>
@@ -101,7 +102,6 @@ export class Hud {
         <div class="card"><p class="meta" id="letterHead">A bottle washes up on your waters</p><p class="ink" id="letterText"></p><p class="sign" id="letterSign"></p><button class="plaque" id="letterOk">Fold it away</button></div>
       </div>
       <div class="herald" id="herald" aria-hidden="true"><div><b></b><span></span></div></div>
-      <div class="objective" id="objective" hidden></div>
       <aside class="card left">
         <h2>The covenant</h2><div class="seals" id="seals" tabindex="0" aria-describedby="shopTip"></div><p class="howto" id="sealHow"></p>
         <h2>Admiralty orders</h2><p id="orderText"></p><p id="orderMeta" class="meta"></p>
@@ -115,9 +115,9 @@ export class Hud {
         <div class="battle">
           <div class="say"><p id="hint"></p>
             <div class="orders" role="group" aria-label="Orders">
-              <button class="order" data-order="fire"><img src="/ui/tool_fire.webp" alt="" draggable="false"><span>Fire</span></button>
-              <button class="order" data-order="sail"><img src="/ui/tool_sail.webp" alt="" draggable="false"><span>Sail</span></button>
-              <button class="order" data-order="turn"><img src="/ui/tool_turn.webp" alt="" draggable="false"><span>Turn</span></button>
+              <button class="order" data-order="fire" aria-label="Fire, 1 AP"><img src="/ui/tool_fire.webp" alt="" draggable="false"><span>Fire</span><i class="cost">1</i></button>
+              <button class="order" data-order="sail" aria-label="Sail, 1 AP"><img src="/ui/tool_sail.webp" alt="" draggable="false"><span>Sail</span><i class="cost">1</i></button>
+              <button class="order" data-order="turn" aria-label="Turn, 1 AP"><img src="/ui/tool_turn.webp" alt="" draggable="false"><span>Turn</span><i class="cost">1</i></button>
             </div>
             <button class="bottleBtn" id="noteBtn" aria-expanded="false" aria-controls="compose"><img src="/ui/bottle.webp" alt="" draggable="false"><span>Cast a bottle</span></button></div>
           <div class="helm">
@@ -146,7 +146,7 @@ export class Hud {
     const show = (open: boolean) => { menu.hidden = !open; menuBtn.setAttribute('aria-expanded', String(open)); };
     menuBtn.onclick = (e) => { e.stopPropagation(); show(menu.hidden === true); };
     addEventListener('pointerdown', (e) => { if (!menu.hidden && !menu.contains(e.target as Node) && e.target !== menuBtn) show(false); });
-    addEventListener('keydown', (e) => { if (e.key === 'Escape') show(false); });
+    addEventListener('keydown', (e) => { if (e.key === 'Escape') { show(false); this.shipMenu(null); } });
     menu.onclick = (e) => {
       const b = (e.target as Element).closest<HTMLElement>('.seg button');
       if (!b) return;
@@ -328,6 +328,18 @@ export class Hud {
     l.hidden = false; l.classList.remove('open'); void l.offsetWidth; l.classList.add('open');
   }
 
+  /** A small floating order beside a ship (right-click); null hides it. */
+  shipMenu(at: { x: number; y: number; order: Mode; ok: boolean } | null, pick?: () => void) {
+    const m = this.q<HTMLElement>('#shipMenu'), b = m.querySelector('button')!;
+    if (!at) { m.hidden = true; return; }
+    b.innerHTML = `<img src="/ui/tool_${at.order}.webp" alt=""><span>${at.order === 'turn' ? 'Turn her' : 'Sail her'}</span><i class="cost">1</i>`;
+    b.disabled = !at.ok;
+    b.title = at.ok ? '' : at.order === 'turn' ? 'She cannot turn now.' : 'She cannot make way now.';
+    b.onclick = () => { m.hidden = true; pick?.(); };
+    m.style.left = at.x + 14 + 'px'; m.style.top = at.y - 24 + 'px';
+    m.hidden = false;
+  }
+
   setHint(text: string) { this.q('#hint').textContent = text; }
 
   update(c: Client, mode: Mode, note = '') {
@@ -339,6 +351,7 @@ export class Hud {
     this.sectors.forEach(([path, t], k) => { path.classList.toggle('on', k === i); t.classList.toggle('on', k === i); });
 
     this.q('#turnTitle').textContent = p.phase === 'placement' ? 'Deploy your fleet' : p.phase === 'over' ? 'Battle over' : mine ? 'Your turn' : 'Enemy turn';
+    this.q('#turnWx').textContent = p.phase === 'battle' && p.storm ? `Storm over rows ${p.storm.row + 1}–${p.storm.row + 3} · no guns or glasses there` : '';
     this.q('#turnSub').textContent = p.phase === 'battle' ? `Round ${p.round} · Wind ${['→ east', '↓ south', '← west', '↑ north'][p.wind ?? 0]}` : '';
     this.q('#seals').innerHTML = Array.from({ length: KRAKEN_SEALS }, (_, i) => `<i class="${i < me.seals ? 'lit' : ''}"></i>`).join('') + `<span>${me.seals >= KRAKEN_SEALS ? 'The Kraken will answer.' : `${Math.min(me.seals, KRAKEN_SEALS)} of ${KRAKEN_SEALS} seals`}</span>`;
     // The full explanation lives in the seals' tooltip; the panel keeps only what needs doing now.
@@ -421,7 +434,6 @@ export class Hud {
       if (role === 'admiral') parts.push(`<span><b>Home port</b>${way} column${way === 1 ? '' : 's'} east</span>`);
       parts.push(`<span><b>Season closes</b>${p.phase === 'battle' ? `in ${left} round${left === 1 ? '' : 's'}` : `after round ${SEASON}`}</span>`);
     }
-    if (p.storm) parts.push(`<span><b>Storm</b>rows ${p.storm.row + 1}–${p.storm.row + 3}, no guns or glasses</span>`);
     if (p.kraken) parts.push(`<span><b>The Kraken</b>holds ${p.kraken.side === c.me ? 'your' : 'enemy'} ships</span>`);
     if (p.ring) parts.push(`<span><b>Maelstrom</b>${p.ring} ring${p.ring === 1 ? '' : 's'} drowned</span>`);
     obj.hidden = !parts.length || p.phase === 'over';

@@ -344,3 +344,22 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); out
 /* The old belt buttons' colours must not reach the cards. */
 .belt .ocard.ocard, .belt .ocard.ocard.on, .belt .ocard.ocard[data-tool="kraken"] { background: url('/ui/card.webp') center / 100% 100% no-repeat; color: inherit; border: 0; }
 .belt .ocard.ocard[data-tool="kraken"] .nm, .belt .ocard.ocard[data-tool="pact"] .nm { color: var(--wax); }
+
+/* Storm line under the round. */
+#hud .status em { display: block; font: italic 14px var(--body); color: #e0a07a; margin-top: 3px; }
+#hud .status em:empty { display: none; }
+/* AP cost on the order tools, the same wax seal as the cards. */
+.order { position: relative; }
+.order .cost, .shipMenu .cost { position: absolute; top: -6px; right: -10px; width: 22px; height: 22px; display: grid; place-items: center; font: 700 10px var(--label); font-style: normal; letter-spacing: 0; color: #f3e6c4; background: url('/ui/ap_seal.webp') center / contain no-repeat; text-shadow: 0 1px 2px #000; }
+/* The floating order beside a ship. */
+.shipMenu { position: fixed; z-index: 9; pointer-events: auto; }
+.shipMenu button { position: relative; display: flex; align-items: center; gap: 8px; padding: 6px 14px 6px 8px; cursor: pointer; font: 700 11px var(--label); letter-spacing: .14em; text-transform: uppercase; color: var(--ink); background: var(--parch); border: 1px solid var(--brass); border-radius: 4px; box-shadow: 0 6px 14px rgba(0, 0, 0, .6); }
+.shipMenu button img { height: 28px; width: auto; }
+.shipMenu button:hover:not(:disabled) { background: #fff8e6; color: var(--wax); }
+.shipMenu button:disabled { opacity: .5; cursor: not-allowed; }
+
+/* The objective strip sits under the round, inside the status, never over it. */
+#hud .status .objective { position: static; transform: none; display: inline-flex; margin-top: 8px; text-shadow: none; }
+#hud .status .objective > span { display: flex; align-items: center; gap: 7px; font: italic 14px var(--body); letter-spacing: 0; text-transform: none; color: var(--parch); margin: 0; }
+#hud .status .objective b { display: inline; font: 700 9.5px var(--label); letter-spacing: .16em; text-transform: uppercase; color: var(--amber); }
+#hud .status .objective .crates { display: inline-flex; margin: 0; }

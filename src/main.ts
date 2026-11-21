@@ -256,7 +256,8 @@ function describe(m: Msg, mine: boolean) {
 const seen = { storm: 0, tide: 0, ring: 0, seals: -1, warned: 0 };
 function weather() {
   const p = c.pub;
-  if (p.storm && p.storm.until !== seen.storm) { seen.storm = p.storm.until; hud.log(`A storm front closes over rows ${p.storm.row + 1}–${p.storm.row + 3}: no guns or spyglasses there.`); }
+  // The storm front is shown under the round in the status line, not as a passing notice.
+  if (p.storm && p.storm.until !== seen.storm) seen.storm = p.storm.until;
   if (p.tide && p.tide.round !== seen.tide) { seen.tide = p.tide.round; hud.log('High tide! The sea carries the flotsam a square.'); if (p.tide.round === p.round) scene.tide(p.tide.dx, p.tide.dy); }
   // Say plainly when a covenant seal comes in, and when three of them can wake the Kraken.
   const n = c.side.seals;
@@ -332,7 +333,8 @@ function zone(side: Cell['side'], x: number, y: number, color: number, opacity: 
 function refreshHud() {
   if (!session) return;
   // Fall back to plain fire when the chosen tool is spent or its ship is lost.
-  const gone = (mode === 'kraken' && c.side.seals < 3) || (mode === 'broadside' && !c.alive('line')) || (mode === 'chain' && !c.alive('frigate')) || (mode === 'spy' && !c.alive('cutter')) || (mode in ITEMS && !c.has(mode as Item));
+  const cost: Record<string, number> = { broadside: 2, chain: 2, spy: 1, kraken: 3, pact: 1, ...Object.fromEntries(Object.entries(ITEMS).map(([k, v]) => [k, v.ap])) };
+  const gone = (mode in cost && c.pub.ap < cost[mode]) || (mode === 'pact' && !c.canPact()) || (mode === 'kraken' && c.side.seals < 3) || (mode === 'broadside' && !c.alive('line')) || (mode === 'chain' && !c.alive('frigate')) || (mode === 'spy' && !c.alive('cutter')) || (mode in ITEMS && !c.has(mode as Item));
   if (gone && c.pub.phase === 'battle') { mode = 'fire'; hud.setHint(HINTS.fire); }
   hud.update(c, mode, foeOnline ? '' : 'lost at sea (disconnected)');
 }
@@ -415,23 +417,26 @@ function battleClick(cell: Cell) {
   if (!myTurn()) return;
   const { side, x, y } = cell;
   if (side === 'enemy') {
+    let played = false;
     if (mode === 'fire') c.attack('shot', x, y);
-    else if (mode === 'broadside' || mode === 'chain' || mode === 'fireship') c.attack(mode, x, y, aimDir);
-    else if (mode === 'spy') c.scan(clampZone(x), clampZone(y), 'cutter');
-    else if (mode === 'spyglass') c.scan(clampZone(x), clampZone(y), 'spyglass');
-    else if (mode === 'longglass') c.peek(Math.min(x, N - 2), Math.min(y, N - 2));
-    else if (mode === 'kraken') c.kraken(x, y);
+    else if (mode === 'broadside' || mode === 'chain' || mode === 'fireship') played = c.attack(mode, x, y, aimDir);
+    else if (mode === 'spy') played = c.scan(clampZone(x), clampZone(y), 'cutter');
+    else if (mode === 'spyglass') played = c.scan(clampZone(x), clampZone(y), 'spyglass');
+    else if (mode === 'longglass') played = c.peek(Math.min(x, N - 2), Math.min(y, N - 2));
+    else if (mode === 'kraken') played = c.kraken(x, y);
+    // A card goes back into the hand once played: the order returns to Fire.
+    if (played) setMode('fire');
     return;
   }
-  if (mode === 'fog') { c.fog(x, y); return; }
-  if (mode === 'current') { c.current(currentDir(x, y)); return; }
+  if (mode === 'fog') { if (c.fog(x, y)) setMode('fire'); return; }
+  if (mode === 'current') { if (c.current(currentDir(x, y))) setMode('fire'); return; }
   if (mode === 'pact') {
     const at = shipAt(c.ships, x, y);
-    if (at && c.pact(at.ship.id)) { hud.log(`You give the ${at.ship.cls} to the deep. Two seals rise in her place.`, 'good'); return; }
+    if (at && c.pact(at.ship.id)) { hud.log(`You give the ${at.ship.cls} to the deep. Two seals rise in her place.`, 'good'); setMode('fire'); return; }
     hud.log('Pick one of your damaged ships (not the merchantman, nor your last).', 'bad');
     return;
   }
-  if (mode === 'shipwright') { if (!c.repair(x, y)) hud.log('Nothing to repair there.'); return; }
+  if (mode === 'shipwright') { if (!c.repair(x, y)) hud.log('Nothing to repair there.'); else setMode('fire'); return; }
   const at = shipAt(c.ships, x, y);
   if (mode === 'turn') {
     // First click picks the ship; then click one of the two previews.
@@ -442,6 +447,8 @@ function battleClick(cell: Cell) {
     refresh();
     return;
   }
+  // Clicking one of your ships takes her helm: the order becomes Sail with her selected.
+  if (mode === 'fire' && at && !at.ship.sunk) { mode = 'sail'; hud.setHint(HINTS.sail); }
   if (mode !== 'sail') return;
   if (selected) {
     const t = sailTargets(selected).find((q) => q.cell.x === x && q.cell.y === y);
@@ -476,6 +483,19 @@ canvas.addEventListener('pointermove', (e) => {
   tip.style.top = e.clientY + 18 + 'px';
 });
 canvas.addEventListener('pointerleave', () => { tip.hidden = true; });
+// Right-click on one of your ships offers the other manoeuvre beside her: Turn while sailing, Sail while turning.
+canvas.addEventListener('contextmenu', (e) => {
+  e.preventDefault();
+  if (!session || c.pub.phase !== 'battle' || !myTurn()) return;
+  const cell = scene.pick(e);
+  const at = cell && cell.side === 'own' ? shipAt(c.ships, cell.x, cell.y) : null;
+  if (!at || at.ship.sunk) { hud.shipMenu(null); return; }
+  const other: Mode = mode === 'turn' ? 'sail' : 'turn', ship = at.ship;
+  hud.shipMenu({ x: e.clientX, y: e.clientY, order: other, ok: other === 'turn' ? WAYS.some((w) => c.canTurn(ship.id, w)) : c.reach(ship.id) > 0 }, () => {
+    setMode(other); selected = ship; refresh();
+  });
+});
+canvas.addEventListener('pointerdown', (e) => { if (e.button === 0) hud.shipMenu(null); });
 canvas.addEventListener('click', (e) => {
   if (!session || e.button !== 0) return;
   const cell = scene.pick(e);

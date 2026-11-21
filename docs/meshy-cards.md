@@ -93,3 +93,28 @@ Photorealistic. No text, no letters.
 ```
 
 The bottle (`public/ui/bottle.webp`) is already done.
+
+## 4. Fire order: a cannon instead of the cannonball
+
+```
+A single small naval cannon on its wooden carriage, seen from a three-quarter view from above and the side,
+muzzle pointing to the right: a dark cast-iron barrel with reinforcing rings and a swelled muzzle, a sturdy
+oak carriage with four small wooden trucks (wheels), iron fittings and a coil of rope at the back.
+Aged and well used, 1860s ship's gun. Isolated on a solid pure black background, no floor, no shadow.
+Photorealistic. Soft warm light from the upper left. No text, no letters, no numbers.
+```
+
+## 5. Tooltip background (stretched in nine slices)
+
+A strip of old chart paper pinned with brass, so the corners keep their shape and the middle stretches to any
+size. The middle must be plain and even, the edges similar all the way round.
+
+```
+A single small rectangular piece of aged nautical chart paper, landscape, about twice as wide as it is
+tall, lying perfectly flat, seen straight from above: warm ivory paper slightly darkened and foxed towards
+the edges, with a thin engraved double border line in faded brown ink running all the way round, and a
+small polished brass corner cap clamped on each of the four corners. The centre is completely plain, even
+and empty, with no marks, no stains, no map, no lines. Straight-on orthographic top view, no perspective,
+no curl, no shadow, filling about 90% of the frame. Isolated on a solid pure black background. Soft even
+light. Photorealistic. No text, no letters, no numbers, no logos.
+```
