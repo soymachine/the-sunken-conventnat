@@ -126,7 +126,7 @@ Same base prompt as the other card pictures (section 2). The arrows are symbols,
 
 | Card | `[SCENE]` |
 |---|---|
-| Fire | a gun crew at a ship's cannon touching the slow match to the touch-hole, a burst of flame and smoke from the muzzle |
+| Fire | a single heavy naval cannon on its oak carriage filling the picture, seen close up from the side and a little from the front at the instant it fires: a great tongue of flame and a rolling cloud of smoke bursting from the muzzle, the barrel jolting back in recoil, sparks flying from the touch-hole; only the gun port's dark timbers behind it, no crew |
 | Sail | a ship running before the wind under full sail, her bow cutting a white wave, a gull alongside; across the foreground a bold engraved straight arrow pointing forward, drawn like a chart's ink symbol, clearly showing movement ahead |
 | Turn | a helmsman heaving on the great double ship's wheel, the ship heeling as she comes about; around the wheel a bold engraved curved arrow sweeping a quarter circle, drawn like a chart's ink symbol, clearly showing rotation |
 
