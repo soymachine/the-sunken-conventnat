@@ -80,6 +80,7 @@ export class Hud {
   private capTurns = 0;
   private glassTurns = 0;
   private sealHelp = '';
+  private maelHelp = '';
   private muted = false;
   private qualityPref = 'auto';
   private q = <T extends Element>(s: string) => this.root.querySelector(s) as T;
@@ -90,7 +91,18 @@ export class Hud {
       <header class="rail top">
         <div class="turn"><button id="menuBtn" class="mini" aria-expanded="false" aria-controls="menu">Settings</button></div>
         <h1 class="title"><span>The Sunken Covenant</span></h1>
-        <div class="foe"><span id="foeNote"></span></div>
+        <div class="foe"><span id="foeNote"></span>
+          <div class="mael" id="mael" hidden tabindex="0" aria-label="Maelstrom">
+            <svg viewBox="0 0 100 100" aria-hidden="true">
+              <defs><radialGradient id="maelBrass" cx=".35" cy=".3" r=".9"><stop offset="0" stop-color="#f6dc95"/><stop offset=".45" stop-color="#b08d3c"/><stop offset="1" stop-color="#4a3710"/></radialGradient></defs>
+              <circle cx="50" cy="50" r="48" fill="url(#maelBrass)" stroke="#2a1e08" stroke-width="1.5"/>
+              <circle cx="50" cy="50" r="39" fill="#0e1517" stroke="#2a1e08" stroke-width="2"/>
+              <g class="swirl">${[0, 72, 144, 216, 288].map((a) => `<path d="M50 50 C 50 34, 66 26, 80 34" transform="rotate(${a} 50 50)" fill="none" stroke="#5f8a8f" stroke-width="2.4" stroke-linecap="round" opacity=".75"/>`).join('')}</g>
+              ${[0, 1, 2, 3, 4].map((k) => { const a = (-90 - 48 + k * 24) * Math.PI / 180; return `<circle class="notch" cx="${(50 + 43.5 * Math.cos(a)).toFixed(1)}" cy="${(50 + 43.5 * Math.sin(a)).toFixed(1)}" r="3.2"/>`; }).join('')}
+            </svg>
+            <b></b><small></small>
+          </div>
+        </div>
         <div class="status" role="status"><b id="turnTitle"></b><span id="turnSub"></span><em id="turnWx"></em><div class="objective" id="objective" hidden></div><p id="placeHint"></p></div>
       </header>
       <div class="menu card" id="menu" hidden>
@@ -189,6 +201,14 @@ export class Hud {
       tip.style.left = panel.right + 10 + 'px'; tip.style.top = r.top - 6 + 'px'; tip.hidden = false;
     };
     seals.addEventListener('pointerenter', showSeals); seals.addEventListener('focus', showSeals);
+    const mael = this.q<HTMLElement>('#mael');
+    const showMael = () => {
+      tip.innerHTML = `<b>The maelstrom</b><span class="cost">The sea closes in</span><p>${esc(this.maelHelp)}</p>`;
+      const r = mael.getBoundingClientRect(); tip.hidden = false;
+      tip.style.left = Math.max(8, r.right - tip.offsetWidth) + 'px'; tip.style.top = r.bottom + 8 + 'px';
+    };
+    mael.addEventListener('pointerenter', showMael); mael.addEventListener('focus', showMael);
+    mael.addEventListener('pointerleave', () => { tip.hidden = true; }); mael.addEventListener('blur', () => { tip.hidden = true; });
     seals.addEventListener('pointerleave', () => { tip.hidden = true; }); seals.addEventListener('blur', () => { tip.hidden = true; });
     // Each ship's sections in Your fleet name her and her speciality.
     const fleet = this.q<HTMLElement>('#fleet');
@@ -468,11 +488,17 @@ export class Hud {
       parts.push(`<span><b>Season closes</b>${p.phase === 'battle' ? `in ${left} round${left === 1 ? '' : 's'}` : `after round ${SEASON}`}</span>`);
     }
     if (p.kraken) parts.push(`<span><b>The Kraken</b>holds ${p.kraken.side === c.me ? 'your' : 'enemy'} ships</span>`);
-    // The maelstrom's countdown is always in sight, so captains can plan their moves around it.
-    if (p.mode === 'classic' && p.phase === 'battle') {
-      const left = maelstromIn(p), ringTxt = p.ring ? `${p.ring} ring${p.ring === 1 ? '' : 's'} drowned · ` : '';
-      parts.push(left === null ? `<span class="mael"><b>Maelstrom</b>spent — the middle 6×6 remains</span>`
-        : `<span class="mael${left === 1 ? ' soon' : ''}"><b>Maelstrom</b>${ringTxt}${left === 1 ? 'the next ring goes under <u>next round</u>' : `${p.ring ? 'next ring' : 'rises'} in <u>${left} rounds</u>`}</span>`);
+    // The maelstrom gauge: a brass instrument whose whirlpool turns faster as the next ring nears.
+    const g = this.q<HTMLElement>('#mael'), left = maelstromIn(p);
+    g.hidden = p.mode !== 'classic' || p.phase !== 'battle';
+    if (!g.hidden) {
+      g.classList.toggle('soon', left === 1); g.classList.toggle('spent', left === null);
+      g.querySelector('b')!.textContent = left === null ? '—' : String(left);
+      g.querySelector('small')!.textContent = left === null ? 'spent' : left === 1 ? 'next round' : 'rounds';
+      g.querySelectorAll('.notch').forEach((n, k) => n.classList.toggle('lit', k < p.ring));
+      g.style.setProperty('--spin', `${left === null ? 0 : Math.max(1.2, Math.min(14, left * 0.9))}s`);
+      this.maelHelp = left === null ? 'The maelstrom is spent: five rings have gone under and the middle 6×6 of each chart remains.'
+        : `From round 20 the maelstrom swallows the outer ring of both charts every other round, sinking whatever lies there, until the middle 6×6 remains. ${p.ring} of 5 rings drowned. ${left === 1 ? 'The next ring goes under at the start of the next round — the marked squares.' : `The next ring goes under in ${left} rounds.`}`;
     }
     obj.hidden = !parts.length || p.phase === 'over';
     obj.innerHTML = parts.join('');
