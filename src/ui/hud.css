@@ -510,23 +510,16 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); out
 .seals.ready:hover i.lit { transform: scale(1.12); }
 @keyframes sealGlow { 50% { box-shadow: 0 0 10px 2px rgba(214, 70, 40, .75), 0 1px 3px rgba(0, 0, 0, .5); } }
 
-/* ---------- the Kraken card's entrance ---------- */
+/* ---------- the Kraken card's entrance: a little ink and a few bubbles ---------- */
 .kfx { position: fixed; z-index: 60; pointer-events: none; }
-.kfx svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 4px 6px rgba(0, 0, 0, .7)); }
-.kfx .arm { transform-box: fill-box; transform-origin: 50% 100%; }
 .kfx i { position: absolute; display: block; width: var(--s); height: var(--s); border-radius: 50%; opacity: 0; }
-.kfx .drop { left: 50%; top: 40%; background: radial-gradient(circle at 35% 30%, #4a1a20, #0b0508 70%); }
-.kfx .bub { left: var(--x); top: 78%; border: 1px solid rgba(210, 235, 240, .8); background: radial-gradient(circle at 35% 30%, rgba(255, 255, 255, .6), transparent 60%); }
-.kfx .drip { left: var(--x); top: 86%; border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%; background: #0b0508; }
-.kfx .pool { position: absolute; left: 50%; top: 38%; width: 92%; height: 34%; border-radius: 50%; transform-origin: 50% 50%;
-  background: radial-gradient(ellipse at 50% 45%, #020102 35%, rgba(40, 8, 16, .9) 58%, rgba(120, 30, 40, .55) 64%, rgba(30, 8, 14, 0) 74%); }
-.kfx.depths .bub { top: 58%; border-color: rgba(230, 245, 250, .95); }
+.kfx .drop { left: 50%; top: 45%; background: radial-gradient(circle at 35% 30%, #6a1f26, #0b0508 70%); }
+.kfx .bub { left: var(--x); top: 60%; border: 1px solid rgba(220, 240, 245, .9); background: radial-gradient(circle at 35% 30%, rgba(255, 255, 255, .6), transparent 60%); }
 
-/* ---------- where the action points sit (chosen in debug) ---------- */
-#hud.ap-desk .apSeals { position: absolute; right: 250px; bottom: 26px; flex-direction: row; gap: 4px; padding: 0; z-index: 2; transform: perspective(300px) rotateX(38deg); transform-origin: 50% 100%; }
-#hud.ap-desk .apSeals i { width: 36px; height: 36px; filter: drop-shadow(0 4px 3px rgba(0, 0, 0, .75)); }
-#hud.ap-desk .apSeals i.spent { border-color: rgba(217, 164, 65, .35); }
-#hud.ap-head .apSeals { flex-direction: row; justify-content: center; gap: 6px; padding: 6px 0 0; }
-#hud.ap-head .apSeals i { width: 24px; height: 24px; }
-#hud.ap-glass .apSeals { position: absolute; right: calc(100% - 4px); bottom: 34px; flex-direction: row; gap: 2px; padding: 0; transform: perspective(300px) rotateX(38deg); transform-origin: 50% 100%; }
-#hud.ap-glass .apSeals i { width: 28px; height: 28px; }
+/* ---------- action points: a row of seals under the turn header ---------- */
+#hud .status .apSeals { flex-direction: row; justify-content: center; gap: 6px; padding: 7px 0 0; }
+#hud .status .apSeals i { width: 24px; height: 24px; }
+
+/* ---------- the hand sits higher, so each card's name shows; a raised card keeps the spot it rose from ---------- */
+.belt { bottom: 0; }
+.belt .ocard::after { content: ''; position: absolute; left: 0; right: 0; top: 100%; height: 72px; }

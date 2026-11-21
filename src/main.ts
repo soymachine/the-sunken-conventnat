@@ -70,7 +70,7 @@ const hud = new Hud({
   },
   sky: (what) => scene.sky(what),
   sound: (s) => sfx.play(s),
-  note: (text) => { if (!c.note(text)) hud.log('One bottle a turn, and only on your own turn.', 'bad'); },
+  note: (text) => { if (!c.note(text)) hud.log('One bottle a turn: yours is already cast.', 'bad'); },
   letterRead: () => scene.clearBottles(),
   buy: (item) => { if (c.buy(item)) setMode(item === 'winds' ? mode : item); },
   endTurn: () => { if (!busy) c.endTurn(); },
@@ -273,7 +273,9 @@ function weather() {
   const p = c.pub;
   // The storm front is shown under the round in the status line, not as a passing notice.
   if (p.storm && p.storm.until !== seen.storm) seen.storm = p.storm.until;
-  if (p.tide && p.tide.round !== seen.tide) { seen.tide = p.tide.round; hud.log('High tide! The sea carries the flotsam a square.'); if (p.tide.round === p.round) scene.tide(p.tide.dx, p.tide.dy); }
+  if (p.tide && p.tide.round !== seen.tide) { seen.tide = p.tide.round; const way = p.tide.dx > 0 ? 'east' : p.tide.dx < 0 ? 'west' : p.tide.dy > 0 ? 'south' : 'north';
+    hud.log(`High tide! Every five rounds the sea carries all the treasure and seals a square ${way}.`);
+    if (p.tide.round === p.round) { scene.tide(p.tide.dx, p.tide.dy); hud.herald('High tide', `The flotsam drifts a square ${way}`, true); } }
   // Say plainly when a covenant seal comes in, and when three of them can wake the Kraken.
   const n = c.side.seals;
   if (seen.seals >= 0 && n > seen.seals && p.phase === 'battle') {
@@ -392,6 +394,11 @@ function refresh() {
     }
   }
   if (myTurn() && mode === 'sail' && selected) for (const t of sailTargets(selected)) hl.push({ ...t.cell, color: AMBER, opacity: 0.7 });
+  // Caught in irons: the squares ahead of her bow show red, the way the wind will not let her go.
+  if (myTurn() && mode === 'sail' && selected && headwind(selected)) {
+    const [bx, by] = bowCell(selected), [hx, hy] = [[1, 0], [0, 1], [-1, 0], [0, -1]][headingOf(selected)];
+    for (let k = 1; k <= 2; k++) if (inBoard(bx + hx * k, by + hy * k)) hl.push({ side: 'own', x: bx + hx * k, y: by + hy * k, color: WAX, opacity: k === 1 ? 0.55 : 0.3 });
+  }
   if (myTurn() && mode === 'turn' && selected) for (const w of WAYS) {
     // The line she would lie on, with the square the bow would take marked more strongly.
     const ok = c.canTurn(selected.id, w), hot = hoverWay() === w, t = turned(selected, w), [bx, by] = bowCell(t);
@@ -471,9 +478,12 @@ function battleClick(cell: Cell) {
   }
   selected = at && !at.ship.sunk ? at.ship : null;
   if (selected?.chained) hud.log(`The ${selected.cls} is pinned by chain shot this turn.`);
-  else if (selected && !c.held(selected.id)) { const why = becalmed(selected, c.pub.wind); if (why) hud.log(`The ${selected.cls} cannot make way — ${why}.`, 'bad'); }
+  else if (selected && !c.held(selected.id)) { const why = becalmed(selected, c.pub.wind); if (why) { hud.log(`The ${selected.cls} cannot make way — ${why}.`, 'bad'); if (headwind(selected)) scene.blow(); } }
   refresh();
 }
+
+/** A square-rigged ship whose bow faces into the wind cannot sail at all this round. */
+function headwind(s: Ship) { return !s.sunk && (becalmed(s, c.pub.wind) ?? '').includes('into the wind'); }
 
 /* ---------- input ---------- */
 canvas.addEventListener('pointermove', (e) => {

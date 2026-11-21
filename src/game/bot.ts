@@ -68,7 +68,7 @@ export function botAct(c: Client, rnd: Rnd = Math.random): boolean {
 
   // Answer a bottle with one of its own, now and then.
   const notes = p.notes || [], last = notes[notes.length - 1];
-  if (last && last.by !== c.me && !p.noteSent && rnd() < 0.8) return c.note(REPLIES[Math.floor(rnd() * REPLIES.length)]);
+  if (last && last.by !== c.me && !p.bottle?.[c.me] && rnd() < 0.8) return c.note(REPLIES[Math.floor(rnd() * REPLIES.length)]);
 
   const mer = c.merchant;
   if (c.role === 'admiral' && mer && !mer.sunk) {

@@ -511,15 +511,19 @@ describe('the covenant', () => {
     const fogged: Msg[] = bus.log.map((m) => (m.t === 'peekResult' ? { ...m, ships: [], fog: true } : m));
     expect(await verify(fogged, 1, 'classic', 7)).toMatch(/Long Glass/);
   });
-  it('a message in a bottle: one a turn, on your own turn, trimmed, and the log still verifies', async () => {
+  it('a message in a bottle: one a turn (or in the other\'s turn if you forgot), trimmed, and the log still verifies', async () => {
     const { bus, a, b } = await duel();
-    expect(b.note('Too soon')).toBe(false);
     expect(a.note('  Fair   winds, brother — ' + 'x'.repeat(100))).toBe(true);
     expect(a.note('And another')).toBe(false);
     expect(a.pub.notes![0].text.length).toBe(80);
     expect(a.pub.notes![0].text.startsWith('Fair winds, brother')).toBe(true);
+    expect(b.note('Out of turn, but not yet cast')).toBe(true);
+    expect(b.note('Again')).toBe(false);
     a.endTurn();
+    expect(a.note('Forgot nothing: already cast this turn')).toBe(false);
     expect(b.note('Strike your colours!')).toBe(true);
+    b.endTurn();
+    expect(a.note('A new turn, a new bottle')).toBe(true);
     expect(a.pub).toEqual(b.pub);
     sinkAll(b, a);
     expect(await verify(bus.log, 1, 'classic', 7)).toBeNull();

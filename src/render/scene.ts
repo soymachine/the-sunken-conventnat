@@ -500,6 +500,8 @@ export class SeaScene {
   }
 
   /** Warm light on your turn, colder on the enemy's. */
+  /** A strong gust across the charts, to show plainly which way the wind blows. */
+  blow() { this.weather.blow(); }
   /** Debug: call up a sky now, or clear it. */
   sky(what: 'sun' | 'aurora' | 'clear') { this.weather.force(what); }
   private turnGrade = new THREE.Vector3(1.04, 1, 0.94);
@@ -740,6 +742,7 @@ export class SeaScene {
       }
       this.seas[side].setHulls(list);
     }
+    this.seas.own.setGust(this.weather.gust); this.seas.enemy.setGust(this.weather.gust);
     this.seas.own.update(dt, t); this.seas.enemy.update(dt, t);
     this.weather.update(dt, t, this.camera);
     // Under the northern lights the whole table goes dim and a little blue.
@@ -1003,6 +1006,8 @@ export class SeaScene {
     this.stormy = !!st && v.pub.phase === 'battle';
     this.weather.setCharts(origin.own, origin.enemy);
     this.weather.setStorm(this.stormy ? st!.row : null);
+    this.weather.setWind(v.pub.wind ?? 0);
+    for (const sd of ['own', 'enemy'] as const) this.seas[sd].setWind(v.pub.wind ?? 0);
     this.rain(this.stormy);
     this.ambience(v.pub.phase !== 'over');
     for (const side of ['own', 'enemy'] as Side[]) {
