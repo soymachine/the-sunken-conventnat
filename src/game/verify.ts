@@ -1,6 +1,6 @@
 // After the battle each captain reveals their placement and hidden moves.
 // Replaying them against the public log shows whether every answer was honest.
-import { Act, Mode, Msg, Placement, commitHash, newPub, reduce } from './engine';
+import { Act, Mode, Msg, Placement, commitHash, dropSquare, newPub, reduce } from './engine';
 import { CellResult, FLEETS, N, Revealed, driftFleet, Role, Ship, XY, countScan, inZone, peekShips, fits, inKraken, legalPlacement, repairShip, resolveAttack, rimCells, sailShip, shipCells, turnShip } from './rules';
 
 // Compare by value: a database may hand objects back with their keys in another order.
@@ -48,6 +48,10 @@ export async function verify(log: Msg[], who: 0 | 1, role: Role = 'classic', see
           if (!!m.home !== shipCells(moving).some(([x]) => x === N - 1)) return 'the merchantman did not truly reach home';
         } else if (m.home) return 'a ship that is not the merchantman claimed the cargo';
       }
+    }
+    if (m.by === who && m.t === 'drop') {
+      const at = dropSquare(p, who, m.id, reveal.salt, ships);
+      if (!at || at[0] !== m.x || at[1] !== m.y) return 'treasure was set down on a square chosen unfairly';
     }
     if (m.by === who && m.t === 'pact') {
       const s = ships.find((q) => !q.sunk && q.kind === m.ship.kind && q.x === m.ship.x && q.y === m.ship.y && q.dir === m.ship.dir);

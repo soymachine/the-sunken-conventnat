@@ -431,12 +431,19 @@ export class Hud {
       if (role !== 'classic' && !p.power[c.me]) tool('power', CAPTAINS[role].power, 1, c.canPower(), `Your captain's power. ${CAPTAINS[role].powerText}`);
     }
     // Fire in the very middle with Sail and Turn either side, the rest of the hand split around them.
+    // The card that was chosen before this redraw sinks back into the hand instead of vanishing from the raised spot.
+    const wasOn = this.root.querySelector<HTMLElement>('#belt .ocard.on')?.dataset.tool;
     const half = Math.floor(belt.length / 2);
     if (p.phase === 'battle') belt.splice(half, 0, ...orderCards);
     this.q('#belt').innerHTML = belt.join('');
     // Fan the hand: each card turns a little about a point below the table.
     const cards = [...this.root.querySelectorAll<HTMLElement>('#belt .ocard')], n = cards.length;
     cards.forEach((el, i) => { const k = i - (n - 1) / 2; el.style.setProperty('--r', `${k * 4}deg`); el.style.setProperty('--y', `${Math.abs(k) * 4}px`); el.style.zIndex = String(10 + i); });
+    const was = wasOn && wasOn !== mode ? cards.find((el) => el.dataset.tool === wasOn) : undefined;
+    if (was) {
+      was.style.transition = 'none'; was.classList.add('on'); void was.offsetWidth;
+      was.style.transition = ''; requestAnimationFrame(() => was.classList.remove('on'));
+    }
     this.root.querySelectorAll<HTMLElement>('.order').forEach((b) => b.classList.toggle('on', b.dataset.order === mode));
     const shownAp = Math.max(3, mine ? p.ap : 0);
     this.q('#apSeals').innerHTML = Array.from({ length: shownAp }, (_, k) => `<i class="${mine && k < p.ap ? '' : 'spent'}"></i>`).join('');

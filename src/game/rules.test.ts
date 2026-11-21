@@ -255,9 +255,10 @@ describe('protocol', () => {
   it('sinking the fleet ends the battle, reveals both fleets and verifies', async () => {
     const { bus, a, b } = await duel();
     const next = () => { for (const s of b.ships) { const cs = shipCells(s); for (let i = 0; i < s.len; i++) if (!s.hits[i]) return cs[i]; } return [0, 0] as [number, number]; };
-    for (let guard = 0; guard < 400 && a.pub.phase === 'battle'; guard++) {
-      if (a.myTurn) { if (a.pub.ap > 0) a.attack('shot', ...next()); else a.endTurn(); }
-      else if (b.pub.ap === 3) b.sail(3, 1, 1); else b.endTurn();
+    for (let guard = 0; guard < 1200 && a.pub.phase === 'battle'; guard++) {
+      // A storm over the target's row blocks the gun: then the turn simply ends.
+      if (a.myTurn) { if (!(a.pub.ap > 0 && a.attack('shot', ...next()))) a.endTurn(); }
+      else if (!(b.pub.ap === 3 && b.sail(3, 1, 1))) b.endTurn();
     }
     expect(a.pub.phase).toBe('over');
     expect(a.pub.winner).toBe(0);
@@ -567,6 +568,19 @@ describe('the covenant', () => {
     for (let guard = 0; guard < 600 && a.pub.phase === 'battle' && a.pub.round < 34; guard++) (a.myTurn ? a : b).endTurn();
     expect(a.pub.ring).toBe(5);
     expect(maelstromIn(a.pub)).toBeNull();
+  });
+  it('treasure never surfaces under its owner\'s ships, and an unfair spot is caught', async () => {
+    const { bus, a, b } = await duel();
+    for (let guard = 0; guard < 60; guard++) {
+      for (const c of [a, b]) for (const t of c.pub.treasures.filter((q) => q.side === c.me)) expect(c.ships.some((s) => !s.sunk && shipCells(s).some(([x, y]) => x === t.x && y === t.y))).toBe(false);
+      (a.myTurn ? a : b).endTurn();
+    }
+    expect(a.pub.treasures.length).toBeGreaterThan(4);
+    expect(a.pub).toEqual(b.pub);
+    sinkAll(a, b);
+    expect(await verify(bus.log, 0, 'classic', 7)).toBeNull();
+    const forged: Msg[] = bus.log.map((m) => (m.t === 'drop' && m.by === 0 ? { ...m, x: (m.x + 1) % N } : m));
+    expect(await verify(forged, 0, 'classic', 7)).toMatch(/treasure/);
   });
   it('a sunk ship leaves open water: others sail through her squares and shots there fall in the sea', () => {
     const line = mk(0, 'line', 5, 0, 0, 'h'), cutter = mk(1, 'cutter', 2, 5, 0, 'h');
