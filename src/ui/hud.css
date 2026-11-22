@@ -674,3 +674,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); out
 .mael { right: auto; left: calc(50vw + var(--mael-x) - 48px); }
 :root { --mael-x: 178px; --glass-x: 305px; --bottle-x: 113px; }
 .battle { position: static; }
+
+/* ---------- 0.25.1 ---------- */
+:root { --glass-h: 126px; --mael-x: 288px; --bottle-x: 29px; --bottle-y: 20px; --glass-x: 25px; --glass-y: 1px; }
+/* The enemy's figure is mirrored with scale, so it comes in already facing the table. */
+#hud .portrait.foe { transform: none; scale: -1 1; }
+/* The action-point seal sits inside the card's corner. */
+.ocard .cost { top: 5px; right: 5px; width: 22px; height: 22px; font-size: 10.5px; }
+/* Settings: on the beam just left of the title plate, clear of the commanders' figures. */
+#hud #menuBtn { position: absolute; right: calc(50% + 252px); top: 17px; margin: 0; }
+.menu { left: calc(50% - 252px - 250px); top: 52px; }

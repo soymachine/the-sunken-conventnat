@@ -511,7 +511,8 @@ export class Hud {
     const need = krakenSeals(me);
     this.q('#seals').innerHTML = Array.from({ length: need }, (_, i) => `<i class="${i < me.seals ? 'lit' : ''}"></i>`).join('') + `<span>${me.seals >= need ? 'The Kraken will answer.' : `${Math.min(me.seals, need)} of ${need} seals`}</span>`;
     // Each captain's commander, named in their panel; the full card shows on hover.
-    for (const [id, side] of [['#myCmd', me], ['#foeCmd', foe]] as const) {
+    // Mine shows as soon as it is chosen (before Ready makes it public); theirs once they are ready.
+    for (const [id, side] of [['#myCmd', { ...me, cmd: me.cmd ?? c.cmd }], ['#foeCmd', foe]] as const) {
       const el = this.q<HTMLElement>(id), info = side.cmd ? CMD_INFO[side.cmd] : null;
       el.hidden = !info;
       // Their portrait stands behind the panel, half-length, looking across the table (the enemy's is mirrored).

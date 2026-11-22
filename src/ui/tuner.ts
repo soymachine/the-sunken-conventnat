@@ -10,11 +10,11 @@ const KNOBS: Knob[] = [
   { v: '--desk-tex', label: 'Texture size', min: 200, max: 3000, step: 20, unit: 'px', def: 400 },
   { v: '--desk-shade', label: 'Back shade', min: 0, max: 1, step: 0.05, unit: '', def: 0.65 },
   { v: '--bottle-h', label: 'Bottle size', min: 60, max: 320, step: 2, unit: 'px', def: 132 },
-  { v: '--glass-h', label: 'Glass size', min: 60, max: 320, step: 2, unit: 'px', def: 150 },
+  { v: '--glass-h', label: 'Glass size', min: 60, max: 320, step: 2, unit: 'px', def: 126 },
   { v: '--belt-y', label: 'Cards at rest (Y)', min: -120, max: 80, step: 2, unit: 'px', def: 26 },
   { v: '--card-lift', label: 'Card raised (Y)', min: 0, max: 200, step: 2, unit: 'px', def: 20 },
   { v: '--wind', label: 'Wind strength', min: 0, max: 3, step: 0.1, unit: '', def: 1 },
-  { v: '--mael-x', label: 'Gauge: X from centre', min: -700, max: 700, step: 2, unit: 'px', def: 178 },
+  { v: '--mael-x', label: 'Gauge: X from centre', min: -700, max: 700, step: 2, unit: 'px', def: 288 },
   { v: '--mael-y', label: 'Gauge: Y', min: 0, max: 600, step: 2, unit: 'px', def: 88 },
   { v: '--lamp-dir', label: 'Gauge lamps: top (-1) / bottom (1)', min: -1, max: 1, step: 2, unit: '', def: -1 },
   { v: '--lamp-x', label: 'Gauge lamps: X', min: -40, max: 40, step: 1, unit: 'px', def: 3 },
@@ -34,8 +34,8 @@ const KNOBS: Knob[] = [
   { v: '--move-bri', label: 'Move cards: brightness', min: 0.3, max: 1.8, step: 0.02, unit: '', def: 0.68 },
 ];
 const MOVES: Record<string, { x: string; y: string; def: [number, number]; fromRight?: boolean }> = {
-  bottle: { x: '--bottle-x', y: '--bottle-y', def: [113, 18] },
-  glass: { x: '--glass-x', y: '--glass-y', def: [305, 6], fromRight: true },
+  bottle: { x: '--bottle-x', y: '--bottle-y', def: [29, 20] },
+  glass: { x: '--glass-x', y: '--glass-y', def: [25, 1], fromRight: true },
 };
 
 /** Knobs that are not only CSS (the wind) are passed on to the game through this event. */
