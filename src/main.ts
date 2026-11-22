@@ -1,6 +1,6 @@
 // Controller: lobby → session → one Client driving the scene and the HUD.
 import './ui/hud.css';
-import { Client, Msg, Snapshot, afloat, roleOf } from './game/engine';
+import { CMDS, Client, Msg, Snapshot, afloat, krakenSeals, roleOf } from './game/engine';
 import { ITEMS, Item } from './game/powerups';
 import { Dir, Ship, Way, ZONE, ahead, attackCells, bowCell, cellName, clampZone, fits, headingOf, inBoard, legalPlacement, pivotCell, randomFleet, shipAt, shipCells, turned, MAELSTROM_ROUND, N, becalmed } from './game/rules';
 import { verify } from './game/verify';
@@ -25,6 +25,8 @@ let session: Session | null = null;
 let c: Client;
 let mode: Mode = 'fire';
 let aimDir: Dir = 'h';
+/** Which way a double-shotted ball flies on (0 east, 1 south, 2 west, 3 north). */
+let dblDir = 0;
 let busy = false; // animations playing
 let selected: Ship | null = null; // ship chosen for sailing, or lifted during placement
 let lifted: { x: number; y: number; dir: Dir; rev: boolean } | null = null;
@@ -35,6 +37,10 @@ let foeOnline = true;
 const queue: Msg[] = [];
 
 const HINTS: Record<string, string> = {
+  squall: 'Squall — click the side of the enemy chart the wind should drive their fleet towards.',
+  gale: 'Call the Wind — click the side of your chart the wind should blow towards this round.',
+  sound: 'Soundings — click a square of enemy water to sound its row. Press R to sound its column instead.',
+  double: 'Double-Shotted — pick a square of enemy water. If it hits, the ball flies on one square further. Press R to turn which way.',
   fire: 'Fire — pick a square in enemy waters. One point a shot.',
   sail: 'Sail — pick one of your ships, then a square ahead of her bow. Ships cannot back up.',
   turn: 'Turn — pick one of your ships, then click on the side her bow should swing to: an arrow marks each choice (or press Q for port, E for starboard).',
@@ -85,7 +91,7 @@ hud.setPrefs(sfx.muted, scene.getQuality());
 addEventListener('tsc:tune', (e) => { const { v, n } = (e as CustomEvent<{ v: string; n: number }>).detail; if (v === '--wind') scene.setWindStrength(n); });
 if (new URLSearchParams(location.search).has('debug')) { Object.assign(window, { scene, hud }); Object.defineProperty(window, 'game', { get: () => ({ c, session }) }); }
 const lobby = new Lobby({
-  bot: (name, mode) => start(new LocalSession(mode), name),
+  bot: (name, mode) => start(new LocalSession(mode, 700, Math.random, true), name),
   create: async (name, mode) => {
     lobby.busy(true);
     try {
@@ -131,6 +137,17 @@ function start(s: Session, name: string) {
   hud.show(true);
   hud.setHint(HINTS.fire);
   if (c.role !== 'classic' && !snap) hud.showRole(c.role);
+  // Classic: choose a commander (or none) before the fleet is committed. Against the machine, if you lead one
+  // it leads one too, drawn at random; it waits for your choice before it readies its own fleet.
+  const local = s instanceof LocalSession ? s : null;
+  if (c.role === 'classic' && !c.side.ready && !snap?.initial?.length) {
+    void hud.chooseCommander(c.cmd ?? null).then((k) => {
+      c.cmd = k ?? undefined;
+      save();
+      local?.begin(k ? CMDS[Math.floor(Math.random() * CMDS.length)] : undefined);
+      refresh();
+    });
+  } else local?.begin();
   refresh();
   s.listen((m) => c.receive(m), (on) => { foeOnline = on; refresh(); });
   Object.assign(window, { __client: c, __screen: (cell: Cell) => scene.screen(cell), __bot: (s as LocalSession).bot });
@@ -205,7 +222,7 @@ function describe(m: Msg, mine: boolean) {
   const foe = c.foeSide.name || 'The enemy';
   switch (m.t) {
     case 'ready': if (!mine) hud.log(`${m.name} has committed a fleet.`); if (c.pub.phase === 'battle') hud.log('Round 1', 'head'); break;
-    case 'kraken': hud.log(mine ? `You break three seals. The Kraken rises at ${cellName(m.x, m.y)}!` : `${foe} breaks three seals — the Kraken rises under your ships at ${cellName(m.x, m.y)}!`, mine ? 'good' : 'bad'); break;
+    case 'kraken': hud.log(mine ? `You break ${krakenSeals(c.side) === 2 ? 'two' : 'three'} seals. The Kraken rises at ${cellName(m.x, m.y)}!` : `${foe} breaks ${krakenSeals(c.foeSide) === 2 ? 'two' : 'three'} seals — the Kraken rises under your ships at ${cellName(m.x, m.y)}!`, mine ? 'good' : 'bad'); break;
     case 'drowned':
       for (const r of m.results) {
         if (r.r === 'sunk') hud.log(mine ? `The maelstrom takes your ${r.ship!.cls}.` : `The maelstrom takes the enemy ${r.ship!.cls}.`, mine ? 'bad' : 'good');
@@ -252,6 +269,11 @@ function describe(m: Msg, mine: boolean) {
     case 'buy': hud.log(mine ? `You buy ${ITEMS[m.item].name}.` : `${foe} buys ${ITEMS[m.item].name}.`); break;
     case 'fog': hud.log(mine ? 'Fog rolls over your waters.' : `Fog rolls over enemy waters near ${cellName(m.x, m.y)}.`); break;
     case 'repair': hud.log(mine ? 'Your shipwrights patch a section.' : 'Enemy shipwrights are at work.'); break;
+    case 'bind': hud.log(mine ? `You bind the tide: the next ring comes ${m.delay ? 'two rounds later' : 'a round sooner'}.` : `${foe} binds the tide: the maelstrom's next ring comes ${m.delay ? 'two rounds later' : 'a round sooner'}.`, mine ? 'good' : 'bad'); break;
+    case 'squall': scene.blow(); hud.log(mine ? `A squall drives the enemy fleet ${['east', 'south', 'west', 'north'][m.dir]}.` : `${foe} calls down a squall — your fleet is driven ${['east', 'south', 'west', 'north'][m.dir]}!`, mine ? 'good' : 'bad'); break;
+    case 'gale': scene.blow(); hud.log(mine ? `You call the wind: it blows ${['east', 'south', 'west', 'north'][m.wind]} this round.` : `${foe} calls the wind: it blows ${['east', 'south', 'west', 'north'][m.wind]} this round.`); break;
+    case 'sound': if (!mine) hud.log(`${foe} takes soundings along ${m.axis === 'row' ? `row ${m.i + 1}` : `column ${cellName(m.i, 0)[0]}`}.`, 'bad'); break;
+    case 'soundResult': if (!mine) hud.log(`Soundings along ${m.axis === 'row' ? `row ${m.i + 1}` : `column ${cellName(m.i, 0)[0]}`}: ${m.count > 0 ? 'there are ships on that line!' : 'no ship lies on that line.'}`, m.count > 0 ? 'good' : ''); break;
     case 'winds': hud.log(mine ? 'The trade winds fill your sails: one more point.' : `${foe} catches the trade winds.`); break;
     case 'power':
       if (roleOf(c.pub, m.by) === 'admiral') hud.log(mine ? 'Close Escort: your frigates close around the merchantman.' : 'The Admiral orders a close escort: the next hit on the merchantman will be turned aside.', mine ? 'good' : 'bad');
@@ -296,6 +318,7 @@ const myTurn = () => !!session && c.can() && !busy;
 function setMode(m: Mode) {
   if (m === 'power') { c.power(); return; }
   if (m === 'winds') { c.winds(); return; }
+  if (m === 'bindLater' || m === 'bindSooner') { c.bind(m === 'bindLater'); return; }
   mode = m;
   selected = null;
   hud.setHint(HINTS[m] || '');
@@ -382,9 +405,13 @@ function refresh() {
       if (mode === 'broadside' || mode === 'fireship') for (const [a, b] of attackCells(mode, x, y, aimDir)) hl.push({ side, x: a, y: b, color: afloat(c.pub, x, y) && afloat(c.pub, a, b) ? WAX : INK, opacity: 0.55 });
       if (mode === 'spy' || mode === 'spyglass') hl.push(...zone(side, clampZone(x), clampZone(y), AMBER, 0.3)); // the patch slides to stay on the chart
       if (mode === 'longglass') { const a0 = Math.min(x, N - 2), b0 = Math.min(y, N - 2); for (const [a, b] of [[a0, b0], [a0 + 1, b0], [a0, b0 + 1], [a0 + 1, b0 + 1]]) hl.push({ side, x: a, y: b, color: AMBER, opacity: 0.45 }); }
+      if (mode === 'double') { const [dx, dy] = STEP[dblDir]; hl.push({ ...hover, color: afloat(c.pub, x, y) ? WAX : INK, opacity: 0.6 }); if (afloat(c.pub, x + dx, y + dy)) hl.push({ side, x: x + dx, y: y + dy, color: WAX, opacity: 0.3 }); }
+      if (mode === 'sound') for (let k = 0; k < N; k++) hl.push({ side, x: aimDir === 'h' ? k : x, y: aimDir === 'h' ? y : k, color: AMBER, opacity: 0.28 });
+      if (mode === 'squall') { const d = currentDir(x, y), [fx, fy] = STEP[d]; for (let k = 0; k < N; k++) hl.push({ side, x: fx ? (fx > 0 ? N - 1 - c.pub.ring : c.pub.ring) : k, y: fy ? (fy > 0 ? N - 1 - c.pub.ring : c.pub.ring) : k, color: WAX, opacity: 0.4 }); }
       if (mode === 'kraken') for (let b = y - 1; b <= y + 1; b++) for (let a = x - 1; a <= x + 1; a++) if (inBoard(a, b)) hl.push({ side, x: a, y: b, color: WAX, opacity: 0.5 });
     } else {
       if (mode === 'fog') hl.push(...zone(side, x, y, FOG, 0.45));
+      if (mode === 'gale') { const [fx, fy] = STEP[currentDir(x, y)]; for (let k = 0; k < N; k++) hl.push({ side, x: fx ? (fx > 0 ? N - 1 : 0) : k, y: fy ? (fy > 0 ? N - 1 : 0) : k, color: AMBER, opacity: 0.35 }); }
       if (mode === 'current') { const [fx, fy] = STEP[currentDir(x, y)]; for (const s of c.ships) if (!s.sunk) for (const [a, b] of shipCells(s)) if (inBoard(a + fx, b + fy)) hl.push({ side, x: a + fx, y: b + fy, color: AMBER, opacity: 0.4 }); }
       if (mode === 'pact') { const at = shipAt(c.ships, x, y); if (at) for (const [a, b] of shipCells(at.ship)) hl.push({ side, x: a, y: b, color: c.canPact(at.ship.id) ? WAX : INK, opacity: 0.5 }); }
       if ((mode === 'sail' && !selected) || (mode === 'turn' && !selected) || mode === 'shipwright') {
@@ -406,6 +433,11 @@ function refresh() {
     // The line she would lie on, with the square the bow would take marked more strongly.
     const ok = c.canTurn(selected.id, w), hot = hoverWay() === w, t = turned(selected, w), [bx, by] = bowCell(t);
     for (const [x, y] of shipCells(t)) if (inBoard(x, y)) hl.push({ side: 'own', x, y, color: ok ? AMBER : WAX, opacity: x === bx && y === by ? (hot ? 0.75 : 0.42) : hot ? 0.3 : 0.12 });
+  }
+  // Soundings stay marked on the enemy chart for a round: amber where a ship lies on the line, dark where none.
+  for (const sd of c.foeSide.soundings ?? []) {
+    if (c.pub.round - sd.round > 1) continue;
+    for (let k = 0; k < N; k++) hl.push({ side: 'enemy', x: sd.axis === 'row' ? k : sd.i, y: sd.axis === 'row' ? sd.i : k, color: sd.count > 0 ? AMBER : INK, opacity: 0.16 });
   }
   scene.setHighlights(hl);
 }
@@ -443,7 +475,7 @@ function battleClick(cell: Cell) {
   const { side, x, y } = cell;
   if (side === 'enemy') {
     let played = false;
-    if (['fire', 'broadside', 'chain', 'fireship', 'kraken'].includes(mode) && !afloat(c.pub, x, y)) {
+    if (['fire', 'broadside', 'chain', 'fireship', 'kraken', 'double'].includes(mode) && !afloat(c.pub, x, y)) {
       hud.log('That water has gone into the maelstrom: aim inside the chart that remains.', 'bad');
       return;
     }
@@ -453,12 +485,16 @@ function battleClick(cell: Cell) {
     else if (mode === 'spyglass') played = c.scan(clampZone(x), clampZone(y), 'spyglass');
     else if (mode === 'longglass') played = c.peek(Math.min(x, N - 2), Math.min(y, N - 2));
     else if (mode === 'kraken') played = c.kraken(x, y);
+    else if (mode === 'squall') played = c.squall(currentDir(x, y));
+    else if (mode === 'sound') played = c.sound(aimDir === 'h' ? 'row' : 'col', aimDir === 'h' ? y : x);
+    else if (mode === 'double') { const [dx, dy] = STEP[dblDir]; played = c.double(x, y, dx, dy); }
     // A card goes back into the hand once played: the order returns to Fire.
     if (played) setMode('fire');
     return;
   }
   if (mode === 'fog') { if (c.fog(x, y)) setMode('fire'); return; }
   if (mode === 'current') { if (c.current(currentDir(x, y))) setMode('fire'); return; }
+  if (mode === 'gale') { if (c.gale(currentDir(x, y))) setMode('fire'); return; }
   if (mode === 'pact') {
     const at = shipAt(c.ships, x, y);
     if (at && c.pact(at.ship.id)) { hud.log(`You give the ${at.ship.cls} to the deep. Two seals rise in her place.`, 'good'); setMode('fire'); return; }
@@ -553,7 +589,7 @@ addEventListener('keydown', (e) => {
   if (mode === 'turn' && selected && (k === 'q' || k === 'e')) turnSelected(k === 'q' ? 'left' : 'right');
   if (k === 'escape' && selected) { selected = null; refresh(); }
   if (k === 'a' || k === '4') setMode('broadside');
-  if (k === 'r') { aimDir = aimDir === 'h' ? 'v' : 'h'; refresh(); }
+  if (k === 'r') { if (mode === 'double') dblDir = (dblDir + 1) % 4; else aimDir = aimDir === 'h' ? 'v' : 'h'; refresh(); }
   if (k === ' ' && myTurn()) { e.preventDefault(); c.endTurn(); }
 });
 

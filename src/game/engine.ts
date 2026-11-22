@@ -458,7 +458,7 @@ export async function commitHash(initial: Placement[], salt: string): Promise<st
 }
 
 /** Everything a client must keep to survive a page reload. */
-export interface Snapshot { ring?: number; ships: Ship[]; initial: Placement[]; salt: string; acts: Act[]; order: Order | null; streak: number; hurt: boolean; count: number; escort: boolean; laden: number }
+export interface Snapshot { ring?: number; cmd?: Cmd; ships: Ship[]; initial: Placement[]; salt: string; acts: Act[]; order: Order | null; streak: number; hurt: boolean; count: number; escort: boolean; laden: number }
 
 export class Client {
   pub: Pub;
@@ -504,12 +504,12 @@ export class Client {
   has(item: Item) { return this.side.items.includes(item); }
 
   snapshot(): Snapshot {
-    return JSON.parse(JSON.stringify({ ships: this.ships, initial: this.initial, salt: this.salt, acts: this.acts, order: this.order, streak: this.streak, hurt: this.hurt, count: this.log.length, escort: this.escort, laden: this.laden, ring: this.ringSeen }));
+    return JSON.parse(JSON.stringify({ ships: this.ships, initial: this.initial, salt: this.salt, acts: this.acts, order: this.order, streak: this.streak, hurt: this.hurt, count: this.log.length, escort: this.escort, laden: this.laden, ring: this.ringSeen, cmd: this.cmd }));
   }
   /** Restore private state; the next `count` messages only rebuild the public view. */
   restore(s: Snapshot) {
     this.ships = s.ships; this.initial = s.initial; this.salt = s.salt; this.acts = s.acts; this.order = s.order;
-    this.streak = s.streak; this.hurt = s.hurt; this.skip = s.count; this.escort = !!s.escort; this.laden = s.laden || 0; this.ringSeen = s.ring || 0;
+    this.streak = s.streak; this.hurt = s.hurt; this.skip = s.count; this.escort = !!s.escort; this.laden = s.laden || 0; this.ringSeen = s.ring || 0; if (s.cmd) this.cmd = s.cmd;
   }
 
   private send(b: Body) { this.inFlight++; this.out({ ...b, by: this.me } as Msg); }
@@ -776,7 +776,7 @@ export class Client {
   squall(dir: number): boolean { if (!this.canSquall() || !(dir >= 0 && dir <= 3)) return false; this.send({ t: 'squall', dir }); return true; }
   canGale() { return this.side.cmd === 'stormcaller' && this.pub.round - (this.side.galeAt ?? -99) >= GALE_EVERY && this.can(1); }
   gale(wind: number): boolean { if (!this.canGale() || !(wind >= 0 && wind <= 3)) return false; this.send({ t: 'gale', wind }); return true; }
-  canSound() { return this.side.cmd === 'spymaster' && this.pub.round - (this.side.soundAt ?? -99) >= SOUND_EVERY && this.can(Math.max(1, SOUND_AP)); }
+  canSound() { return this.side.cmd === 'spymaster' && this.pub.round - (this.side.soundAt ?? -99) >= SOUND_EVERY && this.can(SOUND_AP); }
   sound(axis: 'row' | 'col', i: number): boolean { if (!this.canSound() || !(i >= 0 && i < N)) return false; this.send({ t: 'sound', axis, i }); return true; }
   canDouble() { return this.side.cmd === 'gunmaster' && this.uses() < CMD_USES.gunmaster && this.can(2); }
   /** Double-shotted: fire at (x, y); if it hits, a second ball strikes one square further by (dx, dy). */

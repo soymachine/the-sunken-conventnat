@@ -286,3 +286,99 @@ No text.
 
 With these, the three seals glow when all three are lit, and clicking them takes up the Kraken's card (already
 in the game); when the Kraken is summoned they can crack and fall away using the broken picture.
+
+## 12. Commanders: portraits and power cards
+
+Until these exist, the game shows a wax seal with a symbol for each commander, and the power cards borrow other
+cards' pictures.
+
+### Portraits
+
+Five portraits, all in the same style: head and shoulders, three-quarter view, painted like an 18th-century naval
+oil portrait, dark background, warm light from the upper left, square, 1024 × 1024. Shown in a round frame in the
+panels and on the home. Keep the face centred and leave space round the head. No text.
+
+- **The Tidewarden:**
+  ```
+  An old weathered sea priest-captain with a grey braided beard threaded with shells, a dark green coat crusted with salt, holding a brass astrolabe engraved with tide lines; calm, patient eyes; behind him, faint in the dark, a slow whirlpool.
+  ```
+- **The Stormcaller:**
+  ```
+  A fierce woman captain with wind-torn black hair and a storm-grey greatcoat, one hand raised as if summoning the wind, small sparks of lightning on her fingertips; dark storm clouds and slanting rain in the background.
+  ```
+- **The Spymaster:**
+  ```
+  A thin, sharp-featured gentleman in a black velvet coat and a high collar, a folded spyglass in one hand and a sealed letter in the other, a faint knowing smile, candlelight on one side of the face, a chart table with pins half seen behind.
+  ```
+- **The Gunmaster:**
+  ```
+  A broad, scarred master gunner with powder-blackened face and forearms, a red neckerchief, a ramrod over the shoulder and a slow match smouldering; a cannon muzzle and drifting gun smoke behind him.
+  ```
+- **The Deepspeaker:**
+  ```
+  A pale hooded figure in deep-sea robes of dark teal and black, wet as if just risen from the sea, a necklace of black wax seals stamped with a kraken, eyes faintly glowing sea-green; tentacles barely visible in the darkness behind.
+  ```
+
+### Power cards
+
+Same frame and style as the other order cards in section 1: a vertical painted picture, nothing in the bottom quarter
+(the name goes there), no text.
+
+- **Hold the Tide / Hasten the Tide:**
+  ```
+  A great whirlpool at sea seen from a cliff, a robed figure with a raised brass astrolabe holding it back, the water frozen mid-spin with a glowing ring around it.
+  ```
+- **Squall:**
+  ```
+  A fleet of sailing ships driven sideways by a violent squall, sails torn, one ship crashing into another, white spray and slanting rain.
+  ```
+- **Call the Wind:**
+  ```
+  A woman on a quarterdeck with her arm raised, a great gust visible as swirling streaks of air bending all the sails one way, clouds parting.
+  ```
+- **Soundings:**
+  ```
+  A sailor in the bow of a longboat at night, dropping a lead line into dark water, a lantern lighting the knotted rope, faint ship silhouettes far off in the mist.
+  ```
+- **Double-Shotted:**
+  ```
+  A cannon firing with two iron balls chained in flight, one smashing through a ship's hull and the second flying on behind it, dramatic gun smoke and fire.
+  ```
+
+## 13. The home: a ribbon across the sheet, and an arm of the deep on each side
+
+The home is a single sheet of parchment (the Articles of Engagement). The game's title sits on a **ribbon** across
+its head, and two **kraken arms** reach out from behind the sheet's sides. The game draws the title text itself, so
+the ribbon must be blank. One tentacle picture is enough: the game mirrors it for the other side.
+
+Save them as `public/ui/home_ribbon.webp` and `public/ui/home_tentacle.webp` (or drop them in `images/` and I
+convert them). Until they exist, the game shows a simple drawn ribbon and no tentacles.
+
+**Ribbon (blank, seen face-on)**
+```
+A long horizontal parchment ribbon banner seen exactly face-on, gently arched upwards in the middle, its two ends
+folded back behind it and cut into swallowtails, the folds in shadow. Aged cream parchment with soft creases,
+slightly darker edges and a thin hand-inked border line along both long edges. The centre is completely blank and
+flat enough to print a title on. Nothing else: no text, no letters, no seal, no background. Wide composition about
+5:1, centred, filling the width. Transparent background, PNG with alpha. Warm light from the upper left.
+Photorealistic, 18th-century nautical style.
+```
+
+**Tentacle (one, curling up and outwards; the game mirrors it for the other side)**
+```
+A single kraken tentacle rising from the bottom of the frame and curling upwards and outwards to the left, the
+tip coiled into a tight spiral at the top; thick at the base, tapering to a fine tip. Wet, glistening dark
+red-brown skin with a slightly lighter underside lined with two rows of pale suckers facing the viewer, small
+barnacles near the base. The base is cut straight at the bottom edge of the frame, as if coming out from behind
+something. Nothing else: no water, no background. Tall composition about 1:2. Transparent background, PNG with
+alpha. Warm light from the upper left, deep shadow on the right side. Photorealistic.
+```
+
+Optional, if the top of the page looks empty without the old crest:
+
+**Small crest seal (above the ribbon, about 90 px on screen)**
+```
+A small round wax seal seen from above: deep red wax pressed with an anchor wrapped by a kraken tentacle, a
+coil of rope around the rim. Only the seal. Centred, square. Transparent background, PNG with alpha.
+Photorealistic. No text.
+```

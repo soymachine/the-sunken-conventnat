@@ -204,12 +204,19 @@ Gunmaster 3.0, Deepspeaker 1.5 (Krakens).
   so the powers that move ships (Squall, Gale) are surely worth more to a person than they are here.
   Playtests should confirm before the numbers are trusted.
 
-### Not built yet
+### In the game (0.21.0)
 
-- **The end-of-battle check:** `verify.ts` does not yet know Squall drift, Double-Shotted answers or Soundings. A
-  game with commanders would be flagged when it is checked, so this must come before commanders are offered
-  online.
-- **The interface:** the pick in the lobby, the power cards, and the portraits.
+- **The pick:** on the home, under "Kind of battle", only for Classic. It is remembered. Against the machine, if you
+  lead a commander, the machine leads one drawn at random.
+- **The panels:** your commander shows at the top of your panel and theirs under their name. Hover either for the
+  full card.
+- **The power cards:** they join the hand: Hold / Hasten the Tide, Squall, Call the Wind, Soundings,
+  Double-Shotted. The Deepspeaker's Kraken card appears with two seals.
+- **The end-of-battle check:** `verify.ts` checks Squall drift and crashes, Double-Shotted answers, Soundings,
+  the veil and the Stormcaller's sailing. 630 machine battles with every pairing all verify, and a regular test
+  plays one battle per commander.
+- **Still to do:** portraits and card pictures (Meshy prompts in `docs/meshy-cards.md`, section 12), and the
+  Tidewarden balance pass.
 
 ## Suggested building order
 

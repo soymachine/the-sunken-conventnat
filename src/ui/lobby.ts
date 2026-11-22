@@ -12,34 +12,23 @@ export class Lobby {
   private q = <T extends Element>(s: string) => this.root.querySelector(s) as T;
 
   constructor(on: LobbyHandlers, online: boolean) {
-    // The crest (public/ui/crest.webp) carries the title on its banner and a monogram in the wax.
+    // The sheet of articles, with the title on a ribbon across its head and two arms of the deep at its sides.
     this.root.innerHTML = `
       <div class="port">
-      <svg class="crest" viewBox="0 0 1024 1024" role="img" aria-label="The Sunken Covenant">
-        <defs>
-          <path id="bannerLine" d="M232,443 C243,442 279,436 300,434 C321,432 340,428 360,429 C380,430 402,434 420,439 C438,444 452,450 470,456 C488,462 510,470 530,477 C550,484 570,491 590,497 C610,503 630,509 650,513 C670,517 690,521 710,520 C730,519 753,513 770,508 C787,503 803,493 810,490" />
-          <filter id="inkRough" x="-5%" y="-20%" width="110%" height="140%">
-            <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="7" />
-            <feDisplacementMap in="SourceGraphic" scale="1.6" result="rough" />
-            <feGaussianBlur in="rough" stdDeviation=".55" result="ink" />
-            <feGaussianBlur in="ink" stdDeviation="2.4" result="soft" />
-            <feOffset in="soft" dx="2" dy="4" result="drop" />
-            <feFlood flood-color="#3a2410" flood-opacity=".42" />
-            <feComposite in2="drop" operator="in" result="shadow" />
-            <feMerge><feMergeNode in="shadow" /><feMergeNode in="ink" /></feMerge>
-          </filter>
-        </defs>
-        <image href="/ui/crest.webp" width="1024" height="1024" />
-        <text class="bannerText" filter="url(#inkRough)"><textPath href="#bannerLine" startOffset="50%" text-anchor="middle" textLength="586" lengthAdjust="spacingAndGlyphs">The Sunken Covenant</textPath></text>
-        <g class="monogram" text-anchor="middle">
-          <text x="511" y="828" fill="#3d0f07" opacity=".8">SC</text>
-          <text x="517" y="834" fill="#e68a6c" opacity=".35">SC</text>
-          <text x="514" y="831" fill="#8e2a17">SC</text>
-        </g>
-      </svg>
+      <div class="sheet">
+        <div class="banner" aria-label="The Sunken Covenant">
+          <img class="art" src="/ui/home_ribbon.webp" alt="" draggable="false" onerror="this.remove()">
+          <svg class="fallback" viewBox="0 0 600 110" preserveAspectRatio="none" aria-hidden="true">
+            <path d="M8 30 L70 30 L70 92 L8 92 L30 61 Z" fill="#8a6a3a"/><path d="M592 30 L530 30 L530 92 L592 92 L570 61 Z" fill="#8a6a3a"/>
+            <path d="M70 30 L95 18 L95 80 L70 92 Z M530 30 L505 18 L505 80 L530 92 Z" fill="#5e4524"/>
+            <path d="M95 18 C200 8, 400 8, 505 18 L505 80 C400 70, 200 70, 95 80 Z" fill="#e9dcbc" stroke="#6b5233" stroke-width="2"/>
+          </svg>
+          <h1 class="title">The Sunken Covenant</h1>
+        </div>
+        <img class="tentacle left" src="/ui/home_tentacle.webp" alt="" draggable="false" onerror="this.classList.add('missing')">
+        <img class="tentacle right" src="/ui/home_tentacle.webp" alt="" draggable="false" onerror="this.classList.add('missing')">
       <div class="card">
-        <h1>Articles of Engagement</h1>
-        <p class="tag">Two captains. One sea. No quarter.</p>
+        <p class="claim">A competitive multiplayer naval strategy game inspired by the golden age of sailing warfare.</p>
         <div class="flourish" aria-hidden="true">&#10086;</div>
         <label for="capName">Captain's name</label>
         <input id="capName" maxlength="20" autocomplete="off" placeholder="Sign your name" />
@@ -60,6 +49,7 @@ export class Lobby {
         </div>
         <p class="status" role="status"></p>
         <p class="version">Version ${__APP_VERSION__}</p>
+      </div>
       </div>
       </div>`;
     const name = this.q<HTMLInputElement>('#capName');
