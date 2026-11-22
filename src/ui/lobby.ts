@@ -1,10 +1,12 @@
 // The port: choose a name and how to play.
+import { CMDS, Cmd } from '../game/engine';
+import { CMD_INFO } from './commanders';
 import { Mode } from '../game/engine';
 
 export interface LobbyHandlers {
-  bot(name: string, mode: Mode): void;
-  create(name: string, mode: Mode): void;
-  join(name: string, code: string): void;
+  bot(name: string, mode: Mode, cmd: Cmd | null): void;
+  create(name: string, mode: Mode, cmd: Cmd | null): void;
+  join(name: string, code: string, cmd: Cmd | null): void;
 }
 
 export class Lobby {
@@ -48,6 +50,14 @@ export class Lobby {
           <button class="mode on" data-mode="classic" role="radio" aria-checked="true"><b>Classic</b><span>Sink the whole enemy fleet.</span></button>
           <button class="mode" data-mode="convoy" role="radio" aria-checked="false"><b>Convoy</b><span>One escorts the cargo home, the other plunders it. Roles are drawn by lot.</span></button>
         </div>
+        <div class="cmdPick">
+          <p class="field" id="cmdLbl">Commander <em>(optional, Classic only)</em></p>
+          <div class="cmds" role="radiogroup" aria-labelledby="cmdLbl">
+            <button class="cmd" data-cmd="" role="radio"><i>—</i><b>None</b></button>
+            ${CMDS.map((k) => `<button class="cmd" data-cmd="${k}" role="radio"><i>${CMD_INFO[k].glyph}</i><b>${CMD_INFO[k].name.replace('The ', '')}</b></button>`).join('')}
+          </div>
+          <p class="cmdHelp" id="cmdHelp"></p>
+        </div>
         <div class="row"><button class="plaque" id="vsBot">Play the machine</button></div>
         <p class="or"><span>or sail against a friend</span></p>
         <div class="row"><button class="plaque dark" id="create">Create a room</button></div>
@@ -70,9 +80,27 @@ export class Lobby {
       mode = b.dataset.mode as Mode;
       this.root.querySelectorAll('.mode').forEach((o) => { o.classList.toggle('on', o === b); o.setAttribute('aria-checked', String(o === b)); });
     }));
-    this.q<HTMLElement>('#vsBot').onclick = () => on.bot(who(), mode);
-    this.q<HTMLElement>('#create').onclick = () => on.create(who(), mode);
-    const join = () => { const c = this.q<HTMLInputElement>('#code').value.trim().toUpperCase(); if (c.length === 4) on.join(who(), c); else this.status('A room code has four characters.', true); };
+    // The commander: chosen here, remembered, and shown to the other captain when the battle begins.
+    let cmd: Cmd | null = null;
+    try { const v = localStorage.getItem('tsc:cmd'); cmd = CMDS.includes(v as Cmd) ? (v as Cmd) : null; } catch { /* ignore */ }
+    const help = (k: Cmd | null) => {
+      const i = k ? CMD_INFO[k] : null;
+      this.q('#cmdHelp').innerHTML = i ? `<b>${i.name}</b> <span class="motto">“${i.motto}”</span><br>${i.power}${i.passive ? `<br>${i.passive}` : ''}<br><span class="minus">${i.drawback}</span>`
+        : 'No commander: plain Classic. Pick one to gain a power and a drawback; the other captain sees your choice.';
+    };
+    const paintCmd = () => this.root.querySelectorAll<HTMLElement>('.cmd').forEach((b) => { const on = (b.dataset.cmd || null) === cmd; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
+    this.root.querySelectorAll<HTMLButtonElement>('.cmd').forEach((b) => {
+      const k = (b.dataset.cmd || null) as Cmd | null;
+      b.onclick = () => { cmd = k; try { localStorage.setItem('tsc:cmd', k ?? ''); } catch { /* ignore */ } paintCmd(); help(cmd); };
+      b.onpointerenter = () => help(k); b.onpointerleave = () => help(cmd);
+    });
+    paintCmd(); help(cmd);
+    const showPick = () => { this.q<HTMLElement>('.cmdPick').hidden = mode !== 'classic'; };
+    this.root.querySelectorAll<HTMLButtonElement>('.mode').forEach((b) => b.addEventListener('click', showPick));
+    const chosen = () => (mode === 'classic' ? cmd : null);
+    this.q<HTMLElement>('#vsBot').onclick = () => on.bot(who(), mode, chosen());
+    this.q<HTMLElement>('#create').onclick = () => on.create(who(), mode, chosen());
+    const join = () => { const c = this.q<HTMLInputElement>('#code').value.trim().toUpperCase(); if (c.length === 4) on.join(who(), c, cmd); else this.status('A room code has four characters.', true); };
     this.q<HTMLElement>('#join').onclick = join;
     this.q<HTMLInputElement>('#code').onkeydown = (e) => { if (e.key === 'Enter') join(); };
     if (!online) {

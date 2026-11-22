@@ -1,10 +1,11 @@
 // Oak-and-brass HUD drawn with DOM + SVG over the 3D canvas.
-import { Client, SEASON, maelstromIn, roleOf } from '../game/engine';
+import { CMD_USES, Client, GALE_EVERY, SEASON, SOUND_EVERY, krakenSeals, maelstromIn, mayBuy, price, roleOf } from '../game/engine';
+import { CMD_INFO } from './commanders';
 import { installTuner } from './tuner';
 import { ITEMS, ITEM_HELP, ITEM_IDS, Item, MAX_ITEMS } from '../game/powerups';
 import { FLEETS, KRAKEN_SEALS, N, Role, shipCells } from '../game/rules';
 
-export type Tool = 'broadside' | 'chain' | 'spy' | Item;
+export type Tool = 'broadside' | 'chain' | 'spy' | Item | 'bindLater' | 'bindSooner' | 'squall' | 'gale' | 'sound' | 'double';
 export type Mode = 'fire' | 'sail' | 'turn' | 'power' | 'kraken' | 'pact' | Tool;
 
 /** The two invented captains of the Convoy mode. */
@@ -31,7 +32,9 @@ export const TOOLS: Record<'broadside' | 'chain' | 'spy', { name: string; ap: nu
 /** What each special action above the helm does, told in full for its tooltip. */
 /** Cards that have their own picture in public/ui/cards/. */
 /** Card families, each with its own frame. */
-const CARD_KIND: Record<string, string> = { fire: 'shot', broadside: 'shot', chain: 'shot', fireship: 'shot', sail: 'move', turn: 'move', current: 'move', winds: 'move', kraken: 'kraken' };
+const CARD_KIND: Record<string, string> = { fire: 'shot', broadside: 'shot', chain: 'shot', fireship: 'shot', double: 'shot', sail: 'move', turn: 'move', current: 'move', winds: 'move', squall: 'move', gale: 'move', bindLater: 'move', bindSooner: 'move', kraken: 'kraken' };
+/** Until the commanders' cards have their own pictures, they borrow a fitting one. */
+const ART_STAND_IN: Record<string, string> = { squall: 'current', gale: 'winds', sound: 'spyglass', double: 'broadside', bindLater: 'current', bindSooner: 'current' };
 const CARD_ART = new Set(['fire', 'sail', 'turn', 'broadside', 'chain', 'spy', 'spyglass', 'longglass', 'fireship', 'fog', 'shipwright', 'winds', 'current', 'pact', 'kraken']);
 /** What each ship's trait means, for the fleet's tooltips. */
 const TRAIT_HELP: Record<string, string> = {
@@ -133,12 +136,13 @@ export class Hud {
       </div>
       <div class="herald" id="herald" aria-hidden="true"><div><b></b><span></span></div></div>
       <aside class="card left">
+        <div class="myCmd" id="myCmd" hidden tabindex="0"></div>
         <h2>The covenant</h2><div class="seals" id="seals" tabindex="0" aria-describedby="shopTip"></div><p class="howto" id="sealHow"></p>
         <h2>Admiralty orders</h2><p id="orderText"></p><p id="orderMeta" class="meta"></p>
         <h2>Quartermaster <span id="gold" title="Doubloons"></span></h2><ul id="shop"></ul>
         <h2>Your fleet</h2><ul id="fleet"></ul>
       </aside>
-      <aside class="card right"><h2>Enemy fleet</h2><p id="foeName"></p><p class="meta" id="foeSeals"></p><ul id="foeFleet"></ul></aside>
+      <aside class="card right"><h2>Enemy fleet</h2><p id="foeName"></p><div class="myCmd foe" id="foeCmd" hidden tabindex="0"></div><p class="meta" id="foeSeals"></p><ul id="foeFleet"></ul></aside>
       <p class="toast" id="toast" role="status"></p>
       <div class="belt" id="belt"></div>
       <footer class="rail bottom">
@@ -200,7 +204,7 @@ export class Hud {
       const b = (e.target as Element).closest<HTMLElement>('button[data-item]');
       if (!b) return;
       const id = b.dataset.item as Item, it = ITEMS[id];
-      tip.innerHTML = `<b>${it.name}</b><span class="cost">${it.price} doubloons · ${it.ap} AP</span><p>${esc(ITEM_HELP[id])}</p>${b.dataset.why ? `<p class="why">${esc(b.dataset.why)}</p>` : ''}`;
+      tip.innerHTML = `<b>${it.name}</b><span class="cost">${b.dataset.price ?? it.price} doubloons · ${it.ap} AP</span><p>${esc(ITEM_HELP[id])}</p>${b.dataset.why ? `<p class="why">${esc(b.dataset.why)}</p>` : ''}`;
       const r = b.getBoundingClientRect(), panel = shop.closest('.card')!.getBoundingClientRect();
       tip.style.left = panel.right + 10 + 'px';
       tip.style.top = Math.min(innerHeight - 220, r.top - 6) + 'px';
@@ -224,6 +228,20 @@ export class Hud {
     mael.addEventListener('pointerenter', showMael); mael.addEventListener('focus', showMael);
     mael.addEventListener('pointerleave', () => { tip.hidden = true; }); mael.addEventListener('blur', () => { tip.hidden = true; });
     seals.addEventListener('pointerleave', () => { tip.hidden = true; }); seals.addEventListener('blur', () => { tip.hidden = true; });
+    // A commander's card: power, passive and drawback, beside the panel.
+    for (const id of ['#myCmd', '#foeCmd']) {
+      const el = this.q<HTMLElement>(id);
+      const show = () => {
+        const k = el.dataset.cmd as keyof typeof CMD_INFO | undefined, i = k ? CMD_INFO[k] : null;
+        if (!i) return;
+        tip.innerHTML = `<b>${i.name}</b><span class="cost">“${esc(i.motto)}”</span><p>${esc(i.power)}</p>${i.passive ? `<p>${esc(i.passive)}</p>` : ''}<p class="why">${esc(i.drawback)}</p>`;
+        const r = el.getBoundingClientRect(), panel = el.closest('.card')!.getBoundingClientRect();
+        tip.hidden = false;
+        tip.style.left = (id === '#myCmd' ? panel.right + 10 : panel.left - tip.offsetWidth - 10) + 'px'; tip.style.top = r.top - 6 + 'px';
+      };
+      el.addEventListener('pointerenter', show); el.addEventListener('focus', show);
+      el.addEventListener('pointerleave', () => { tip.hidden = true; }); el.addEventListener('blur', () => { tip.hidden = true; });
+    }
     // Each ship's sections in Your fleet name her and her speciality.
     const fleet = this.q<HTMLElement>('#fleet');
     fleet.addEventListener('pointerover', (e) => {
@@ -425,7 +443,14 @@ export class Hud {
     this.q('#turnTitle').textContent = p.phase === 'placement' ? 'Deploy your fleet' : p.phase === 'over' ? 'Battle over' : mine ? 'Your turn' : 'Enemy turn';
     this.q('#turnWx').textContent = p.phase === 'battle' && p.storm ? `Storm over ${(p.storm.rows ?? 3) === 1 ? `row ${p.storm.row + 1}` : `rows ${p.storm.row + 1}–${p.storm.row + (p.storm.rows ?? 3)}`} · no guns or glasses there` : '';
     this.q('#turnSub').textContent = p.phase === 'battle' ? `Round ${p.round} · ${(p.wind ?? 0) < 0 ? 'Flat calm' : `Wind ${['→ east', '↓ south', '← west', '↑ north'][p.wind ?? 0]}`}` : '';
-    this.q('#seals').innerHTML = Array.from({ length: KRAKEN_SEALS }, (_, i) => `<i class="${i < me.seals ? 'lit' : ''}"></i>`).join('') + `<span>${me.seals >= KRAKEN_SEALS ? 'The Kraken will answer.' : `${Math.min(me.seals, KRAKEN_SEALS)} of ${KRAKEN_SEALS} seals`}</span>`;
+    const need = krakenSeals(me);
+    this.q('#seals').innerHTML = Array.from({ length: need }, (_, i) => `<i class="${i < me.seals ? 'lit' : ''}"></i>`).join('') + `<span>${me.seals >= need ? 'The Kraken will answer.' : `${Math.min(me.seals, need)} of ${need} seals`}</span>`;
+    // Each captain's commander, named in their panel; the full card shows on hover.
+    for (const [id, side] of [['#myCmd', me], ['#foeCmd', foe]] as const) {
+      const el = this.q<HTMLElement>(id), info = side.cmd ? CMD_INFO[side.cmd] : null;
+      el.hidden = !info;
+      if (info) { el.innerHTML = `<i>${info.glyph}</i><span>${id === '#myCmd' ? 'Your commander' : 'Their commander'}<b>${info.name}</b></span>`; el.dataset.cmd = side.cmd!; }
+    }
     // The full explanation lives in the seals' tooltip; the panel keeps only what needs doing now.
     this.sealHelp = me.seals >= KRAKEN_SEALS
       ? 'Choose Summon the Kraken above the helm (3 AP), then a 3×3 patch of enemy water. It strikes now and again on their next turn, and holds the ships it finds.'
@@ -459,9 +484,10 @@ export class Hud {
     this.q('#gold').textContent = String(me.doubloons);
     this.q('#shop').innerHTML = ITEM_IDS.map((id) => {
       const it = ITEMS[id];
-      const why = c.canBuy(id) ? '' : p.phase !== 'battle' ? 'The quartermaster opens once the battle begins.' : !mine ? 'Wait for your turn.'
-        : me.doubloons < it.price ? `You need ${it.price - me.doubloons} more doubloons.` : me.items.length >= MAX_ITEMS ? `Your hold is full: ${MAX_ITEMS} items at most. Use one first.` : 'Not now.';
-      return `<li><button data-item="${id}" data-why="${esc(why)}" aria-disabled="${!!why}" ${why ? 'class="off"' : ''}><span>${it.name}</span><em>${it.ap} AP</em><b>${it.price}</b></button></li>`;
+      const cost = price(me, id);
+      const why = c.canBuy(id) ? '' : !mayBuy(me, id) ? 'Your commander forswears it.' : p.phase !== 'battle' ? 'The quartermaster opens once the battle begins.' : !mine ? 'Wait for your turn.'
+        : me.doubloons < cost ? `You need ${cost - me.doubloons} more doubloons.` : me.items.length >= MAX_ITEMS ? `Your hold is full: ${MAX_ITEMS} items at most. Use one first.` : 'Not now.';
+      return `<li><button data-item="${id}" data-price="${cost}" data-why="${esc(why)}" aria-disabled="${!!why}" ${why ? 'class="off"' : ''}><span>${it.name}</span><em>${it.ap} AP</em><b>${cost}</b></button></li>`;
     }).join('');
     this.q('#fleet').innerHTML = c.ships.map((s) => {
       const f = FLEETS[role].find((q) => q.kind === s.kind)!;
@@ -479,8 +505,8 @@ export class Hud {
       const tool = (id: Mode, name: string, ap: number, ok: boolean, help: string, why = '') => {
         if (!ok && !why) why = p.phase !== 'battle' || !mine ? 'Wait for your turn.' : p.ap < ap ? `Needs ${ap} action point${ap === 1 ? '' : 's'}; you have ${p.ap}.` : 'Not now.';
         // An order card: the frame and its picture, the name and the cost in a wax seal.
-        const pic = id === 'power' ? (role === 'admiral' ? 'escort' : 'reckoning') : id;
-        const art = CARD_ART.has(id) || id === 'power' ? `background-image:url(/ui/cards/${pic}.webp)` : '';
+        const pic = id === 'power' ? (role === 'admiral' ? 'escort' : 'reckoning') : ART_STAND_IN[id] ?? id;
+        const art = CARD_ART.has(pic) || id === 'power' ? `background-image:url(/ui/cards/${pic}.webp)` : '';
         belt.push(`<button data-tool="${id}" data-name="${esc(name)}" data-ap="${ap}" data-help="${esc(help)}" data-why="${ok ? '' : esc(why)}" class="ocard${CARD_KIND[id] ? ' k-' + CARD_KIND[id] : ''}${mode === id ? ' on' : ''}${ok ? '' : ' off'}${art ? '' : ' noart'}" aria-disabled="${!ok}" aria-label="${esc(name)}, ${ap} AP"><span class="art" style="${art}"></span><span class="nm">${name.replace(/ ×\d+$/, '')}</span>${/×\d+$/.test(name) ? `<span class="many">${name.match(/×\d+$/)![0]}</span>` : ''}<span class="cost">${ap}</span></button>`);
       };
       // Fire, Sail and Turn are cards too; they always sit in the middle of the hand (placed below).
@@ -497,8 +523,23 @@ export class Hud {
         const n = me.items.filter((q) => q === id).length;
         tool(id, ITEMS[id].name + (n > 1 ? ` ×${n}` : ''), ITEMS[id].ap, c.can(ITEMS[id].ap) && !(id === 'winds' && p.windsUsed), `${ITEM_HELP[id]} Bought from the quartermaster; used up once played.`, id === 'winds' && p.windsUsed ? 'Trade Winds already blew this turn.' : '');
       }
-      if (me.seals >= KRAKEN_SEALS || mode === 'kraken') tool('kraken', 'Summon the Kraken', 3, c.canKraken(), TOOL_HELP.kraken.text, p.kraken ? 'The Kraken is already abroad.' : '');
-      if (!p.pacts?.[c.me] && c.ships.some((s) => !s.sunk && s.hits.some(Boolean) && s.kind !== 'merchant')) tool('pact', 'Blood Pact', 1, c.canPact(), TOOL_HELP.pact.text, c.ships.filter((s) => !s.sunk).length <= 1 ? 'Your last ship cannot be given up.' : '');
+      if (me.seals >= krakenSeals(me) || mode === 'kraken') tool('kraken', 'Summon the Kraken', 3, c.canKraken(), TOOL_HELP.kraken.text, p.kraken ? 'The Kraken is already abroad.' : '');
+      // The commander's own cards.
+      const usesLeft = (k: keyof typeof CMD_USES) => CMD_USES[k] - (me.cmdUses ?? 0);
+      const again = (at: number | undefined, every: number) => `Again in ${every - (p.round - (at ?? -99))} round${every - (p.round - (at ?? -99)) === 1 ? '' : 's'}.`;
+      if (me.cmd === 'tidewarden') {
+        const left = maelstromIn(p), why = left === null ? 'The maelstrom is spent.' : usesLeft('tidewarden') <= 0 ? 'You have bound the tide twice already.' : p.round < 14 ? 'The tide can be bound from round 14.' : '';
+        const n = `${usesLeft('tidewarden')} of ${CMD_USES.tidewarden} left.`;
+        tool('bindLater', 'Hold the Tide', 2, c.canBind(), `The maelstrom's next ring comes two rounds later. ${n}`, why);
+        tool('bindSooner', 'Hasten the Tide', 2, c.canBind(), `The maelstrom's next ring comes a round sooner. ${n}`, why);
+      }
+      if (me.cmd === 'stormcaller') {
+        tool('squall', 'Squall', 1, c.canSquall(), `Click the side of the enemy chart the wind should drive their fleet towards: every ship moves a square, and a ship that cannot is dashed and takes a hit. Their next glass on your waters sees only spray. ${usesLeft('stormcaller')} of ${CMD_USES.stormcaller} left.`, usesLeft('stormcaller') <= 0 ? 'All three squalls are spent.' : '');
+        tool('gale', 'Call the Wind', 1, c.canGale(), 'Click the side of your chart the wind should blow towards this round.', p.round - (me.galeAt ?? -99) < GALE_EVERY ? again(me.galeAt, GALE_EVERY) : '');
+      }
+      if (me.cmd === 'spymaster') tool('sound', 'Soundings', 0, c.canSound(), 'Click a square of enemy water: you learn whether any ship lies on its row (press R for its column).', p.round - (me.soundAt ?? -99) < SOUND_EVERY ? again(me.soundAt, SOUND_EVERY) : '');
+      if (me.cmd === 'gunmaster') tool('double', 'Double-Shotted', 2, c.canDouble(), `Fire at a square; if it hits, the ball flies on and strikes the next square too (press R to turn which way). ${usesLeft('gunmaster')} of ${CMD_USES.gunmaster} left.`, usesLeft('gunmaster') <= 0 ? 'All three charges are spent.' : '');
+      if (!p.pacts?.[c.me] && me.cmd !== 'deepspeaker' && c.ships.some((s) => !s.sunk && s.hits.some(Boolean) && s.kind !== 'merchant')) tool('pact', 'Blood Pact', 1, c.canPact(), TOOL_HELP.pact.text, c.ships.filter((s) => !s.sunk).length <= 1 ? 'Your last ship cannot be given up.' : '');
       if (role !== 'classic' && !p.power[c.me]) tool('power', CAPTAINS[role].power, 1, c.canPower(), `Your captain's power. ${CAPTAINS[role].powerText}`);
     }
     // Fire in the very middle with Sail and Turn either side, the rest of the hand split around them.
@@ -509,6 +550,8 @@ export class Hud {
     this.q('#belt').innerHTML = belt.join('');
     // Fan the hand: each card turns a little about a point below the table.
     const cards = [...this.root.querySelectorAll<HTMLElement>('#belt .ocard')], n = cards.length;
+    // A big hand overlaps more, so it never runs under the bottle or the hourglass.
+    this.q<HTMLElement>('#belt').style.setProperty('--overlap', `${-16 - Math.max(0, n - 6) * 8}px`);
     cards.forEach((el, i) => { const k = i - (n - 1) / 2; el.style.setProperty('--r', `${k * 4}deg`); el.style.setProperty('--y', `${Math.abs(k) * 4}px`); el.style.zIndex = String(10 + i); });
     const was = wasOn && wasOn !== mode ? cards.find((el) => el.dataset.tool === wasOn) : undefined;
     if (was) {

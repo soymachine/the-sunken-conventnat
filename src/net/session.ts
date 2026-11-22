@@ -1,6 +1,6 @@
 // A session carries messages between the two captains in a single agreed order.
 import { driveBot } from '../game/bot';
-import { Client, Mode, Msg } from '../game/engine';
+import { Client, Cmd, Mode, Msg } from '../game/engine';
 import { Rnd } from '../game/rules';
 
 export interface Session {
@@ -38,8 +38,9 @@ export class LocalSession implements Session {
   bus = new Bus();
   bot: Client;
   private closed = false;
-  constructor(public mode: Mode = 'classic', private botDelay: number | null = 700, rnd: Rnd = Math.random) {
+  constructor(public mode: Mode = 'classic', private botDelay: number | null = 700, rnd: Rnd = Math.random, botCmd?: Cmd) {
     this.bot = new Client(1, this.seed, (m) => !this.closed && this.bus.send(m), rnd, 'The machine', mode);
+    this.bot.cmd = botCmd;
     this.bus.subscribe((m) => !this.closed && this.bot.receive(m));
     driveBot(this.bot, this.botDelay, rnd);
   }

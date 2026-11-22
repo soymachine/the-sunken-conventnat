@@ -564,3 +564,30 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); out
 #lobby .port { flex-direction: column; flex-wrap: nowrap; gap: 0; padding: 8px 0 24px; }
 #lobby .crest { width: min(400px, 70vw); margin-bottom: -26px; position: relative; z-index: 1; }
 #lobby .card { width: min(520px, 100%); padding-top: 40px; }
+
+/* ---------- commanders: the pick on the home ---------- */
+#lobby .cmdPick { margin-bottom: 18px; }
+#lobby .field em { font: italic 12px var(--body); letter-spacing: 0; text-transform: none; color: #6b5233; }
+#lobby .cmds { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+#lobby .cmd { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 2px 6px; cursor: pointer; background: rgba(255, 250, 232, .22); border: 1px solid rgba(13, 11, 8, .25); border-radius: 4px; color: var(--ink); font-family: var(--body); transition: background .2s, border-color .2s; }
+#lobby .cmd i { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; font-style: normal; font-size: 17px; color: #f3e6c4; background: radial-gradient(circle at 35% 30%, #c0563c, var(--wax) 60%, #4a160c); box-shadow: 0 1px 3px rgba(0, 0, 0, .5); }
+#lobby .cmd[data-cmd=""] i { background: none; color: #6b5233; border: 1.5px dashed rgba(13, 11, 8, .35); box-shadow: none; }
+#lobby .cmd b { font: 700 9px var(--label); letter-spacing: .06em; text-transform: uppercase; }
+#lobby .cmd:hover { border-color: rgba(13, 11, 8, .5); background: rgba(255, 250, 232, .38); }
+#lobby .cmd.on { border-color: var(--wax); background: rgba(184, 49, 42, .1); box-shadow: inset 0 0 0 1px var(--wax); }
+#lobby .cmdHelp { text-align: left; font-size: 13.5px; line-height: 1.35; min-height: 5.4em; margin: 8px 2px 0; color: #3a2a18; }
+#lobby .cmdHelp .motto { font-style: italic; color: #6b5233; }
+#lobby .cmdHelp .minus { color: var(--wax); }
+
+/* ---------- commanders in the panels ---------- */
+#hud .myCmd { display: flex; align-items: center; gap: 9px; margin: 0 0 12px; padding-bottom: 10px; border-bottom: 1px solid rgba(13, 11, 8, .25); cursor: help; }
+#hud .myCmd i { flex: none; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; font-style: normal; font-size: 16px; color: #f3e6c4; background: radial-gradient(circle at 35% 30%, #c0563c, var(--wax) 60%, #4a160c); box-shadow: 0 1px 3px rgba(0, 0, 0, .5); }
+#hud .myCmd span { display: flex; flex-direction: column; font: 700 9px var(--label); letter-spacing: .14em; text-transform: uppercase; color: var(--wax); }
+#hud .myCmd b { font: italic 600 16px var(--body); letter-spacing: 0; text-transform: none; color: var(--ink); }
+#hud .myCmd.foe { margin: 6px 0 10px; }
+#hud .myCmd:focus-visible { outline: 2px solid var(--wax); outline-offset: 3px; }
+
+#hud .myCmd.foe { justify-content: flex-start; text-align: left; flex-direction: row; }
+#hud .myCmd.foe span { align-items: flex-start; }
+.belt .ocard { margin-left: var(--overlap, -16px); }
+.belt .ocard:first-child { margin-left: 0; }

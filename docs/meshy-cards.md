@@ -286,3 +286,61 @@ No text.
 
 With these, the three seals glow when all three are lit, and clicking them takes up the Kraken's card (already
 in the game); when the Kraken is summoned they can crack and fall away using the broken picture.
+
+## 12. Commanders: portraits and power cards
+
+Until these exist, the game shows a wax seal with a symbol for each commander, and the power cards borrow other
+cards' pictures.
+
+### Portraits
+
+Five portraits, all in the same style: head and shoulders, three-quarter view, painted like an 18th-century naval
+oil portrait, dark background, warm light from the upper left, square, 1024 × 1024. Shown in a round frame in the
+panels and on the home. Keep the face centred and leave space round the head. No text.
+
+- **The Tidewarden:**
+  ```
+  An old weathered sea priest-captain with a grey braided beard threaded with shells, a dark green coat crusted with salt, holding a brass astrolabe engraved with tide lines; calm, patient eyes; behind him, faint in the dark, a slow whirlpool.
+  ```
+- **The Stormcaller:**
+  ```
+  A fierce woman captain with wind-torn black hair and a storm-grey greatcoat, one hand raised as if summoning the wind, small sparks of lightning on her fingertips; dark storm clouds and slanting rain in the background.
+  ```
+- **The Spymaster:**
+  ```
+  A thin, sharp-featured gentleman in a black velvet coat and a high collar, a folded spyglass in one hand and a sealed letter in the other, a faint knowing smile, candlelight on one side of the face, a chart table with pins half seen behind.
+  ```
+- **The Gunmaster:**
+  ```
+  A broad, scarred master gunner with powder-blackened face and forearms, a red neckerchief, a ramrod over the shoulder and a slow match smouldering; a cannon muzzle and drifting gun smoke behind him.
+  ```
+- **The Deepspeaker:**
+  ```
+  A pale hooded figure in deep-sea robes of dark teal and black, wet as if just risen from the sea, a necklace of black wax seals stamped with a kraken, eyes faintly glowing sea-green; tentacles barely visible in the darkness behind.
+  ```
+
+### Power cards
+
+Same frame and style as the other order cards in section 1: a vertical painted picture, nothing in the bottom quarter
+(the name goes there), no text.
+
+- **Hold the Tide / Hasten the Tide:**
+  ```
+  A great whirlpool at sea seen from a cliff, a robed figure with a raised brass astrolabe holding it back, the water frozen mid-spin with a glowing ring around it.
+  ```
+- **Squall:**
+  ```
+  A fleet of sailing ships driven sideways by a violent squall, sails torn, one ship crashing into another, white spray and slanting rain.
+  ```
+- **Call the Wind:**
+  ```
+  A woman on a quarterdeck with her arm raised, a great gust visible as swirling streaks of air bending all the sails one way, clouds parting.
+  ```
+- **Soundings:**
+  ```
+  A sailor in the bow of a longboat at night, dropping a lead line into dark water, a lantern lighting the knotted rope, faint ship silhouettes far off in the mist.
+  ```
+- **Double-Shotted:**
+  ```
+  A cannon firing with two iron balls chained in flight, one smashing through a ship's hull and the second flying on behind it, dramatic gun smoke and fire.
+  ```
