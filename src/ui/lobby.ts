@@ -28,7 +28,7 @@ export class Lobby {
         <img class="tentacle left" src="/ui/home_tentacle.webp" alt="" draggable="false" onerror="this.classList.add('missing')">
         <img class="tentacle right" src="/ui/home_tentacle.webp" alt="" draggable="false" onerror="this.classList.add('missing')">
       <div class="card">
-        <h2 class="articles">Articles of Engagement</h2>
+        <p class="claim">A competitive multiplayer naval strategy game inspired by the golden age of sailing warfare.</p>
         <div class="flourish" aria-hidden="true">&#10086;</div>
         <label for="capName">Captain's name</label>
         <input id="capName" maxlength="20" autocomplete="off" placeholder="Sign your name" />

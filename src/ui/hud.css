@@ -625,3 +625,4 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); out
 @media (max-height: 760px) { #lobby .port { padding-top: 48px; } #lobby .flourish { display: none; } }
 #lobby .card h2.articles { text-align: center; border: 0; padding: 0; }
 .cmdModal .meta { font: italic 15px var(--body); text-transform: none; letter-spacing: 0; color: #5b4429; }
+#lobby .claim { margin: 0 auto; max-width: 380px; text-align: center; font: italic 16px/1.35 var(--body); color: #5b4429; text-wrap: balance; }
