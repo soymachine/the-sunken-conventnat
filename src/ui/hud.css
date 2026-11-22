@@ -626,3 +626,19 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); out
 #lobby .card h2.articles { text-align: center; border: 0; padding: 0; }
 .cmdModal .meta { font: italic 15px var(--body); text-transform: none; letter-spacing: 0; color: #5b4429; }
 #lobby .claim { margin: 0 auto; max-width: 380px; text-align: center; font: italic 16px/1.35 var(--body); color: #5b4429; text-wrap: balance; }
+/* The Meshy ribbon: a gentle upward arch, its tails folding back; the title sits in its flat middle. */
+#lobby .banner { top: -60px; width: 118%; height: 118px; }
+#lobby .banner .title { margin: -14px 0 0; font-size: 33px; color: #2e1c0c; text-shadow: 0 1px 0 rgba(255, 245, 220, .6); }
+#lobby .sheet .card { padding-top: 62px; padding-bottom: 34px; }
+#lobby .tentacle { bottom: 12%; height: 68%; }
+#lobby .tentacle.left { left: -31%; transform: rotate(-10deg); }
+#lobby .tentacle.right { right: -31%; transform: scaleX(-1) rotate(-10deg); }
+/* The articles are sealed: the anchor-and-kraken seal pressed on the foot of the sheet. */
+#lobby .card .seal { position: absolute; left: 50%; bottom: -34px; width: 74px; height: 74px; transform: translateX(-50%) rotate(-8deg); filter: drop-shadow(0 4px 5px rgba(0, 0, 0, .6)); pointer-events: none; }
+
+/* ---------- the commanders' portraits: half-length figures standing behind the panels ---------- */
+#hud .portrait { position: absolute; top: 8px; width: 130px; height: 122px; object-fit: contain; object-position: 50% 100%; pointer-events: none; filter: drop-shadow(0 6px 10px rgba(0, 0, 0, .7)); animation: rise .8s ease-out; }
+#hud .portrait.mine { left: 118px; }
+#hud .portrait.foe { right: 40px; transform: scaleX(-1); }
+#hud .portrait.mine { left: 50px; }
+#hud #menuBtn { position: relative; z-index: 3; }
