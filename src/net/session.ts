@@ -38,11 +38,19 @@ export class LocalSession implements Session {
   bus = new Bus();
   bot: Client;
   private closed = false;
-  constructor(public mode: Mode = 'classic', private botDelay: number | null = 700, rnd: Rnd = Math.random, botCmd?: Cmd) {
+  private started = false;
+  /** With `wait`, the machine holds off until begin() names its commander (chosen once the player has chosen). */
+  constructor(public mode: Mode = 'classic', private botDelay: number | null = 700, private rnd: Rnd = Math.random, wait = false) {
     this.bot = new Client(1, this.seed, (m) => !this.closed && this.bus.send(m), rnd, 'The machine', mode);
-    this.bot.cmd = botCmd;
     this.bus.subscribe((m) => !this.closed && this.bot.receive(m));
-    driveBot(this.bot, this.botDelay, rnd);
+    if (!wait) this.begin();
+  }
+  /** Set the machine to work, leading `cmd` (or no commander). */
+  begin(cmd?: Cmd) {
+    if (this.started) return;
+    this.started = true;
+    this.bot.cmd = cmd;
+    driveBot(this.bot, this.botDelay, this.rnd);
   }
   send(m: Msg) { if (!this.closed) this.bus.send(m); }
   listen(cb: (m: Msg) => void) { this.bus.subscribe((m) => !this.closed && cb(m)); }

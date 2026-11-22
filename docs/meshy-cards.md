@@ -344,3 +344,41 @@ Same frame and style as the other order cards in section 1: a vertical painted p
   ```
   A cannon firing with two iron balls chained in flight, one smashing through a ship's hull and the second flying on behind it, dramatic gun smoke and fire.
   ```
+
+## 13. The home: a ribbon across the sheet, and an arm of the deep on each side
+
+The home is a single sheet of parchment (the Articles of Engagement). The game's title sits on a **ribbon** across
+its head, and two **kraken arms** reach out from behind the sheet's sides. The game draws the title text itself, so
+the ribbon must be blank. One tentacle picture is enough: the game mirrors it for the other side.
+
+Save them as `public/ui/home_ribbon.webp` and `public/ui/home_tentacle.webp` (or drop them in `images/` and I
+convert them). Until they exist, the game shows a simple drawn ribbon and no tentacles.
+
+**Ribbon (blank, seen face-on)**
+```
+A long horizontal parchment ribbon banner seen exactly face-on, gently arched upwards in the middle, its two ends
+folded back behind it and cut into swallowtails, the folds in shadow. Aged cream parchment with soft creases,
+slightly darker edges and a thin hand-inked border line along both long edges. The centre is completely blank and
+flat enough to print a title on. Nothing else: no text, no letters, no seal, no background. Wide composition about
+5:1, centred, filling the width. Transparent background, PNG with alpha. Warm light from the upper left.
+Photorealistic, 18th-century nautical style.
+```
+
+**Tentacle (one, curling up and outwards; the game mirrors it for the other side)**
+```
+A single kraken tentacle rising from the bottom of the frame and curling upwards and outwards to the left, the
+tip coiled into a tight spiral at the top; thick at the base, tapering to a fine tip. Wet, glistening dark
+red-brown skin with a slightly lighter underside lined with two rows of pale suckers facing the viewer, small
+barnacles near the base. The base is cut straight at the bottom edge of the frame, as if coming out from behind
+something. Nothing else: no water, no background. Tall composition about 1:2. Transparent background, PNG with
+alpha. Warm light from the upper left, deep shadow on the right side. Photorealistic.
+```
+
+Optional, if the top of the page looks empty without the old crest:
+
+**Small crest seal (above the ribbon, about 90 px on screen)**
+```
+A small round wax seal seen from above: deep red wax pressed with an anchor wrapped by a kraken tentacle, a
+coil of rope around the rim. Only the seal. Centred, square. Transparent background, PNG with alpha.
+Photorealistic. No text.
+```

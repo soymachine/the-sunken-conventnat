@@ -1,5 +1,5 @@
 // Oak-and-brass HUD drawn with DOM + SVG over the 3D canvas.
-import { CMD_USES, Client, GALE_EVERY, SEASON, SOUND_EVERY, krakenSeals, maelstromIn, mayBuy, price, roleOf } from '../game/engine';
+import { CMDS, CMD_USES, Client, Cmd, GALE_EVERY, SEASON, SOUND_EVERY, krakenSeals, maelstromIn, mayBuy, price, roleOf } from '../game/engine';
 import { CMD_INFO } from './commanders';
 import { installTuner } from './tuner';
 import { ITEMS, ITEM_HELP, ITEM_IDS, Item, MAX_ITEMS } from '../game/powerups';
@@ -366,6 +366,42 @@ export class Hud {
     this.tipShip = i; tip.hidden = false;
     tip.style.left = Math.min(innerWidth - tip.offsetWidth - 8, x + 18) + 'px';
     tip.style.top = Math.min(innerHeight - tip.offsetHeight - 8, y + 18) + 'px';
+  }
+
+  /** The commander's choice, in a sheet of its own as the battle is set up: resolves with the pick (null for none). */
+  chooseCommander(current: Cmd | null): Promise<Cmd | null> {
+    let pick: Cmd | null = current;
+    try { if (!pick) { const v = localStorage.getItem('tsc:cmd'); pick = CMDS.includes(v as Cmd) ? (v as Cmd) : null; } } catch { /* ignore */ }
+    const box = this.root.appendChild(document.createElement('div'));
+    box.className = 'cmdModal';
+    box.innerHTML = `<div class="card" role="dialog" aria-labelledby="cmdHead">
+      <h2 id="cmdHead">Choose your commander</h2>
+      <p class="meta">Optional. Each brings a power and a drawback; the other captain sees your choice when the battle begins.</p>
+      <div class="cmds" role="radiogroup" aria-labelledby="cmdHead">
+        <button class="cmd" data-cmd="" role="radio"><i>—</i><b>None</b></button>
+        ${CMDS.map((k) => `<button class="cmd" data-cmd="${k}" role="radio"><i>${CMD_INFO[k].glyph}</i><b>${CMD_INFO[k].name.replace('The ', '')}</b></button>`).join('')}
+      </div>
+      <p class="cmdHelp"></p>
+      <button class="plaque" type="button" data-act="ok">Take command</button>
+    </div>`;
+    const help = (k: Cmd | null) => {
+      const i = k ? CMD_INFO[k] : null;
+      box.querySelector('.cmdHelp')!.innerHTML = i ? `<b>${i.name}</b> <span class="motto">“${esc(i.motto)}”</span><br>${esc(i.power)}${i.passive ? `<br>${esc(i.passive)}` : ''}<br><span class="minus">${esc(i.drawback)}</span>`
+        : 'No commander: plain Classic, as it has always been played.';
+    };
+    const paint = () => box.querySelectorAll<HTMLElement>('.cmd').forEach((b) => { const on = (b.dataset.cmd || null) === pick; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
+    box.querySelectorAll<HTMLButtonElement>('.cmd').forEach((b) => {
+      const k = (b.dataset.cmd || null) as Cmd | null;
+      b.onclick = () => { pick = k; paint(); help(pick); };
+      b.onpointerenter = () => help(k); b.onpointerleave = () => help(pick);
+    });
+    paint(); help(pick);
+    return new Promise((done) => {
+      box.querySelector<HTMLElement>('[data-act=ok]')!.onclick = () => {
+        try { localStorage.setItem('tsc:cmd', pick ?? ''); } catch { /* ignore */ }
+        box.remove(); done(pick);
+      };
+    });
   }
 
   /** Show the saved settings in the menu. */

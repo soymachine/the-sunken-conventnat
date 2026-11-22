@@ -565,19 +565,24 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); out
 #lobby .crest { width: min(400px, 70vw); margin-bottom: -26px; position: relative; z-index: 1; }
 #lobby .card { width: min(520px, 100%); padding-top: 40px; }
 
-/* ---------- commanders: the pick on the home ---------- */
+/* ---------- commanders: the pick, in its own sheet as the battle is set up ---------- */
+.cmdModal { position: absolute; inset: 0; z-index: 70; display: grid; place-items: center; background: rgba(13, 11, 8, .6); pointer-events: auto; }
+.cmdModal .card { position: relative; width: min(560px, calc(100vw - 32px)); padding: 26px 28px 22px; text-align: center; }
+.cmdModal h2 { font: 400 26px var(--display); margin: 0 0 4px; letter-spacing: .04em; }
+.cmdModal .meta { margin: 0 0 14px; }
+.cmdModal .plaque { margin-top: 14px; padding: 12px 28px; }
 #lobby .cmdPick { margin-bottom: 18px; }
 #lobby .field em { font: italic 12px var(--body); letter-spacing: 0; text-transform: none; color: #6b5233; }
-#lobby .cmds { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
-#lobby .cmd { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 2px 6px; cursor: pointer; background: rgba(255, 250, 232, .22); border: 1px solid rgba(13, 11, 8, .25); border-radius: 4px; color: var(--ink); font-family: var(--body); transition: background .2s, border-color .2s; }
-#lobby .cmd i { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; font-style: normal; font-size: 17px; color: #f3e6c4; background: radial-gradient(circle at 35% 30%, #c0563c, var(--wax) 60%, #4a160c); box-shadow: 0 1px 3px rgba(0, 0, 0, .5); }
-#lobby .cmd[data-cmd=""] i { background: none; color: #6b5233; border: 1.5px dashed rgba(13, 11, 8, .35); box-shadow: none; }
-#lobby .cmd b { font: 700 9px var(--label); letter-spacing: .06em; text-transform: uppercase; }
-#lobby .cmd:hover { border-color: rgba(13, 11, 8, .5); background: rgba(255, 250, 232, .38); }
-#lobby .cmd.on { border-color: var(--wax); background: rgba(184, 49, 42, .1); box-shadow: inset 0 0 0 1px var(--wax); }
-#lobby .cmdHelp { text-align: left; font-size: 13.5px; line-height: 1.35; min-height: 5.4em; margin: 8px 2px 0; color: #3a2a18; }
-#lobby .cmdHelp .motto { font-style: italic; color: #6b5233; }
-#lobby .cmdHelp .minus { color: var(--wax); }
+.cmdModal .cmds { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+.cmdModal .cmd { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 2px 6px; cursor: pointer; background: rgba(255, 250, 232, .22); border: 1px solid rgba(13, 11, 8, .25); border-radius: 4px; color: var(--ink); font-family: var(--body); transition: background .2s, border-color .2s; }
+.cmdModal .cmd i { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; font-style: normal; font-size: 17px; color: #f3e6c4; background: radial-gradient(circle at 35% 30%, #c0563c, var(--wax) 60%, #4a160c); box-shadow: 0 1px 3px rgba(0, 0, 0, .5); }
+.cmdModal .cmd[data-cmd=""] i { background: none; color: #6b5233; border: 1.5px dashed rgba(13, 11, 8, .35); box-shadow: none; }
+.cmdModal .cmd b { font: 700 9px var(--label); letter-spacing: .06em; text-transform: uppercase; }
+.cmdModal .cmd:hover { border-color: rgba(13, 11, 8, .5); background: rgba(255, 250, 232, .38); }
+.cmdModal .cmd.on { border-color: var(--wax); background: rgba(184, 49, 42, .1); box-shadow: inset 0 0 0 1px var(--wax); }
+.cmdModal .cmdHelp { text-align: left; font-size: 13.5px; line-height: 1.35; min-height: 5.4em; margin: 8px 2px 0; color: #3a2a18; }
+.cmdModal .cmdHelp .motto { font-style: italic; color: #6b5233; }
+.cmdModal .cmdHelp .minus { color: var(--wax); }
 
 /* ---------- commanders in the panels ---------- */
 #hud .myCmd { display: flex; align-items: center; gap: 9px; margin: 0 0 12px; padding-bottom: 10px; border-bottom: 1px solid rgba(13, 11, 8, .25); cursor: help; }
@@ -595,3 +600,28 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); out
 /* ---------- 0.21.1: the values tuned in debug ---------- */
 :root { --lamp-x: 3px; --lamp-y: 3px; --face-x: 4px; --face-y: 3px; --mtext-x: 3px; --mtext-y: 0px;
   --card-hue: 4deg; --card-sat: 1; --card-bri: 1; --shot-hue: -38deg; --shot-sat: 3; --shot-bri: .58; --move-hue: 38deg; --move-sat: 3; --move-bri: .68; }
+
+/* ---------- 0.22: the home fits in 800px — the title on a ribbon across the sheet, arms of the deep at its sides ---------- */
+#lobby .port { padding: 54px 0 16px; }
+#lobby .sheet { position: relative; width: min(500px, calc(100vw - 32px)); }
+#lobby .sheet .card { position: relative; z-index: 2; width: 100%; padding: 58px 32px 18px; }
+#lobby .banner { position: absolute; z-index: 4; left: 50%; top: -44px; width: 124%; height: 98px; transform: translateX(-50%); display: grid; place-items: center; filter: drop-shadow(0 8px 10px rgba(0, 0, 0, .55)); }
+#lobby .banner .art, #lobby .banner .fallback { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; }
+#lobby .banner .art ~ .fallback { display: none; }
+#lobby .banner .title { position: relative; margin: -8px 0 0; font: 400 34px var(--display); letter-spacing: .05em; color: #2b1a0b; white-space: nowrap; }
+#lobby .articles { font: 400 13px var(--label); letter-spacing: .26em; text-transform: uppercase; color: var(--wax); text-align: center; margin: 0; }
+#lobby .flourish { margin: 6px 0 12px; }
+#lobby input { margin-bottom: 14px; }
+#lobby .modes { margin-bottom: 14px; }
+#lobby .or { margin: 10px 0 8px; }
+#lobby #vsBot { padding: 13px 22px; }
+#lobby .status { margin: 4px 0 0; min-height: 1.2em; }
+#lobby .version { margin: 2px 0 0; }
+/* Two arms of the kraken reach out from behind the sheet's sides. */
+#lobby .tentacle { position: absolute; z-index: 1; bottom: 8%; height: 72%; width: auto; filter: drop-shadow(0 10px 12px rgba(0, 0, 0, .6)); pointer-events: none; }
+#lobby .tentacle.left { left: -16%; }
+#lobby .tentacle.right { right: -16%; transform: scaleX(-1); }
+#lobby .tentacle.missing { display: none; }
+@media (max-height: 760px) { #lobby .port { padding-top: 48px; } #lobby .flourish { display: none; } }
+#lobby .card h2.articles { text-align: center; border: 0; padding: 0; }
+.cmdModal .meta { font: italic 15px var(--body); text-transform: none; letter-spacing: 0; color: #5b4429; }

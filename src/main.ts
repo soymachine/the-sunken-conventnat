@@ -1,6 +1,6 @@
 // Controller: lobby → session → one Client driving the scene and the HUD.
 import './ui/hud.css';
-import { CMDS, Client, Cmd, Msg, Snapshot, afloat, krakenSeals, roleOf } from './game/engine';
+import { CMDS, Client, Msg, Snapshot, afloat, krakenSeals, roleOf } from './game/engine';
 import { ITEMS, Item } from './game/powerups';
 import { Dir, Ship, Way, ZONE, ahead, attackCells, bowCell, cellName, clampZone, fits, headingOf, inBoard, legalPlacement, pivotCell, randomFleet, shipAt, shipCells, turned, MAELSTROM_ROUND, N, becalmed } from './game/rules';
 import { verify } from './game/verify';
@@ -91,22 +91,21 @@ hud.setPrefs(sfx.muted, scene.getQuality());
 addEventListener('tsc:tune', (e) => { const { v, n } = (e as CustomEvent<{ v: string; n: number }>).detail; if (v === '--wind') scene.setWindStrength(n); });
 if (new URLSearchParams(location.search).has('debug')) { Object.assign(window, { scene, hud }); Object.defineProperty(window, 'game', { get: () => ({ c, session }) }); }
 const lobby = new Lobby({
-  // Against the machine, if you lead a commander it leads one too, drawn at random.
-  bot: (name, mode, cmd) => start(new LocalSession(mode, 700, Math.random, cmd ? CMDS[Math.floor(Math.random() * CMDS.length)] : undefined), name, cmd),
-  create: async (name, mode, cmd) => {
+  bot: (name, mode) => start(new LocalSession(mode, 700, Math.random, true), name),
+  create: async (name, mode) => {
     lobby.busy(true);
     try {
       const s = await createRoom(mode);
       lobby.showCode(s.code);
       location.hash = s.code;
       await s.guest();
-      start(s, name, cmd);
+      start(s, name);
     } catch (e) { lobby.busy(false); lobby.status((e as Error).message, true); }
   },
-  join: async (name, code, cmd) => {
+  join: async (name, code) => {
     lobby.busy(true);
     lobby.status('Hailing the room…');
-    try { const s = await joinRoom(code); location.hash = code; start(s, name, cmd); }
+    try { const s = await joinRoom(code); location.hash = code; start(s, name); }
     catch (e) { lobby.busy(false); lobby.status((e as Error).message, true); }
   },
 }, firebaseConfigured);
@@ -114,10 +113,9 @@ const lobby = new Lobby({
 const storeKey = () => (session?.code ? `tsc:room:${session.code}:${session.me}` : '');
 function save() { const k = storeKey(); if (k) try { localStorage.setItem(k, JSON.stringify(c.snapshot())); } catch { /* ignore */ } }
 
-function start(s: Session, name: string, cmd: Cmd | null = null) {
+function start(s: Session, name: string) {
   session = s;
   c = new Client(s.me, s.seed, (m) => s.send(m), Math.random, name, s.mode);
-  if (cmd && s.mode === 'classic') c.cmd = cmd;
   let snap: Snapshot | null = null;
   try { snap = JSON.parse(localStorage.getItem(storeKey()) || 'null'); } catch { /* ignore */ }
   if (snap) c.restore(snap);
@@ -139,6 +137,17 @@ function start(s: Session, name: string, cmd: Cmd | null = null) {
   hud.show(true);
   hud.setHint(HINTS.fire);
   if (c.role !== 'classic' && !snap) hud.showRole(c.role);
+  // Classic: choose a commander (or none) before the fleet is committed. Against the machine, if you lead one
+  // it leads one too, drawn at random; it waits for your choice before it readies its own fleet.
+  const local = s instanceof LocalSession ? s : null;
+  if (c.role === 'classic' && !c.side.ready && !snap?.initial?.length) {
+    void hud.chooseCommander(c.cmd ?? null).then((k) => {
+      c.cmd = k ?? undefined;
+      save();
+      local?.begin(k ? CMDS[Math.floor(Math.random() * CMDS.length)] : undefined);
+      refresh();
+    });
+  } else local?.begin();
   refresh();
   s.listen((m) => c.receive(m), (on) => { foeOnline = on; refresh(); });
   Object.assign(window, { __client: c, __screen: (cell: Cell) => scene.screen(cell), __bot: (s as LocalSession).bot });
