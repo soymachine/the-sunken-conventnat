@@ -631,8 +631,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); out
 #lobby .banner .title { margin: -14px 0 0; font-size: 33px; color: #2e1c0c; text-shadow: 0 1px 0 rgba(255, 245, 220, .6); }
 #lobby .sheet .card { padding-top: 62px; padding-bottom: 34px; }
 #lobby .tentacle { bottom: 12%; height: 68%; }
-#lobby .tentacle.left { left: -31%; transform: rotate(-10deg); }
-#lobby .tentacle.right { right: -31%; transform: scaleX(-1) rotate(-10deg); }
+#lobby .tentacle.left { left: -31%; transform: rotate(337deg); }
+#lobby .tentacle.right { right: -31%; transform: scaleX(-1) rotate(337deg); }
 /* The articles are sealed: the anchor-and-kraken seal pressed on the foot of the sheet. */
 #lobby .card .seal { position: absolute; left: 50%; bottom: -34px; width: 74px; height: 74px; transform: translateX(-50%) rotate(-8deg); filter: drop-shadow(0 4px 5px rgba(0, 0, 0, .6)); pointer-events: none; }
 
@@ -642,3 +642,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); out
 #hud .portrait.foe { right: 40px; transform: scaleX(-1); }
 #hud .portrait.mine { left: 50px; }
 #hud #menuBtn { position: relative; z-index: 3; }
+
+/* ---------- 0.24: the commanders' faces in the pick and the panels; the title centred on the ribbon ---------- */
+.cmdModal .cmd i.face, #hud .myCmd i.face { background: #1d2a2c center / cover no-repeat; border: 2px solid #b08d3c; box-shadow: 0 2px 4px rgba(0, 0, 0, .55); }
+.cmdModal .cmd i.face { width: 54px; height: 54px; }
+#hud .myCmd i.face { width: 40px; height: 40px; }
+.cmdModal .cmd.on i.face { border-color: var(--wax); box-shadow: 0 0 0 2px var(--wax), 0 2px 6px rgba(0, 0, 0, .6); }
+.cmdModal .card { width: min(620px, calc(100vw - 32px)); }
+#lobby .banner .title { margin: -34px 0 0; }

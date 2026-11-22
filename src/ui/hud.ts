@@ -380,7 +380,7 @@ export class Hud {
       <p class="meta">Optional. Each brings a power and a drawback; the other captain sees your choice when the battle begins.</p>
       <div class="cmds" role="radiogroup" aria-labelledby="cmdHead">
         <button class="cmd" data-cmd="" role="radio"><i>—</i><b>None</b></button>
-        ${CMDS.map((k) => `<button class="cmd" data-cmd="${k}" role="radio"><i>${CMD_INFO[k].glyph}</i><b>${CMD_INFO[k].name.replace('The ', '')}</b></button>`).join('')}
+        ${CMDS.map((k) => `<button class="cmd" data-cmd="${k}" role="radio"><i class="face" style="background-image:url(/ui/cmd/${k}_face.webp)"></i><b>${CMD_INFO[k].name.replace('The ', '')}</b></button>`).join('')}
       </div>
       <p class="cmdHelp"></p>
       <button class="plaque" type="button" data-act="ok">Take command</button>
@@ -396,6 +396,9 @@ export class Hud {
       b.onclick = () => { pick = k; paint(); help(pick); };
       b.onpointerenter = () => help(k); b.onpointerleave = () => help(pick);
     });
+    // Keep the sheet one height whichever commander is described: as tall as the longest description.
+    const helpEl = box.querySelector<HTMLElement>('.cmdHelp')!;
+    helpEl.style.minHeight = Math.max(...[null, ...CMDS].map((k) => { help(k); return helpEl.offsetHeight; })) + 'px';
     paint(); help(pick);
     return new Promise((done) => {
       box.querySelector<HTMLElement>('[data-act=ok]')!.onclick = () => {
@@ -490,7 +493,7 @@ export class Hud {
       const img = this.q<HTMLImageElement>(id === '#myCmd' ? '.portrait.mine' : '.portrait.foe'), src = side.cmd ? `/ui/cmd/${side.cmd}.webp` : '';
       if (!src) img.hidden = true;
       else if (img.dataset.src !== src) { img.dataset.src = src; img.hidden = true; img.onload = () => { img.hidden = false; }; img.onerror = () => { img.hidden = true; }; img.src = src; }
-      if (info) { el.innerHTML = `<i>${info.glyph}</i><span>${id === '#myCmd' ? 'Your commander' : 'Their commander'}<b>${info.name}</b></span>`; el.dataset.cmd = side.cmd!; }
+      if (info) { el.innerHTML = `<i class="face" style="background-image:url(/ui/cmd/${side.cmd}_face.webp)"></i><span>${id === '#myCmd' ? 'Your commander' : 'Their commander'}<b>${info.name}</b></span>`; el.dataset.cmd = side.cmd!; }
     }
     // The full explanation lives in the seals' tooltip; the panel keeps only what needs doing now.
     this.sealHelp = me.seals >= KRAKEN_SEALS
