@@ -135,6 +135,7 @@ export class Hud {
         <div class="card"><p class="meta" id="letterHead">A bottle washes up on your waters</p><p class="ink" id="letterText"></p><p class="sign" id="letterSign"></p><button class="plaque" id="letterOk">Fold it away</button></div>
       </div>
       <div class="herald" id="herald" aria-hidden="true"><div><b></b><span></span></div></div>
+      <img class="portrait mine" alt="" hidden draggable="false"><img class="portrait foe" alt="" hidden draggable="false">
       <aside class="card left">
         <div class="myCmd" id="myCmd" hidden tabindex="0"></div>
         <h2>The covenant</h2><div class="seals" id="seals" tabindex="0" aria-describedby="shopTip"></div><p class="howto" id="sealHow"></p>
@@ -485,6 +486,10 @@ export class Hud {
     for (const [id, side] of [['#myCmd', me], ['#foeCmd', foe]] as const) {
       const el = this.q<HTMLElement>(id), info = side.cmd ? CMD_INFO[side.cmd] : null;
       el.hidden = !info;
+      // Their portrait stands behind the panel, half-length, looking across the table (the enemy's is mirrored).
+      const img = this.q<HTMLImageElement>(id === '#myCmd' ? '.portrait.mine' : '.portrait.foe'), src = side.cmd ? `/ui/cmd/${side.cmd}.webp` : '';
+      if (!src) img.hidden = true;
+      else if (img.dataset.src !== src) { img.dataset.src = src; img.hidden = true; img.onload = () => { img.hidden = false; }; img.onerror = () => { img.hidden = true; }; img.src = src; }
       if (info) { el.innerHTML = `<i>${info.glyph}</i><span>${id === '#myCmd' ? 'Your commander' : 'Their commander'}<b>${info.name}</b></span>`; el.dataset.cmd = side.cmd!; }
     }
     // The full explanation lives in the seals' tooltip; the panel keeps only what needs doing now.

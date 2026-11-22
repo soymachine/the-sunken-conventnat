@@ -49,6 +49,7 @@ export class Lobby {
         </div>
         <p class="status" role="status"></p>
         <p class="version">Version ${__APP_VERSION__}</p>
+        <img class="seal" src="/ui/home_seal.webp" alt="" draggable="false">
       </div>
       </div>
       </div>`;

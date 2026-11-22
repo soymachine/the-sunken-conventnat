@@ -382,3 +382,65 @@ A small round wax seal seen from above: deep red wax pressed with an anchor wrap
 coil of rope around the rim. Only the seal. Centred, square. Transparent background, PNG with alpha.
 Photorealistic. No text.
 ```
+
+## 14. Commanders: half-length figures behind the panels (replaces the portraits in section 12)
+
+When a commander is chosen, a half-length figure of them stands behind the top of the side panel: yours on the left
+(behind "The covenant"), the enemy's on the right (behind "Enemy fleet"). The panel hides them from the waist down,
+so **half-length is enough**. The game mirrors the enemy's picture, so **every figure faces right** (towards the
+middle of the table) and works for both sides.
+
+The same for all five:
+- Waist up, standing, the body turned three-quarters to the right, head and eyes looking right.
+- Cut off cleanly at the waist at the bottom edge of the frame.
+- Painted like an 18th-century naval oil portrait, with warm light from the upper left.
+- Transparent background, PNG with alpha. No frame, no scenery, no text.
+- Tall frame, about 3:4 (768 × 1024), with the head in the upper third and a little space above it.
+
+Name the files after the commander (`tidewarden.png`, `stormcaller.png`, `spymaster.png`, `gunmaster.png`,
+`deepspeaker.png`) and drop them in `images/`; I convert them to `public/ui/cmd/`. Until then nothing shows there.
+
+**The Tidewarden**
+```
+Half-length portrait from the waist up of an old weathered sea priest-captain, body turned three-quarters to the
+right and looking right: grey braided beard threaded with small shells, a long dark green coat crusted with salt,
+a brass astrolabe engraved with tide lines held against his chest; calm, patient eyes. Cut off at the waist at the
+bottom of the frame. 18th-century naval oil portrait style, warm light from the upper left. Transparent background,
+PNG with alpha. No scenery, no frame, no text. Tall 3:4 frame.
+```
+
+**The Stormcaller**
+```
+Half-length portrait from the waist up of a fierce woman sea captain, body turned three-quarters to the right and
+looking right: wind-torn black hair, a storm-grey greatcoat with brass buttons, one hand raised at shoulder height
+as if summoning the wind, faint sparks of lightning on her fingertips. Cut off at the waist at the bottom of the
+frame. 18th-century naval oil portrait style, warm light from the upper left. Transparent background, PNG with
+alpha. No scenery, no frame, no text. Tall 3:4 frame.
+```
+
+**The Spymaster**
+```
+Half-length portrait from the waist up of a thin, sharp-featured gentleman, body turned three-quarters to the right
+and looking right with a faint knowing smile: black velvet coat with a high collar and white cravat, a folded
+brass spyglass in one hand and a sealed letter with red wax in the other. Cut off at the waist at the bottom of the
+frame. 18th-century naval oil portrait style, warm light from the upper left. Transparent background, PNG with
+alpha. No scenery, no frame, no text. Tall 3:4 frame.
+```
+
+**The Gunmaster**
+```
+Half-length portrait from the waist up of a broad, scarred master gunner, body turned three-quarters to the right
+and looking right: powder-blackened face and forearms, rolled sleeves, a red neckerchief, a leather bandolier of
+powder charges, a ramrod resting on his shoulder. Cut off at the waist at the bottom of the frame. 18th-century
+naval oil portrait style, warm light from the upper left. Transparent background, PNG with alpha. No scenery, no
+frame, no text. Tall 3:4 frame.
+```
+
+**The Deepspeaker**
+```
+Half-length portrait from the waist up of a pale hooded figure, body turned three-quarters to the right and
+looking right: deep-sea robes of dark teal and black that look wet, a necklace of black wax seals stamped with a
+kraken, eyes faintly glowing sea-green, one hand holding a coil of rope hung with shells. Cut off at the waist at
+the bottom of the frame. 18th-century naval oil portrait style, warm light from the upper left. Transparent
+background, PNG with alpha. No scenery, no frame, no text. Tall 3:4 frame.
+```
