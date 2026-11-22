@@ -704,3 +704,8 @@ canvas[data-cur="helm"] { cursor: var(--cur-helm, pointer); }
 .belt .ocard.ocard.off::before { filter: grayscale(1) brightness(.62) contrast(.9); }
 .belt .ocard.ocard.k-kraken.off { background-color: #2a2a2a; }
 .belt .ocard.off .art, .belt .ocard.off .nm, .belt .ocard.off .cost, .belt .ocard.off .many { opacity: .42; filter: grayscale(.85); }
+
+/* ---------- language: EN | ES on the home ---------- */
+#lobby .langPick { position: fixed; top: 14px; right: 16px; z-index: 5; display: flex; gap: 0; border: 1px solid var(--brass); border-radius: 3px; overflow: hidden; }
+#lobby .langPick button { font: 700 11px var(--label); letter-spacing: .14em; padding: 6px 10px; background: rgba(13, 11, 8, .6); color: var(--parch); border: 0; }
+#lobby .langPick button.on { background: var(--parch); color: var(--ink); }

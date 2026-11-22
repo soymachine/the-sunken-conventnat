@@ -2,6 +2,7 @@
 import { CMDS, CMD_USES, Client, Cmd, GALE_EVERY, SEASON, SOUND_EVERY, krakenSeals, maelstromIn, mayBuy, price, roleOf } from '../game/engine';
 import { CMD_INFO } from './commanders';
 import { CursorStyle, applyCursors } from './cursors';
+import { Lang, getLang, setLang } from './i18n';
 import { installTuner } from './tuner';
 import { ITEMS, ITEM_HELP, ITEM_IDS, Item, MAX_ITEMS } from '../game/powerups';
 import { FLEETS, KRAKEN_SEALS, N, Role, shipCells } from '../game/rules';
@@ -122,6 +123,8 @@ export class Hud {
       </header>
       <div class="menu card" id="menu" hidden>
         <h2>Settings</h2>
+        <p class="opt">Language</p>
+        <div class="seg" data-pref="lang" role="radiogroup" aria-label="Language" translate="no"><button data-v="en" role="radio">English</button><button data-v="es" role="radio">Español</button></div>
         <p class="opt">Sound</p>
         <div class="seg" data-pref="sound" role="radiogroup" aria-label="Sound"><button data-v="on" role="radio">On</button><button data-v="off" role="radio">Off</button></div>
         <p class="opt">3D quality</p>
@@ -207,6 +210,7 @@ export class Hud {
       if (pref === 'sound' && (v === 'off') !== this.muted) this.muted = on.mute();
       if (pref === 'quality') { on.quality(v as 'auto' | 'high' | 'low'); this.qualityPref = v; }
       if (pref === 'sky') on.sky?.(v as 'sun' | 'aurora' | 'clear');
+      if (pref === 'lang') { setLang(v as Lang); this.paintPrefs(); }
       if (pref === 'cursor') { this.cursor = v as CursorStyle; applyCursors(this.cursor); try { localStorage.setItem('tsc:cursor', v); } catch { /* ignore */ } }
       this.paintPrefs();
     };
@@ -448,7 +452,7 @@ export class Hud {
   private paintPrefs() {
     this.root.querySelectorAll<HTMLElement>('#menu .seg button').forEach((b) => {
       const pref = b.parentElement!.dataset.pref, v = b.dataset.v;
-      const on = pref === 'sound' ? (v === 'off') === this.muted : pref === 'quality' ? v === this.qualityPref : pref === 'cursor' ? v === this.cursor : false;
+      const on = pref === 'sound' ? (v === 'off') === this.muted : pref === 'quality' ? v === this.qualityPref : pref === 'cursor' ? v === this.cursor : pref === 'lang' ? v === getLang() : false;
       b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on));
     });
   }
@@ -575,7 +579,7 @@ export class Hud {
       const f = FLEETS[role].find((q) => q.kind === s.kind)!;
       const pips = s.hits.map((h, i) => `<i class="${s.floods?.[i] ? 'flood' : h ? 'hit' : ''}"></i>`).join('');
       const hurt = s.hits.filter(Boolean).length, holed = (s.floods || []).filter(Boolean).length;
-      const state = s.sunk ? 'Sunk' : s.chained ? 'Pinned by chain shot' : holed ? `${hurt} hit · ${holed} holed` : hurt ? `${hurt} of ${s.len} sections hit` : 'Sound';
+      const state = s.sunk ? 'Sunk' : s.chained ? 'Pinned by chain shot' : holed ? `${hurt} hit · ${holed} holed` : hurt ? `${hurt} of ${s.len} sections hit` : 'Undamaged';
       const trait = TRAIT_HELP[f.trait] ?? f.trait;
       return `<li class="${s.sunk ? 'sunk' : ''}${s.chained ? ' pinned' : ''}" data-cls="${esc(s.cls)}" data-state="${esc(state)}" data-trait="${esc(f.trait + ': ' + trait)}"><span class="pips">${pips}</span></li>`;
     }).join('');

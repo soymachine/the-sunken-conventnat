@@ -8,10 +8,13 @@ import { createRoom, firebaseConfigured, joinRoom } from './net/firebase';
 import { LocalSession, Session } from './net/session';
 import { Cell, Ghost, Highlight, SeaScene } from './render/scene';
 import { Sfx } from './ui/audio';
+import { startI18n } from './ui/i18n';
 import { Hud, Mode } from './ui/hud';
 import { Lobby } from './ui/lobby';
 
 const AMBER = 0xd9a441, WAX = 0x8c2f1b, INK = 0x0d0b08, FOG = 0xcfc4a8;
+// Spanish or English, chosen in Settings (or from the browser's language at first).
+startI18n();
 const canvas = document.getElementById('sea') as HTMLCanvasElement;
 const scene = new SeaScene(canvas);
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));

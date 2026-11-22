@@ -1,5 +1,6 @@
 // The port: choose a name and how to play.
 import { Mode } from '../game/engine';
+import { Lang, getLang, setLang } from './i18n';
 
 export interface LobbyHandlers {
   bot(name: string, mode: Mode): void;
@@ -14,6 +15,7 @@ export class Lobby {
   constructor(on: LobbyHandlers, online: boolean) {
     // The sheet of articles, with the title on a ribbon across its head and two arms of the deep at its sides.
     this.root.innerHTML = `
+      <div class="langPick" role="radiogroup" aria-label="Language" translate="no"><button type="button" data-lang="en">EN</button><button type="button" data-lang="es">ES</button></div>
       <div class="port">
       <div class="sheet">
         <div class="banner" aria-label="The Sunken Covenant">
@@ -53,6 +55,9 @@ export class Lobby {
       </div>
       </div>
       </div>`;
+    const paintLang = () => this.root.querySelectorAll<HTMLElement>('.langPick button').forEach((b) => b.classList.toggle('on', b.dataset.lang === getLang()));
+    this.root.querySelectorAll<HTMLElement>('.langPick button').forEach((b) => (b.onclick = () => { setLang(b.dataset.lang as Lang); paintLang(); }));
+    paintLang();
     const name = this.q<HTMLInputElement>('#capName');
     try { name.value = localStorage.getItem('tsc:name') || ''; } catch { /* storage unavailable */ }
     const who = () => { const n = name.value.trim() || 'Captain'; try { localStorage.setItem('tsc:name', n); } catch { /* ignore */ } return n; };
