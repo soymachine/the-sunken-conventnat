@@ -543,6 +543,7 @@ export class SeaScene {
     this.ambience(false);
     this.ghosts.clear(); this.ghostKey = '';
     this.last = null;
+    this.weather.freshWind(); this.seas.own.windFresh = true; this.seas.enemy.windFresh = true;
   }
 
   /* ---------- camera ---------- */

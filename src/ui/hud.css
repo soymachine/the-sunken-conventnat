@@ -698,3 +698,9 @@ input, textarea { cursor: text; }
 canvas[data-cur="sight"] { cursor: var(--cur-sight, crosshair); }
 canvas[data-cur="glass"] { cursor: var(--cur-glass, zoom-in); }
 canvas[data-cur="helm"] { cursor: var(--cur-helm, pointer); }
+
+/* ---------- 0.26.1: a card that cannot be played keeps a solid grey card behind; only its face fades ---------- */
+.belt .ocard.ocard.off { opacity: 1; filter: none; }
+.belt .ocard.ocard.off::before { filter: grayscale(1) brightness(.62) contrast(.9); }
+.belt .ocard.ocard.k-kraken.off { background-color: #2a2a2a; }
+.belt .ocard.off .art, .belt .ocard.off .nm, .belt .ocard.off .cost, .belt .ocard.off .many { opacity: .42; filter: grayscale(.85); }

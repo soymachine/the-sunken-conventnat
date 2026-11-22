@@ -34,6 +34,11 @@ export const TOOLS: Record<'broadside' | 'chain' | 'spy', { name: string; ap: nu
 /** Cards that have their own picture in public/ui/cards/. */
 /** Card families, each with its own frame. */
 const CARD_KIND: Record<string, string> = { fire: 'shot', broadside: 'shot', chain: 'shot', fireship: 'shot', double: 'shot', sail: 'move', turn: 'move', current: 'move', winds: 'move', squall: 'move', gale: 'move', bindLater: 'move', bindSooner: 'move', kraken: 'kraken' };
+/** The order of the hand: moving, then firing, then looking, then the rest (left to right). */
+const HAND_ORDER = ['sail', 'turn', 'current', 'winds', 'squall', 'gale', 'bindLater', 'bindSooner',
+  'fire', 'broadside', 'chain', 'fireship', 'double',
+  'spy', 'spyglass', 'longglass', 'sound', 'fog',
+  'shipwright', 'pact', 'power', 'kraken'];
 /** Until the commanders' cards have their own pictures, they borrow a fitting one. */
 const ART_STAND_IN: Record<string, string> = { squall: 'current', gale: 'winds', sound: 'spyglass', double: 'broadside', bindLater: 'current', bindSooner: 'current' };
 const CARD_ART = new Set(['fire', 'sail', 'turn', 'broadside', 'chain', 'spy', 'spyglass', 'longglass', 'fireship', 'fog', 'shipwright', 'winds', 'current', 'pact', 'kraken']);
@@ -619,17 +624,21 @@ export class Hud {
       if (!p.pacts?.[c.me] && me.cmd !== 'deepspeaker' && c.ships.some((s) => !s.sunk && s.hits.some(Boolean) && s.kind !== 'merchant')) tool('pact', 'Blood Pact', 1, c.canPact(), TOOL_HELP.pact.text, c.ships.filter((s) => !s.sunk).length <= 1 ? 'Your last ship cannot be given up.' : '');
       if (role !== 'classic' && !p.power[c.me]) tool('power', CAPTAINS[role].power, 1, c.canPower(), `Your captain's power. ${CAPTAINS[role].powerText}`);
     }
-    // Fire in the very middle with Sail and Turn either side, the rest of the hand split around them.
+    // The hand is grouped by kind of action — moving, firing, looking, then the rest — each group with the
+    // plain orders first and the commander's and bought cards after them.
     // The card that was chosen before this redraw sinks back into the hand instead of vanishing from the raised spot.
     const wasOn = this.root.querySelector<HTMLElement>('#belt .ocard.on')?.dataset.tool;
-    const half = Math.floor(belt.length / 2);
-    if (p.phase === 'battle') belt.splice(half, 0, ...orderCards);
+    if (p.phase === 'battle') {
+      belt.push(...orderCards);
+      const rank = (h: string) => { const id = h.match(/data-tool="(\w+)"/)?.[1] ?? ''; const i = HAND_ORDER.indexOf(id); return i < 0 ? HAND_ORDER.length : i; };
+      belt.sort((a, b) => rank(a) - rank(b));
+    }
     this.q('#belt').innerHTML = belt.join('');
     // Fan the hand: each card turns a little about a point below the table.
     const cards = [...this.root.querySelectorAll<HTMLElement>('#belt .ocard')], n = cards.length;
     // A big hand overlaps more, so it never runs under the bottle or the hourglass.
     this.q<HTMLElement>('#belt').style.setProperty('--overlap', `${-16 - Math.max(0, n - 6) * 8}px`);
-    cards.forEach((el, i) => { const k = i - (n - 1) / 2; el.style.setProperty('--r', `${k * 4}deg`); el.style.setProperty('--y', `${Math.abs(k) * 4}px`); el.style.zIndex = String(10 + i); });
+    cards.forEach((el, i) => { const k = i - (n - 1) / 2; el.style.setProperty('--r', `${k * 4}deg`); el.style.setProperty('--y', `${Math.abs(k) * 4}px`); el.style.zIndex = String(10 + n - i); });
     const was = wasOn && wasOn !== mode ? cards.find((el) => el.dataset.tool === wasOn) : undefined;
     if (was) {
       was.style.transition = 'none'; was.classList.add('on'); void was.offsetWidth;
