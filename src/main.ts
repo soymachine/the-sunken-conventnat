@@ -383,6 +383,7 @@ function refreshHud() {
 
 let lastTurnKey = '';
 function refresh() {
+  pointerFor();
   if (!session) return;
   refreshHud();
   const invalid = !!lifted && (!fits(c.ships, selected!, selected!.id) || !legalPlacement(c.ships));
@@ -523,6 +524,18 @@ function battleClick(cell: Cell) {
   if (selected?.chained) hud.log(`The ${selected.cls} is pinned by chain shot this turn.`);
   else if (selected && !c.held(selected.id)) { const why = becalmed(selected, c.pub.wind); if (why) { hud.log(`The ${selected.cls} cannot make way — ${why}.`, 'bad'); if (headwind(selected)) scene.blow(); } }
   refresh();
+}
+
+/** The pointer over the charts says what a click will do: a gun sight to fire, a spyglass to look, a wheel to steer. */
+const AIM = new Set(['fire', 'broadside', 'chain', 'fireship', 'double', 'kraken', 'squall']), LOOK = new Set(['spy', 'spyglass', 'longglass', 'sound']);
+function pointerFor() {
+  let cur = '';
+  if (session && hover && c.pub.phase !== 'over') {
+    const at = hover.side === 'own' ? shipAt(c.ships, hover.x, hover.y) : null;
+    if (hover.side === 'enemy' && myTurn()) cur = AIM.has(mode) ? 'sight' : LOOK.has(mode) ? 'glass' : '';
+    else if (at && !at.ship.sunk && (c.pub.phase === 'placement' || myTurn())) cur = 'helm';
+  }
+  if (canvas.dataset.cur !== cur) canvas.dataset.cur = cur;
 }
 
 /** A square-rigged ship whose bow faces into the wind cannot sail at all this round. */

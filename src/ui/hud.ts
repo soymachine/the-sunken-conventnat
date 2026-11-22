@@ -1,6 +1,7 @@
 // Oak-and-brass HUD drawn with DOM + SVG over the 3D canvas.
 import { CMDS, CMD_USES, Client, Cmd, GALE_EVERY, SEASON, SOUND_EVERY, krakenSeals, maelstromIn, mayBuy, price, roleOf } from '../game/engine';
 import { CMD_INFO } from './commanders';
+import { CursorStyle, applyCursors } from './cursors';
 import { installTuner } from './tuner';
 import { ITEMS, ITEM_HELP, ITEM_IDS, Item, MAX_ITEMS } from '../game/powerups';
 import { FLEETS, KRAKEN_SEALS, N, Role, shipCells } from '../game/rules';
@@ -88,6 +89,7 @@ export class Hud {
   private balls: SVGGElement[] = [];
   private capTurns = 0;
   private krakenReady = false;
+  private cursor: CursorStyle = (() => { try { const v = localStorage.getItem('tsc:cursor'); return v === 'quill' || v === 'system' ? v : 'brass'; } catch { return 'brass' as const; } })();
   private krakenSeen: boolean | null = null;
   private sealHelp = '';
   private maelHelp = '';
@@ -120,7 +122,8 @@ export class Hud {
         <p class="opt">3D quality</p>
         <div class="seg" data-pref="quality" role="radiogroup" aria-label="3D quality"><button data-v="auto" role="radio">Auto</button><button data-v="high" role="radio">High</button><button data-v="low" role="radio">Low</button></div>
         <div class="debug" hidden><p class="opt">Debug</p><div class="seg three"><button type="button" data-cheat="gold">+100 gold</button><button type="button" data-cheat="seals">+3 seals</button><button type="button" data-cheat="ap">+3 AP</button></div>
-          <p class="opt">Sky</p><div class="seg three" data-pref="sky"><button type="button" data-v="sun">Sun rays</button><button type="button" data-v="aurora">Aurora</button><button type="button" data-v="clear">Clear</button></div></div>
+          <p class="opt">Sky</p><div class="seg three" data-pref="sky"><button type="button" data-v="sun">Sun rays</button><button type="button" data-v="aurora">Aurora</button><button type="button" data-v="clear">Clear</button></div>
+          <p class="opt">Pointer</p><div class="seg three" data-pref="cursor"><button type="button" data-v="brass">Brass</button><button type="button" data-v="quill">Quill</button><button type="button" data-v="system">System</button></div></div>
         <p class="meta">Auto steps down by itself if the game runs slowly. Low drops shadows, glow and the print grade.</p>
       </div>
       <div class="shopTip" id="shopTip" role="tooltip" hidden></div>
@@ -166,6 +169,7 @@ export class Hud {
       <div class="role" hidden><div class="card"><svg class="medal" viewBox="0 0 100 100"></svg><p class="meta" id="roleTitle"></p><h2 id="roleName"></h2><p id="roleMission"></p><p class="pw"><b id="rolePower"></b> <span id="rolePowerText"></span></p><button class="plaque" id="roleOk">To your station</button></div></div>
       <div class="over" hidden><div class="card"><h2 id="overTitle"></h2><p id="overText"></p><p id="overVerify" class="meta"></p><button class="plaque" id="leave">Back to port</button></div></div>`;
     this.telegraph(this.q('.telegraph'));
+    applyCursors(this.cursor);
     // The action points sit under the turn header, where the eye goes as a turn begins.
     this.q('#turnSub').after(this.q('#apSeals'));
     // Setting the glass down ends the turn: it is tapped onto the desk and goes dull until your turn comes back.
@@ -198,6 +202,7 @@ export class Hud {
       if (pref === 'sound' && (v === 'off') !== this.muted) this.muted = on.mute();
       if (pref === 'quality') { on.quality(v as 'auto' | 'high' | 'low'); this.qualityPref = v; }
       if (pref === 'sky') on.sky?.(v as 'sun' | 'aurora' | 'clear');
+      if (pref === 'cursor') { this.cursor = v as CursorStyle; applyCursors(this.cursor); try { localStorage.setItem('tsc:cursor', v); } catch { /* ignore */ } }
       this.paintPrefs();
     };
     // The quartermaster explains each item on hover: what it does, its price, and why you cannot buy it yet.
@@ -438,7 +443,7 @@ export class Hud {
   private paintPrefs() {
     this.root.querySelectorAll<HTMLElement>('#menu .seg button').forEach((b) => {
       const pref = b.parentElement!.dataset.pref, v = b.dataset.v;
-      const on = pref === 'sound' ? (v === 'off') === this.muted : pref === 'quality' ? v === this.qualityPref : false;
+      const on = pref === 'sound' ? (v === 'off') === this.muted : pref === 'quality' ? v === this.qualityPref : pref === 'cursor' ? v === this.cursor : false;
       b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on));
     });
   }
@@ -516,11 +521,11 @@ export class Hud {
       const el = this.q<HTMLElement>(id), info = side.cmd ? CMD_INFO[side.cmd] : null;
       el.hidden = !info;
       // Their portrait stands behind the panel, half-length, looking across the table (the enemy's is mirrored).
-      const img = this.q<HTMLImageElement>(id === '#myCmd' ? '.portrait.mine' : '.portrait.foe'), src = side.cmd ? `/ui/cmd/${side.cmd}.webp` : '';
+      const img = this.q<HTMLImageElement>(id === '#myCmd' ? '.portrait.mine' : '.portrait.foe'), src = side.cmd ? `/ui/cmd/${side.cmd}${id === '#foeCmd' ? '_left' : ''}.webp` : '';
       this.root.classList.toggle(id === '#myCmd' ? 'with-mine' : 'with-foe', !!src);
       if (!src) img.hidden = true;
       else if (img.dataset.src !== src) { img.dataset.src = src; img.hidden = true; img.onload = () => { img.hidden = false; }; img.onerror = () => { img.hidden = true; }; img.src = src; }
-      if (info) { el.innerHTML = `<i class="face" style="background-image:url(/ui/cmd/${side.cmd}_face.webp)"></i><span>${id === '#myCmd' ? 'Your commander' : 'Their commander'}<b>${info.name}</b></span>`; el.dataset.cmd = side.cmd!; }
+      if (info) { el.innerHTML = `<i class="face" style="background-image:url(/ui/cmd/${side.cmd}_face${id === '#foeCmd' ? '_left' : ''}.webp)"></i><span>${id === '#myCmd' ? 'Your commander' : 'Their commander'}<b>${info.name}</b></span>`; el.dataset.cmd = side.cmd!; }
     }
     // The full explanation lives in the seals' tooltip; the panel keeps only what needs doing now.
     this.sealHelp = me.seals >= KRAKEN_SEALS

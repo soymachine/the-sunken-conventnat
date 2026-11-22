@@ -684,3 +684,17 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); out
 /* Settings: on the beam just left of the title plate, clear of the commanders' figures. */
 #hud #menuBtn { position: absolute; right: calc(50% + 252px); top: 17px; margin: 0; }
 .menu { left: calc(50% - 252px - 250px); top: 52px; }
+
+/* ---------- 0.25.2 ---------- */
+/* The enemy's figure is a mirrored picture (cmd/<name>_left.webp): nothing turns it as it comes in. */
+#hud .portrait.foe { transform: none; scale: none; }
+/* The chosen card: a soft amber glow that follows its rounded corners, no hard ring. */
+.belt .ocard.ocard.on { box-shadow: 0 0 0 0 #8c2f1b, 0 0 23px #ffbe6e99, 0 5px 33px #000000b3; }
+
+/* ---------- the game's own pointers (src/ui/cursors.ts) ---------- */
+html, body, #hud, #lobby, canvas { cursor: var(--cur, auto); }
+button:not(:disabled), [role="radio"], .ocard, #money, #seals.ready, .shopPop button, #lobby .mode, .cmdModal .cmd { cursor: var(--cur-hot, pointer) !important; }
+input, textarea { cursor: text; }
+canvas[data-cur="sight"] { cursor: var(--cur-sight, crosshair); }
+canvas[data-cur="glass"] { cursor: var(--cur-glass, zoom-in); }
+canvas[data-cur="helm"] { cursor: var(--cur-helm, pointer); }
