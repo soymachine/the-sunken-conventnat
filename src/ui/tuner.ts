@@ -15,6 +15,8 @@ const KNOBS: Knob[] = [
   { v: '--card-lift', label: 'Card raised (Y)', min: 0, max: 200, step: 2, unit: 'px', def: 20 },
   { v: '--wind', label: 'Wind strength', min: 0, max: 3, step: 0.1, unit: '', def: 1 },
   { v: '--mael-x', label: 'Gauge: X from centre', min: -700, max: 700, step: 2, unit: 'px', def: 288 },
+  { v: '--windg-x', label: 'Wind gauge: X left of centre', min: -700, max: 700, step: 2, unit: 'px', def: 288 },
+  { v: '--windg-y', label: 'Wind gauge: Y', min: 0, max: 600, step: 2, unit: 'px', def: 88 },
   { v: '--mael-y', label: 'Gauge: Y', min: 0, max: 600, step: 2, unit: 'px', def: 88 },
   { v: '--lamp-dir', label: 'Gauge lamps: top (-1) / bottom (1)', min: -1, max: 1, step: 2, unit: '', def: -1 },
   { v: '--lamp-x', label: 'Gauge lamps: X', min: -40, max: 40, step: 1, unit: 'px', def: 3 },

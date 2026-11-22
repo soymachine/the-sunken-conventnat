@@ -148,7 +148,8 @@ const EXACT: Record<string, string> = {
   'Double-Shotted — pick a square of enemy water. If it hits, the ball flies on one square further. Press R to turn which way.': 'Doble carga: elige una casilla de agua enemiga. Si impacta, la bala sigue una casilla más. Pulsa R para cambiar la dirección.',
   'into the wind': 'contra el viento', 'she cannot sail into the wind — turn her across it': 'no puede navegar contra el viento: vírala de través', 'she is holed and taking water': 'tiene una vía de agua',
   'the Kraken holds her': 'el Kraken la retiene', 'she is pinned by chain shot': 'está inmovilizada por palanqueta', 'she is too badly damaged': 'está demasiado dañada', 'there is no sea room': 'no hay espacio en el mar',
-  'Flat calm': 'Calma chicha', 'flat calm': 'calma chicha',
+  'Flat calm': 'Calma chicha', 'flat calm': 'calma chicha', east: 'este', south: 'sur', west: 'oeste', north: 'norte', 'The wind': 'El viento', Wind: 'Viento',
+  'A flat calm this round: the wind helps and hinders no ship.': 'Calma chicha esta ronda: el viento no ayuda ni frena a ningún barco.',
   // Maelstrom gauge and misc
   Captain: 'Capitán', 'The enemy': 'El enemigo',
 };
@@ -251,6 +252,7 @@ const PATTERNS: [RegExp, (m: RegExpMatchArray) => string][] = [
   [/^You are invited to room (\w+)\. Sign your name and press Join\.$/, (m) => `Te han invitado a la sala ${m[1]}. Firma con tu nombre y pulsa Unirse.`],
   [/^Orders fulfilled: (.+) \+(\d+) doubloons\.$/, (m) => `Órdenes cumplidas: ${tr(m[1])} +${m[2]} doblones.`],
   [/^Orders lapsed: (.+)$/, (m) => `Órdenes caducadas: ${tr(m[1])}`],
+  [/^The wind blows (\w+) this round\. A ship sailing with it makes a square more; square-rigged ships \(Ship of the Line, Frigate\) cannot sail into it, and fore-and-aft rigs lose a square against it\. Across the wind it changes nothing, and the Ironclad's steam ignores it\. It veers each round, and one round in five is a flat calm\.$/, (m) => `El viento sopla hacia el ${DIR[m[1]]} esta ronda. Un barco que navega a favor avanza una casilla más; los de velas cuadradas (Navío de línea, Fragata) no pueden navegar contra él, y los de vela cangreja pierden una casilla en contra. De través no cambia nada, y el vapor del Acorazado lo ignora. Cambia cada ronda, y una de cada cinco hay calma chicha.`],
   [/^Version (.+)$/, (m) => `Versión ${m[1]}`],
   [/^Debug: (.+)\.$/, (m) => `Depuración: ${m[1].replace('doubloons', 'doblones').replace('seals', 'sellos').replace('action points', 'puntos de acción')}.`],
   [/^The enemy fleet lies on the seabed after (\d+) rounds\.$/, (m) => `La flota enemiga yace en el fondo del mar tras ${m[1]} rondas.`],

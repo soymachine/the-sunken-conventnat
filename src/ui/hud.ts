@@ -109,6 +109,19 @@ export class Hud {
       <header class="rail top">
         <div class="turn"><button id="menuBtn" class="mini" aria-expanded="false" aria-controls="menu">Settings</button></div>
         <h1 class="title"><span>The Sunken Covenant</span></h1>
+        <div class="windg" id="windg" hidden tabindex="0" aria-label="Wind">
+            <img class="hanger" src="/ui/mael_hanger.webp" alt="" draggable="false">
+            <img class="face" src="/ui/mael_face.webp" alt="" draggable="false">
+            <svg class="rose" viewBox="0 0 100 100" aria-hidden="true">
+              ${Array.from({ length: 32 }, (_, i) => { const a = i * 11.25 * Math.PI / 180, r1 = i % 8 === 0 ? 30 : i % 2 ? 36 : 33.5; return `<line x1="${(50 + r1 * Math.sin(a)).toFixed(1)}" y1="${(50 - r1 * Math.cos(a)).toFixed(1)}" x2="${(50 + 39 * Math.sin(a)).toFixed(1)}" y2="${(50 - 39 * Math.cos(a)).toFixed(1)}" stroke="#a9c3bf" stroke-width="${i % 8 === 0 ? 1.4 : 0.6}" opacity=".8"/>`; }).join('')}
+              <path d="M50 22 L53.5 46.5 L78 50 L53.5 53.5 L50 78 L46.5 53.5 L22 50 L46.5 46.5 Z" fill="#7d9c98" opacity=".32"/>
+              ${['N', 'E', 'S', 'W'].map((t, i) => `<text x="${(50 + 23.5 * Math.sin(i * Math.PI / 2)).toFixed(1)}" y="${(50 - 23.5 * Math.cos(i * Math.PI / 2) + 3.6).toFixed(1)}" text-anchor="middle" class="pt">${t}</text>`).join('')}
+              <g class="needle"><path d="M50 17 L54.2 50 L50 57 L45.8 50 Z" fill="#c0392b" stroke="#2a1e08" stroke-width=".7"/><path d="M50 83 L53.6 50 L50 57 L46.4 50 Z" fill="#eadfc4" stroke="#2a1e08" stroke-width=".7"/></g>
+              <circle cx="50" cy="50" r="4.2" fill="#c9a24d" stroke="#2a1e08" stroke-width=".8"/><circle cx="48.8" cy="48.8" r="1.4" fill="#f6dc95"/>
+            </svg>
+            <img class="bezel" src="/ui/mael_bezel.webp" alt="" draggable="false">
+            <small></small>
+        </div>
         <div class="foe"><span id="foeNote"></span>
           <div class="mael" id="mael" hidden tabindex="0" aria-label="Maelstrom">
             <img class="hanger" src="/ui/mael_hanger.webp" alt="" draggable="false">
@@ -259,6 +272,16 @@ export class Hud {
       tip.style.left = panel.right + 10 + 'px'; tip.style.top = r.top - 6 + 'px'; tip.hidden = false;
     };
     seals.addEventListener('pointerenter', showSeals); seals.addEventListener('focus', showSeals);
+    // The wind gauge explains itself on hover, below it.
+    const windg = this.q<HTMLElement>('#windg');
+    const showWind = () => {
+      tip.innerHTML = `<b>The wind</b><span class="cost">${esc(windg.querySelector('small')!.textContent ?? '')}</span><p>${esc(this.windHelp)}</p>`;
+      const r = windg.getBoundingClientRect(); tip.hidden = false;
+      tip.style.left = Math.max(8, r.left) + 'px'; tip.style.top = r.bottom + 8 + 'px';
+    };
+    windg.addEventListener('pointerenter', showWind); windg.addEventListener('focus', showWind);
+    windg.addEventListener('pointerleave', () => { tip.hidden = true; }); windg.addEventListener('blur', () => { tip.hidden = true; });
+    this.animateWind(windg.querySelector<SVGGElement>('.needle')!);
     const mael = this.q<HTMLElement>('#mael');
     const showMael = () => {
       tip.innerHTML = `<b>The maelstrom</b><span class="cost">The sea closes in</span><p>${esc(this.maelHelp)}</p>`;
@@ -408,6 +431,35 @@ export class Hud {
     tip.style.top = Math.min(innerHeight - tip.offsetHeight - 8, y + 18) + 'px';
   }
 
+  private windTo: number | null = 0;
+  private windHelp = '';
+  /**
+   * The needle swings to the wind with a little overshoot, then trembles: small quick shivers and, now and then, a
+   * gust that pushes it wider. In a calm it wanders slowly with no heading.
+   */
+  private animateWind(needle: SVGGElement) {
+    let ang = 0, vel = 0, gust = 0, nextGust = 3, drift = 0, last = performance.now(), first = true;
+    const tick = (now: number) => {
+      const dt = Math.min(0.05, (now - last) / 1000); last = now; const t = now / 1000;
+      if ((nextGust -= dt) < 0) { gust = 1; nextGust = 4 + Math.random() * 7; }
+      gust = Math.max(0, gust - dt * 0.7);
+      let target: number;
+      if (this.windTo === null) { drift += (Math.random() - 0.5) * dt * 40; drift *= 0.995; target = ang + drift * dt * 6; }
+      else {
+        // Take the short way round to the new heading.
+        let to = this.windTo; while (to - ang > 180) to -= 360; while (to - ang < -180) to += 360;
+        if (first) { ang = to; first = false; }
+        const shiver = 1.6 * Math.sin(t * 13.1) + 1.1 * Math.sin(t * 7.3 + 1.7) + gust * (9 * Math.sin(t * 4.1) + 4 * Math.sin(t * 11.7));
+        target = to + shiver;
+      }
+      // A damped spring: it overshoots a little when the wind veers.
+      vel += ((target - ang) * 26 - vel * 7.5) * dt; ang += vel * dt;
+      needle.setAttribute('transform', `rotate(${ang.toFixed(2)} 50 50)`);
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
+
   /** The commander's choice, in a sheet of its own as the battle is set up: resolves with the pick (null for none). */
   chooseCommander(current: Cmd | null): Promise<Cmd | null> {
     let pick: Cmd | null = current;
@@ -521,7 +573,15 @@ export class Hud {
 
     this.q('#turnTitle').textContent = p.phase === 'placement' ? 'Deploy your fleet' : p.phase === 'over' ? 'Battle over' : mine ? 'Your turn' : 'Enemy turn';
     this.q('#turnWx').textContent = p.phase === 'battle' && p.storm ? `Storm over ${(p.storm.rows ?? 3) === 1 ? `row ${p.storm.row + 1}` : `rows ${p.storm.row + 1}–${p.storm.row + (p.storm.rows ?? 3)}`} · no guns or glasses there` : '';
-    this.q('#turnSub').textContent = p.phase === 'battle' ? `Round ${p.round} · ${(p.wind ?? 0) < 0 ? 'Flat calm' : `Wind ${['→ east', '↓ south', '← west', '↑ north'][p.wind ?? 0]}`}` : '';
+    this.q('#turnSub').textContent = p.phase === 'battle' ? `Round ${p.round}` : '';
+    // The wind gauge: its needle points where the wind blows, and trembles with it.
+    const wg = this.q<HTMLElement>('#windg'), w = p.wind ?? 0;
+    wg.hidden = p.phase !== 'battle';
+    this.windTo = w < 0 ? null : w * 90 + 90; // the needle is drawn pointing north; heading 0 is east
+    wg.classList.toggle('calm', w < 0);
+    wg.querySelector('small')!.textContent = w < 0 ? 'Flat calm' : ['east', 'south', 'west', 'north'][w];
+    this.windHelp = w < 0 ? 'A flat calm this round: the wind helps and hinders no ship.'
+      : `The wind blows ${['east', 'south', 'west', 'north'][w]} this round. A ship sailing with it makes a square more; square-rigged ships (Ship of the Line, Frigate) cannot sail into it, and fore-and-aft rigs lose a square against it. Across the wind it changes nothing, and the Ironclad's steam ignores it. It veers each round, and one round in five is a flat calm.`;
     const need = krakenSeals(me);
     this.q('#seals').innerHTML = Array.from({ length: need }, (_, i) => `<i class="${i < me.seals ? 'lit' : ''}"></i>`).join('') + `<span>${me.seals >= need ? 'The Kraken will answer.' : `${Math.min(me.seals, need)} of ${need} seals`}</span>`;
     // Each captain's commander, named in their panel; the full card shows on hover.
