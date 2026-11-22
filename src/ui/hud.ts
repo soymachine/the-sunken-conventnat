@@ -1,6 +1,7 @@
 // Oak-and-brass HUD drawn with DOM + SVG over the 3D canvas.
 import { CMDS, CMD_USES, Client, Cmd, GALE_EVERY, SEASON, SOUND_EVERY, krakenSeals, maelstromIn, mayBuy, price, roleOf } from '../game/engine';
 import { CMD_INFO } from './commanders';
+import { CursorStyle, applyCursors } from './cursors';
 import { installTuner } from './tuner';
 import { ITEMS, ITEM_HELP, ITEM_IDS, Item, MAX_ITEMS } from '../game/powerups';
 import { FLEETS, KRAKEN_SEALS, N, Role, shipCells } from '../game/rules';
@@ -33,6 +34,11 @@ export const TOOLS: Record<'broadside' | 'chain' | 'spy', { name: string; ap: nu
 /** Cards that have their own picture in public/ui/cards/. */
 /** Card families, each with its own frame. */
 const CARD_KIND: Record<string, string> = { fire: 'shot', broadside: 'shot', chain: 'shot', fireship: 'shot', double: 'shot', sail: 'move', turn: 'move', current: 'move', winds: 'move', squall: 'move', gale: 'move', bindLater: 'move', bindSooner: 'move', kraken: 'kraken' };
+/** The order of the hand: moving, then firing, then looking, then the rest (left to right). */
+const HAND_ORDER = ['sail', 'turn', 'current', 'winds', 'squall', 'gale', 'bindLater', 'bindSooner',
+  'fire', 'broadside', 'chain', 'fireship', 'double',
+  'spy', 'spyglass', 'longglass', 'sound', 'fog',
+  'shipwright', 'pact', 'power', 'kraken'];
 /** Until the commanders' cards have their own pictures, they borrow a fitting one. */
 const ART_STAND_IN: Record<string, string> = { squall: 'current', gale: 'winds', sound: 'spyglass', double: 'broadside', bindLater: 'current', bindSooner: 'current' };
 const CARD_ART = new Set(['fire', 'sail', 'turn', 'broadside', 'chain', 'spy', 'spyglass', 'longglass', 'fireship', 'fog', 'shipwright', 'winds', 'current', 'pact', 'kraken']);
@@ -88,6 +94,7 @@ export class Hud {
   private balls: SVGGElement[] = [];
   private capTurns = 0;
   private krakenReady = false;
+  private cursor: CursorStyle = (() => { try { const v = localStorage.getItem('tsc:cursor'); return v === 'quill' || v === 'system' ? v : 'brass'; } catch { return 'brass' as const; } })();
   private krakenSeen: boolean | null = null;
   private sealHelp = '';
   private maelHelp = '';
@@ -120,7 +127,8 @@ export class Hud {
         <p class="opt">3D quality</p>
         <div class="seg" data-pref="quality" role="radiogroup" aria-label="3D quality"><button data-v="auto" role="radio">Auto</button><button data-v="high" role="radio">High</button><button data-v="low" role="radio">Low</button></div>
         <div class="debug" hidden><p class="opt">Debug</p><div class="seg three"><button type="button" data-cheat="gold">+100 gold</button><button type="button" data-cheat="seals">+3 seals</button><button type="button" data-cheat="ap">+3 AP</button></div>
-          <p class="opt">Sky</p><div class="seg three" data-pref="sky"><button type="button" data-v="sun">Sun rays</button><button type="button" data-v="aurora">Aurora</button><button type="button" data-v="clear">Clear</button></div></div>
+          <p class="opt">Sky</p><div class="seg three" data-pref="sky"><button type="button" data-v="sun">Sun rays</button><button type="button" data-v="aurora">Aurora</button><button type="button" data-v="clear">Clear</button></div>
+          <p class="opt">Pointer</p><div class="seg three" data-pref="cursor"><button type="button" data-v="brass">Brass</button><button type="button" data-v="quill">Quill</button><button type="button" data-v="system">System</button></div></div>
         <p class="meta">Auto steps down by itself if the game runs slowly. Low drops shadows, glow and the print grade.</p>
       </div>
       <div class="shopTip" id="shopTip" role="tooltip" hidden></div>
@@ -140,9 +148,10 @@ export class Hud {
         <div class="myCmd" id="myCmd" hidden tabindex="0"></div>
         <h2>The covenant</h2><div class="seals" id="seals" tabindex="0" aria-describedby="shopTip"></div><p class="howto" id="sealHow"></p>
         <h2>Admiralty orders</h2><p id="orderText"></p><p id="orderMeta" class="meta"></p>
-        <h2>Quartermaster <span id="gold" title="Doubloons"></span></h2><ul id="shop"></ul>
+        <h2 class="money" id="money" tabindex="0" aria-haspopup="true" aria-controls="shopPop">Money <span><span id="gold" title="Doubloons"></span><em>Buy ›</em></span></h2>
         <h2>Your fleet</h2><ul id="fleet"></ul>
       </aside>
+      <div class="shopPop card" id="shopPop" hidden><h2>Quartermaster</h2><ul id="shop"></ul></div>
       <aside class="card right"><h2>Enemy fleet</h2><p id="foeName"></p><div class="myCmd foe" id="foeCmd" hidden tabindex="0"></div><p class="meta" id="foeSeals"></p><ul id="foeFleet"></ul></aside>
       <p class="toast" id="toast" role="status"></p>
       <div class="belt" id="belt"></div>
@@ -165,6 +174,7 @@ export class Hud {
       <div class="role" hidden><div class="card"><svg class="medal" viewBox="0 0 100 100"></svg><p class="meta" id="roleTitle"></p><h2 id="roleName"></h2><p id="roleMission"></p><p class="pw"><b id="rolePower"></b> <span id="rolePowerText"></span></p><button class="plaque" id="roleOk">To your station</button></div></div>
       <div class="over" hidden><div class="card"><h2 id="overTitle"></h2><p id="overText"></p><p id="overVerify" class="meta"></p><button class="plaque" id="leave">Back to port</button></div></div>`;
     this.telegraph(this.q('.telegraph'));
+    applyCursors(this.cursor);
     // The action points sit under the turn header, where the eye goes as a turn begins.
     this.q('#turnSub').after(this.q('#apSeals'));
     // Setting the glass down ends the turn: it is tapped onto the desk and goes dull until your turn comes back.
@@ -197,6 +207,7 @@ export class Hud {
       if (pref === 'sound' && (v === 'off') !== this.muted) this.muted = on.mute();
       if (pref === 'quality') { on.quality(v as 'auto' | 'high' | 'low'); this.qualityPref = v; }
       if (pref === 'sky') on.sky?.(v as 'sun' | 'aurora' | 'clear');
+      if (pref === 'cursor') { this.cursor = v as CursorStyle; applyCursors(this.cursor); try { localStorage.setItem('tsc:cursor', v); } catch { /* ignore */ } }
       this.paintPrefs();
     };
     // The quartermaster explains each item on hover: what it does, its price, and why you cannot buy it yet.
@@ -212,6 +223,30 @@ export class Hud {
       tip.hidden = false;
     });
     shop.addEventListener('pointerleave', () => { tip.hidden = true; });
+    // The quartermaster opens beside the panel while the pointer is over Money (or the list itself).
+    const money = this.q<HTMLElement>('#money'), pop = this.q<HTMLElement>('#shopPop');
+    let closing = 0;
+    const open = () => {
+      clearTimeout(closing);
+      const r = money.getBoundingClientRect(), panel = money.closest('.card')!.getBoundingClientRect();
+      pop.hidden = false;
+      pop.style.left = panel.right + 6 + 'px';
+      pop.style.top = Math.max(70, Math.min(innerHeight - pop.offsetHeight - 170, r.top - 14)) + 'px';
+    };
+    const close = () => { clearTimeout(closing); closing = window.setTimeout(() => { pop.hidden = true; tip.hidden = true; }, 220); };
+    for (const el of [money, pop]) { el.addEventListener('pointerenter', open); el.addEventListener('pointerleave', close); }
+    money.addEventListener('focus', open); money.addEventListener('blur', close);
+    // Enemy ships: each group of squares names her and her speciality.
+    const foeFleet = this.q<HTMLElement>('#foeFleet');
+    foeFleet.addEventListener('pointerover', (e) => {
+      const li = (e.target as Element).closest<HTMLElement>('li[data-cls]');
+      if (!li) return;
+      tip.innerHTML = `<b>${esc(li.dataset.cls!)}</b><span class="cost">${esc(li.dataset.state!)}</span><p>${esc(li.dataset.trait!)}</p>`;
+      const r = li.getBoundingClientRect(), panel = li.closest('.card')!.getBoundingClientRect();
+      tip.hidden = false;
+      tip.style.left = panel.left - tip.offsetWidth - 10 + 'px'; tip.style.top = r.top - 30 + 'px';
+    });
+    foeFleet.addEventListener('pointerleave', () => { tip.hidden = true; });
     // The covenant's seals explain themselves on hover (or focus).
     const seals = this.q<HTMLElement>('#seals');
     const showSeals = () => {
@@ -380,7 +415,7 @@ export class Hud {
       <p class="meta">Optional. Each brings a power and a drawback; the other captain sees your choice when the battle begins.</p>
       <div class="cmds" role="radiogroup" aria-labelledby="cmdHead">
         <button class="cmd" data-cmd="" role="radio"><i>—</i><b>None</b></button>
-        ${CMDS.map((k) => `<button class="cmd" data-cmd="${k}" role="radio"><i>${CMD_INFO[k].glyph}</i><b>${CMD_INFO[k].name.replace('The ', '')}</b></button>`).join('')}
+        ${CMDS.map((k) => `<button class="cmd" data-cmd="${k}" role="radio"><i class="face" style="background-image:url(/ui/cmd/${k}_face.webp)"></i><b>${CMD_INFO[k].name.replace('The ', '')}</b></button>`).join('')}
       </div>
       <p class="cmdHelp"></p>
       <button class="plaque" type="button" data-act="ok">Take command</button>
@@ -396,6 +431,9 @@ export class Hud {
       b.onclick = () => { pick = k; paint(); help(pick); };
       b.onpointerenter = () => help(k); b.onpointerleave = () => help(pick);
     });
+    // Keep the sheet one height whichever commander is described: as tall as the longest description.
+    const helpEl = box.querySelector<HTMLElement>('.cmdHelp')!;
+    helpEl.style.minHeight = Math.max(...[null, ...CMDS].map((k) => { help(k); return helpEl.offsetHeight; })) + 'px';
     paint(); help(pick);
     return new Promise((done) => {
       box.querySelector<HTMLElement>('[data-act=ok]')!.onclick = () => {
@@ -410,7 +448,7 @@ export class Hud {
   private paintPrefs() {
     this.root.querySelectorAll<HTMLElement>('#menu .seg button').forEach((b) => {
       const pref = b.parentElement!.dataset.pref, v = b.dataset.v;
-      const on = pref === 'sound' ? (v === 'off') === this.muted : pref === 'quality' ? v === this.qualityPref : false;
+      const on = pref === 'sound' ? (v === 'off') === this.muted : pref === 'quality' ? v === this.qualityPref : pref === 'cursor' ? v === this.cursor : false;
       b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on));
     });
   }
@@ -483,14 +521,16 @@ export class Hud {
     const need = krakenSeals(me);
     this.q('#seals').innerHTML = Array.from({ length: need }, (_, i) => `<i class="${i < me.seals ? 'lit' : ''}"></i>`).join('') + `<span>${me.seals >= need ? 'The Kraken will answer.' : `${Math.min(me.seals, need)} of ${need} seals`}</span>`;
     // Each captain's commander, named in their panel; the full card shows on hover.
-    for (const [id, side] of [['#myCmd', me], ['#foeCmd', foe]] as const) {
+    // Mine shows as soon as it is chosen (before Ready makes it public); theirs once they are ready.
+    for (const [id, side] of [['#myCmd', { ...me, cmd: me.cmd ?? c.cmd }], ['#foeCmd', foe]] as const) {
       const el = this.q<HTMLElement>(id), info = side.cmd ? CMD_INFO[side.cmd] : null;
       el.hidden = !info;
       // Their portrait stands behind the panel, half-length, looking across the table (the enemy's is mirrored).
-      const img = this.q<HTMLImageElement>(id === '#myCmd' ? '.portrait.mine' : '.portrait.foe'), src = side.cmd ? `/ui/cmd/${side.cmd}.webp` : '';
+      const img = this.q<HTMLImageElement>(id === '#myCmd' ? '.portrait.mine' : '.portrait.foe'), src = side.cmd ? `/ui/cmd/${side.cmd}${id === '#foeCmd' ? '_left' : ''}.webp` : '';
+      this.root.classList.toggle(id === '#myCmd' ? 'with-mine' : 'with-foe', !!src);
       if (!src) img.hidden = true;
       else if (img.dataset.src !== src) { img.dataset.src = src; img.hidden = true; img.onload = () => { img.hidden = false; }; img.onerror = () => { img.hidden = true; }; img.src = src; }
-      if (info) { el.innerHTML = `<i>${info.glyph}</i><span>${id === '#myCmd' ? 'Your commander' : 'Their commander'}<b>${info.name}</b></span>`; el.dataset.cmd = side.cmd!; }
+      if (info) { el.innerHTML = `<i class="face" style="background-image:url(/ui/cmd/${side.cmd}_face${id === '#foeCmd' ? '_left' : ''}.webp)"></i><span>${id === '#myCmd' ? 'Your commander' : 'Their commander'}<b>${info.name}</b></span>`; el.dataset.cmd = side.cmd!; }
     }
     // The full explanation lives in the seals' tooltip; the panel keeps only what needs doing now.
     this.sealHelp = me.seals >= KRAKEN_SEALS
@@ -517,7 +557,8 @@ export class Hud {
     this.q('#foeFleet').innerHTML = FLEETS[foeRole].map((f) => {
       const sunk = (lost[f.kind] || 0) > 0;
       if (sunk) lost[f.kind]--;
-      return `<li class="${sunk ? 'sunk' : ''}"><span>${f.cls}</span><span class="pips">${`<i class="${sunk ? 'hit' : ''}"></i>`.repeat(f.len)}</span></li>`;
+      const trait = TRAIT_HELP[f.trait] ?? f.trait;
+      return `<li class="${sunk ? 'sunk' : ''}" data-cls="${esc(f.cls)}" data-state="${sunk ? 'Sunk' : 'Afloat'}" data-trait="${esc(f.trait + ': ' + trait)}"><span class="pips">${`<i class="${sunk ? 'hit' : ''}"></i>`.repeat(f.len)}</span></li>`;
     }).join('');
 
     this.q('#orderText').textContent = c.order ? c.order.text : p.phase === 'placement' ? 'Sealed until the battle begins.' : '—';
@@ -583,17 +624,21 @@ export class Hud {
       if (!p.pacts?.[c.me] && me.cmd !== 'deepspeaker' && c.ships.some((s) => !s.sunk && s.hits.some(Boolean) && s.kind !== 'merchant')) tool('pact', 'Blood Pact', 1, c.canPact(), TOOL_HELP.pact.text, c.ships.filter((s) => !s.sunk).length <= 1 ? 'Your last ship cannot be given up.' : '');
       if (role !== 'classic' && !p.power[c.me]) tool('power', CAPTAINS[role].power, 1, c.canPower(), `Your captain's power. ${CAPTAINS[role].powerText}`);
     }
-    // Fire in the very middle with Sail and Turn either side, the rest of the hand split around them.
+    // The hand is grouped by kind of action — moving, firing, looking, then the rest — each group with the
+    // plain orders first and the commander's and bought cards after them.
     // The card that was chosen before this redraw sinks back into the hand instead of vanishing from the raised spot.
     const wasOn = this.root.querySelector<HTMLElement>('#belt .ocard.on')?.dataset.tool;
-    const half = Math.floor(belt.length / 2);
-    if (p.phase === 'battle') belt.splice(half, 0, ...orderCards);
+    if (p.phase === 'battle') {
+      belt.push(...orderCards);
+      const rank = (h: string) => { const id = h.match(/data-tool="(\w+)"/)?.[1] ?? ''; const i = HAND_ORDER.indexOf(id); return i < 0 ? HAND_ORDER.length : i; };
+      belt.sort((a, b) => rank(a) - rank(b));
+    }
     this.q('#belt').innerHTML = belt.join('');
     // Fan the hand: each card turns a little about a point below the table.
     const cards = [...this.root.querySelectorAll<HTMLElement>('#belt .ocard')], n = cards.length;
     // A big hand overlaps more, so it never runs under the bottle or the hourglass.
     this.q<HTMLElement>('#belt').style.setProperty('--overlap', `${-16 - Math.max(0, n - 6) * 8}px`);
-    cards.forEach((el, i) => { const k = i - (n - 1) / 2; el.style.setProperty('--r', `${k * 4}deg`); el.style.setProperty('--y', `${Math.abs(k) * 4}px`); el.style.zIndex = String(10 + i); });
+    cards.forEach((el, i) => { const k = i - (n - 1) / 2; el.style.setProperty('--r', `${k * 4}deg`); el.style.setProperty('--y', `${Math.abs(k) * 4}px`); el.style.zIndex = String(10 + n - i); });
     const was = wasOn && wasOn !== mode ? cards.find((el) => el.dataset.tool === wasOn) : undefined;
     if (was) {
       was.style.transition = 'none'; was.classList.add('on'); void was.offsetWidth;

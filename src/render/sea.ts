@@ -431,7 +431,14 @@ export class Sea {
   /** How strongly the wind shows on the water (debug), 1 by default. */
   static windStrength = 1;
   /** Where the wind blows towards: a heading (0 east, 1 south, 2 west, 3 north); the strokes swing round to it. */
-  setWind(h: number) { this.calmTo = h < 0 ? 1 : 0; if (h >= 0) this.windTo = h * Math.PI / 2; }
+  setWind(h: number) {
+    this.calmTo = h < 0 ? 1 : 0;
+    if (h >= 0) this.windTo = h * Math.PI / 2;
+    // The first wind of a game is simply there: the strokes start along it instead of swinging round.
+    if (this.windFresh) { this.windFresh = false; this.windAng = this.windTo; this.calm = this.calmTo; }
+  }
+  /** A new game: the next wind is taken as it is. */
+  windFresh = true;
   setGust(g: number) { this.mat.uniforms.uGust.value = g; }
   /** The storm front: its first row and how many rows it covers (none when `row` is null). */
   setStorm(row: number | null, rows = 3) { (this.mat.uniforms.uStorm.value as THREE.Vector2).set(row ?? 0, row === null ? 0 : rows); }

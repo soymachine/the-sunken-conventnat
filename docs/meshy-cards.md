@@ -444,3 +444,20 @@ kraken, eyes faintly glowing sea-green, one hand holding a coil of rope hung wit
 the bottom of the frame. 18th-century naval oil portrait style, warm light from the upper left. Transparent
 background, PNG with alpha. No scenery, no frame, no text. Tall 3:4 frame.
 ```
+
+## 15. The commanders' power cards (replaces the card list in section 12)
+
+These six cards use the same **base prompt as section 2** (a small square illustration in the style of a
+hand-coloured 1860s steel engraving). Fill `[SCENE]` with the line below. Make them square, as the other card
+pictures, and name the files as in the first column. The game draws the frame, the name and the AP seal.
+
+| File | Card | `[SCENE]` |
+|---|---|---|
+| `bind_later.png` | Hold the Tide | a robed old sea-priest on a rocky headland raising a brass astrolabe against a vast whirlpool, the water around it stilled and frozen mid-turn, a pale ring of light holding it back |
+| `bind_sooner.png` | Hasten the Tide | the same robed sea-priest on the headland sweeping his arm forward, the whirlpool below spinning faster and wider, foam racing round its rim and a ship tipping at its edge |
+| `squall.png` | Squall | a fleet of sailing ships thrown sideways by a sudden squall, sails torn and slanting rain, one ship driven hard against another with splintering timber and white spray |
+| `gale.png` | Call the Wind | a woman captain on a quarterdeck with one arm raised to the sky, streaks of wind sweeping across the picture and bending every sail the same way, clouds parting behind her |
+| `sound.png` | Soundings | a sailor in the bow of a longboat at night swinging a lead line into black water, a lantern lighting the knotted rope, the faint shapes of distant ships in the mist |
+| `double.png` | Double-Shotted | a heavy cannon firing two iron balls that fly one behind the other, the first smashing through a ship's hull in a burst of splinters and the second flying on beyond it, thick gun smoke |
+
+The Deepspeaker has no card of their own: their power changes the Kraken's card, which keeps its picture.

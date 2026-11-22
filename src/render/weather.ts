@@ -425,7 +425,13 @@ class WindStreaks {
   cover(x: number, z: number, w: number, d: number) { (this.mat.uniforms.uArea.value as THREE.Vector4).set(x, z, w, d); }
   /** Where the wind blows towards: a heading (0 east, 1 south, 2 west, 3 north). */
   /** A heading (0 east, 1 south, 2 west, 3 north), or -1 for a flat calm: the streaks die away. */
-  setWind(h: number) { this.calmTo = h < 0 ? 1 : 0; if (h >= 0) this.angTo = h * Math.PI / 2; }
+  setWind(h: number) {
+    this.calmTo = h < 0 ? 1 : 0;
+    if (h >= 0) this.angTo = h * Math.PI / 2;
+    if (this.fresh) { this.fresh = false; this.ang = this.angTo; this.calm = this.calmTo; this.dir.set(Math.cos(this.ang), Math.sin(this.ang)); }
+  }
+  /** A new game: the next wind is taken as it is, with no swing. */
+  fresh = true;
   /** A strong gust now (e.g. when a ship is caught in irons). */
   blow() { this.forced = 2.5; }
   update(dt: number, t: number, stormy: boolean) {
@@ -553,6 +559,8 @@ export class Weather {
   }
   strike(at: THREE.Vector3) { this.bolt.strike(at); }
   setWind(h: number) { this.wind.setWind(h); }
+  /** A new game begins: the first wind is set at once. */
+  freshWind() { this.wind.fresh = true; }
   /** Debug: how strongly the wind shows. */
   set windStrength(k: number) { this.wind.strength = k; }
   /** A strong gust, to show the wind plainly. */

@@ -631,8 +631,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); out
 #lobby .banner .title { margin: -14px 0 0; font-size: 33px; color: #2e1c0c; text-shadow: 0 1px 0 rgba(255, 245, 220, .6); }
 #lobby .sheet .card { padding-top: 62px; padding-bottom: 34px; }
 #lobby .tentacle { bottom: 12%; height: 68%; }
-#lobby .tentacle.left { left: -31%; transform: rotate(-10deg); }
-#lobby .tentacle.right { right: -31%; transform: scaleX(-1) rotate(-10deg); }
+#lobby .tentacle.left { left: -31%; transform: rotate(337deg); }
+#lobby .tentacle.right { right: -31%; transform: scaleX(-1) rotate(337deg); }
 /* The articles are sealed: the anchor-and-kraken seal pressed on the foot of the sheet. */
 #lobby .card .seal { position: absolute; left: 50%; bottom: -34px; width: 74px; height: 74px; transform: translateX(-50%) rotate(-8deg); filter: drop-shadow(0 4px 5px rgba(0, 0, 0, .6)); pointer-events: none; }
 
@@ -642,3 +642,65 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); out
 #hud .portrait.foe { right: 40px; transform: scaleX(-1); }
 #hud .portrait.mine { left: 50px; }
 #hud #menuBtn { position: relative; z-index: 3; }
+
+/* ---------- 0.24: the commanders' faces in the pick and the panels; the title centred on the ribbon ---------- */
+.cmdModal .cmd i.face, #hud .myCmd i.face { background: #1d2a2c center / cover no-repeat; border: 2px solid #b08d3c; box-shadow: 0 2px 4px rgba(0, 0, 0, .55); }
+.cmdModal .cmd i.face { width: 54px; height: 54px; }
+#hud .myCmd i.face { width: 40px; height: 40px; }
+.cmdModal .cmd.on i.face { border-color: var(--wax); box-shadow: 0 0 0 2px var(--wax), 0 2px 6px rgba(0, 0, 0, .6); }
+.cmdModal .card { width: min(620px, calc(100vw - 32px)); }
+#lobby .banner .title { margin: -34px 0 0; }
+
+/* ---------- 0.25: room for twice the portraits — a compact enemy fleet, the quartermaster in a pop-out ---------- */
+#hud .portrait { top: 6px; width: 260px; height: 244px; }
+#hud .portrait.mine { left: 10px; }
+#hud .portrait.foe { right: 0; }
+#hud.with-mine .card.left { top: 214px; max-height: calc(100vh - 214px - 168px); }
+#hud.with-foe .card.right { top: 214px; }
+/* Enemy fleet: one row of hulls, like Your fleet; hover a hull for her name and speciality. */
+#foeFleet { display: flex; flex-direction: row; flex-wrap: nowrap; gap: 8px; margin: 2px 0 0; padding: 0; }
+#foeFleet li { display: block; padding: 0; border: 0; cursor: help; }
+#foeFleet .pips { gap: 1.5px; } #foeFleet .pips i { width: 8px; height: 14px; background: var(--ink); }
+#foeFleet .pips i.hit { background: var(--wax); }
+#foeFleet li.sunk .pips { opacity: .45; }
+.card.right { bottom: auto; }
+/* Money: the purse in the panel; the quartermaster's list opens beside it. */
+#hud .money { cursor: pointer; }
+#hud .money em { font: italic 12px var(--body); letter-spacing: 0; text-transform: none; color: #6b5233; margin-left: 8px; }
+#hud .money:hover em, #hud .money:focus-visible em { color: var(--wax); }
+.shopPop { position: absolute; z-index: 6; width: 250px; padding: 16px 18px 12px; pointer-events: auto; }
+.shopPop[hidden] { display: none; }
+/* The gauge stands a fixed distance from the middle of the screen; the hourglass and bottle from its sides. */
+.mael { right: auto; left: calc(50vw + var(--mael-x) - 48px); }
+:root { --mael-x: 178px; --glass-x: 305px; --bottle-x: 113px; }
+.battle { position: static; }
+
+/* ---------- 0.25.1 ---------- */
+:root { --glass-h: 126px; --mael-x: 288px; --bottle-x: 29px; --bottle-y: 20px; --glass-x: 25px; --glass-y: 1px; }
+/* The enemy's figure is mirrored with scale, so it comes in already facing the table. */
+#hud .portrait.foe { transform: none; scale: -1 1; }
+/* The action-point seal sits inside the card's corner. */
+.ocard .cost { top: 5px; right: 5px; width: 22px; height: 22px; font-size: 10.5px; }
+/* Settings: on the beam just left of the title plate, clear of the commanders' figures. */
+#hud #menuBtn { position: absolute; right: calc(50% + 252px); top: 17px; margin: 0; }
+.menu { left: calc(50% - 252px - 250px); top: 52px; }
+
+/* ---------- 0.25.2 ---------- */
+/* The enemy's figure is a mirrored picture (cmd/<name>_left.webp): nothing turns it as it comes in. */
+#hud .portrait.foe { transform: none; scale: none; }
+/* The chosen card: a soft amber glow that follows its rounded corners, no hard ring. */
+.belt .ocard.ocard.on { box-shadow: 0 0 0 0 #8c2f1b, 0 0 23px #ffbe6e99, 0 5px 33px #000000b3; }
+
+/* ---------- the game's own pointers (src/ui/cursors.ts) ---------- */
+html, body, #hud, #lobby, canvas { cursor: var(--cur, auto); }
+button:not(:disabled), [role="radio"], .ocard, #money, #seals.ready, .shopPop button, #lobby .mode, .cmdModal .cmd { cursor: var(--cur-hot, pointer) !important; }
+input, textarea { cursor: text; }
+canvas[data-cur="sight"] { cursor: var(--cur-sight, crosshair); }
+canvas[data-cur="glass"] { cursor: var(--cur-glass, zoom-in); }
+canvas[data-cur="helm"] { cursor: var(--cur-helm, pointer); }
+
+/* ---------- 0.26.1: a card that cannot be played keeps a solid grey card behind; only its face fades ---------- */
+.belt .ocard.ocard.off { opacity: 1; filter: none; }
+.belt .ocard.ocard.off::before { filter: grayscale(1) brightness(.62) contrast(.9); }
+.belt .ocard.ocard.k-kraken.off { background-color: #2a2a2a; }
+.belt .ocard.off .art, .belt .ocard.off .nm, .belt .ocard.off .cost, .belt .ocard.off .many { opacity: .42; filter: grayscale(.85); }
