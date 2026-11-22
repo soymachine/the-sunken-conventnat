@@ -650,3 +650,27 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); out
 .cmdModal .cmd.on i.face { border-color: var(--wax); box-shadow: 0 0 0 2px var(--wax), 0 2px 6px rgba(0, 0, 0, .6); }
 .cmdModal .card { width: min(620px, calc(100vw - 32px)); }
 #lobby .banner .title { margin: -34px 0 0; }
+
+/* ---------- 0.25: room for twice the portraits — a compact enemy fleet, the quartermaster in a pop-out ---------- */
+#hud .portrait { top: 6px; width: 260px; height: 244px; }
+#hud .portrait.mine { left: 10px; }
+#hud .portrait.foe { right: 0; }
+#hud.with-mine .card.left { top: 214px; max-height: calc(100vh - 214px - 168px); }
+#hud.with-foe .card.right { top: 214px; }
+/* Enemy fleet: one row of hulls, like Your fleet; hover a hull for her name and speciality. */
+#foeFleet { display: flex; flex-direction: row; flex-wrap: nowrap; gap: 8px; margin: 2px 0 0; padding: 0; }
+#foeFleet li { display: block; padding: 0; border: 0; cursor: help; }
+#foeFleet .pips { gap: 1.5px; } #foeFleet .pips i { width: 8px; height: 14px; background: var(--ink); }
+#foeFleet .pips i.hit { background: var(--wax); }
+#foeFleet li.sunk .pips { opacity: .45; }
+.card.right { bottom: auto; }
+/* Money: the purse in the panel; the quartermaster's list opens beside it. */
+#hud .money { cursor: pointer; }
+#hud .money em { font: italic 12px var(--body); letter-spacing: 0; text-transform: none; color: #6b5233; margin-left: 8px; }
+#hud .money:hover em, #hud .money:focus-visible em { color: var(--wax); }
+.shopPop { position: absolute; z-index: 6; width: 250px; padding: 16px 18px 12px; pointer-events: auto; }
+.shopPop[hidden] { display: none; }
+/* The gauge stands a fixed distance from the middle of the screen; the hourglass and bottle from its sides. */
+.mael { right: auto; left: calc(50vw + var(--mael-x) - 48px); }
+:root { --mael-x: 178px; --glass-x: 305px; --bottle-x: 113px; }
+.battle { position: static; }

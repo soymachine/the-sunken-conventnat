@@ -140,9 +140,10 @@ export class Hud {
         <div class="myCmd" id="myCmd" hidden tabindex="0"></div>
         <h2>The covenant</h2><div class="seals" id="seals" tabindex="0" aria-describedby="shopTip"></div><p class="howto" id="sealHow"></p>
         <h2>Admiralty orders</h2><p id="orderText"></p><p id="orderMeta" class="meta"></p>
-        <h2>Quartermaster <span id="gold" title="Doubloons"></span></h2><ul id="shop"></ul>
+        <h2 class="money" id="money" tabindex="0" aria-haspopup="true" aria-controls="shopPop">Money <span><span id="gold" title="Doubloons"></span><em>Buy ›</em></span></h2>
         <h2>Your fleet</h2><ul id="fleet"></ul>
       </aside>
+      <div class="shopPop card" id="shopPop" hidden><h2>Quartermaster</h2><ul id="shop"></ul></div>
       <aside class="card right"><h2>Enemy fleet</h2><p id="foeName"></p><div class="myCmd foe" id="foeCmd" hidden tabindex="0"></div><p class="meta" id="foeSeals"></p><ul id="foeFleet"></ul></aside>
       <p class="toast" id="toast" role="status"></p>
       <div class="belt" id="belt"></div>
@@ -212,6 +213,30 @@ export class Hud {
       tip.hidden = false;
     });
     shop.addEventListener('pointerleave', () => { tip.hidden = true; });
+    // The quartermaster opens beside the panel while the pointer is over Money (or the list itself).
+    const money = this.q<HTMLElement>('#money'), pop = this.q<HTMLElement>('#shopPop');
+    let closing = 0;
+    const open = () => {
+      clearTimeout(closing);
+      const r = money.getBoundingClientRect(), panel = money.closest('.card')!.getBoundingClientRect();
+      pop.hidden = false;
+      pop.style.left = panel.right + 6 + 'px';
+      pop.style.top = Math.max(70, Math.min(innerHeight - pop.offsetHeight - 170, r.top - 14)) + 'px';
+    };
+    const close = () => { clearTimeout(closing); closing = window.setTimeout(() => { pop.hidden = true; tip.hidden = true; }, 220); };
+    for (const el of [money, pop]) { el.addEventListener('pointerenter', open); el.addEventListener('pointerleave', close); }
+    money.addEventListener('focus', open); money.addEventListener('blur', close);
+    // Enemy ships: each group of squares names her and her speciality.
+    const foeFleet = this.q<HTMLElement>('#foeFleet');
+    foeFleet.addEventListener('pointerover', (e) => {
+      const li = (e.target as Element).closest<HTMLElement>('li[data-cls]');
+      if (!li) return;
+      tip.innerHTML = `<b>${esc(li.dataset.cls!)}</b><span class="cost">${esc(li.dataset.state!)}</span><p>${esc(li.dataset.trait!)}</p>`;
+      const r = li.getBoundingClientRect(), panel = li.closest('.card')!.getBoundingClientRect();
+      tip.hidden = false;
+      tip.style.left = panel.left - tip.offsetWidth - 10 + 'px'; tip.style.top = r.top - 30 + 'px';
+    });
+    foeFleet.addEventListener('pointerleave', () => { tip.hidden = true; });
     // The covenant's seals explain themselves on hover (or focus).
     const seals = this.q<HTMLElement>('#seals');
     const showSeals = () => {
@@ -491,6 +516,7 @@ export class Hud {
       el.hidden = !info;
       // Their portrait stands behind the panel, half-length, looking across the table (the enemy's is mirrored).
       const img = this.q<HTMLImageElement>(id === '#myCmd' ? '.portrait.mine' : '.portrait.foe'), src = side.cmd ? `/ui/cmd/${side.cmd}.webp` : '';
+      this.root.classList.toggle(id === '#myCmd' ? 'with-mine' : 'with-foe', !!src);
       if (!src) img.hidden = true;
       else if (img.dataset.src !== src) { img.dataset.src = src; img.hidden = true; img.onload = () => { img.hidden = false; }; img.onerror = () => { img.hidden = true; }; img.src = src; }
       if (info) { el.innerHTML = `<i class="face" style="background-image:url(/ui/cmd/${side.cmd}_face.webp)"></i><span>${id === '#myCmd' ? 'Your commander' : 'Their commander'}<b>${info.name}</b></span>`; el.dataset.cmd = side.cmd!; }
@@ -520,7 +546,8 @@ export class Hud {
     this.q('#foeFleet').innerHTML = FLEETS[foeRole].map((f) => {
       const sunk = (lost[f.kind] || 0) > 0;
       if (sunk) lost[f.kind]--;
-      return `<li class="${sunk ? 'sunk' : ''}"><span>${f.cls}</span><span class="pips">${`<i class="${sunk ? 'hit' : ''}"></i>`.repeat(f.len)}</span></li>`;
+      const trait = TRAIT_HELP[f.trait] ?? f.trait;
+      return `<li class="${sunk ? 'sunk' : ''}" data-cls="${esc(f.cls)}" data-state="${sunk ? 'Sunk' : 'Afloat'}" data-trait="${esc(f.trait + ': ' + trait)}"><span class="pips">${`<i class="${sunk ? 'hit' : ''}"></i>`.repeat(f.len)}</span></li>`;
     }).join('');
 
     this.q('#orderText').textContent = c.order ? c.order.text : p.phase === 'placement' ? 'Sealed until the battle begins.' : '—';

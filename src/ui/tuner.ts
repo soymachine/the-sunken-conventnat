@@ -14,7 +14,7 @@ const KNOBS: Knob[] = [
   { v: '--belt-y', label: 'Cards at rest (Y)', min: -120, max: 80, step: 2, unit: 'px', def: 26 },
   { v: '--card-lift', label: 'Card raised (Y)', min: 0, max: 200, step: 2, unit: 'px', def: 20 },
   { v: '--wind', label: 'Wind strength', min: 0, max: 3, step: 0.1, unit: '', def: 1 },
-  { v: '--mael-x', label: 'Gauge: X from right', min: 0, max: 1200, step: 2, unit: 'px', def: 474 },
+  { v: '--mael-x', label: 'Gauge: X from centre', min: -700, max: 700, step: 2, unit: 'px', def: 178 },
   { v: '--mael-y', label: 'Gauge: Y', min: 0, max: 600, step: 2, unit: 'px', def: 88 },
   { v: '--lamp-dir', label: 'Gauge lamps: top (-1) / bottom (1)', min: -1, max: 1, step: 2, unit: '', def: -1 },
   { v: '--lamp-x', label: 'Gauge lamps: X', min: -40, max: 40, step: 1, unit: 'px', def: 3 },
@@ -34,8 +34,8 @@ const KNOBS: Knob[] = [
   { v: '--move-bri', label: 'Move cards: brightness', min: 0.3, max: 1.8, step: 0.02, unit: '', def: 0.68 },
 ];
 const MOVES: Record<string, { x: string; y: string; def: [number, number]; fromRight?: boolean }> = {
-  bottle: { x: '--bottle-x', y: '--bottle-y', def: [93, 18] },
-  glass: { x: '--glass-x', y: '--glass-y', def: [285, 6], fromRight: true },
+  bottle: { x: '--bottle-x', y: '--bottle-y', def: [113, 18] },
+  glass: { x: '--glass-x', y: '--glass-y', def: [305, 6], fromRight: true },
 };
 
 /** Knobs that are not only CSS (the wind) are passed on to the game through this event. */
@@ -45,11 +45,15 @@ export function installTuner(hud: HTMLElement) {
   const root = document.documentElement.style;
   let saved: Record<string, string> = {};
   try { saved = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch { /* storage unavailable */ }
+  // Version 2 measures the gauge from the middle of the screen and the bottle and glass from its very edges:
+  // older saved positions for those three would land in the wrong place, so they are dropped.
+  if (saved['--tuning-v'] !== '2') { for (const k of ['--mael-x', '--glass-x', '--bottle-x']) delete saved[k]; saved['--tuning-v'] = '2'; }
   for (const [k, v] of Object.entries(saved)) { root.setProperty(k, v); queueMicrotask(() => tuned(k, parseFloat(v))); }
   const val = (k: string) => getComputedStyle(document.documentElement).getPropertyValue(k).trim();
   const save = () => {
     const all: Record<string, string> = {};
     for (const k of [...KNOBS.map((q) => q.v), ...Object.values(MOVES).flatMap((m) => [m.x, m.y])]) all[k] = val(k);
+    all['--tuning-v'] = '2';
     try { localStorage.setItem(KEY, JSON.stringify(all)); } catch { /* ignore */ }
     out.value = JSON.stringify(all, null, 1);
   };
