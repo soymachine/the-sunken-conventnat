@@ -39,9 +39,9 @@ const HAND_ORDER = ['sail', 'turn', 'current', 'winds', 'squall', 'gale', 'bindL
   'fire', 'broadside', 'chain', 'fireship', 'double',
   'spy', 'spyglass', 'longglass', 'sound', 'fog',
   'shipwright', 'pact', 'power', 'kraken'];
-/** Until the commanders' cards have their own pictures, they borrow a fitting one. */
-const ART_STAND_IN: Record<string, string> = { squall: 'current', gale: 'winds', sound: 'spyglass', double: 'broadside', bindLater: 'current', bindSooner: 'current' };
-const CARD_ART = new Set(['fire', 'sail', 'turn', 'broadside', 'chain', 'spy', 'spyglass', 'longglass', 'fireship', 'fog', 'shipwright', 'winds', 'current', 'pact', 'kraken']);
+/** A card may borrow another's picture (none do now that the commanders' cards have their own). */
+const ART_STAND_IN: Record<string, string> = {};
+const CARD_ART = new Set(['squall', 'gale', 'sound', 'double', 'bindLater', 'bindSooner', 'fire', 'sail', 'turn', 'broadside', 'chain', 'spy', 'spyglass', 'longglass', 'fireship', 'fog', 'shipwright', 'winds', 'current', 'pact', 'kraken']);
 /** What each ship's trait means, for the fleet's tooltips. */
 const TRAIT_HELP: Record<string, string> = {
   Broadside: 'fires three squares in a row.', 'Chain shot': 'a hit pins the enemy ship for a turn.',
