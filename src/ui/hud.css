@@ -591,3 +591,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); out
 #hud .myCmd.foe span { align-items: flex-start; }
 .belt .ocard { margin-left: var(--overlap, -16px); }
 .belt .ocard:first-child { margin-left: 0; }
+
+/* ---------- 0.21.1: the values tuned in debug ---------- */
+:root { --lamp-x: 3px; --lamp-y: 3px; --face-x: 4px; --face-y: 3px; --mtext-x: 3px; --mtext-y: 0px;
+  --card-hue: 4deg; --card-sat: 1; --card-bri: 1; --shot-hue: -38deg; --shot-sat: 3; --shot-bri: .58; --move-hue: 38deg; --move-sat: 3; --move-bri: .68; }
