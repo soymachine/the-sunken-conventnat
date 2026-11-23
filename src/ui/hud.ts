@@ -233,6 +233,10 @@ export class Hud {
     // The latest event reads right under them: lower down, a raised card would cover it.
     const toast = this.q<HTMLElement>('#toast');
     this.q('#apSeals').after(toast);
+    // Online, the turn's clock sits between the action points and the note.
+    this.q('#apSeals').insertAdjacentHTML('afterend', '<div class="clock" id="turnClock" hidden><i></i><b></b></div>');
+    this.root.insertAdjacentHTML('beforeend', '<div class="linkBanner" id="linkBanner" role="alert" hidden><span></span><button type="button" class="plaque" hidden>Back to port</button></div>');
+    this.q<HTMLElement>('#linkBanner button').onclick = () => on.leave();
     toast.addEventListener('animationend', () => toast.classList.remove('show'));
     // Setting the glass down ends the turn: it is tapped onto the desk and goes dull until your turn comes back.
     this.q<HTMLElement>('#endTurn').onclick = () => {
@@ -643,6 +647,8 @@ export class Hud {
     this.lever.style.transform = `rotate(${90 - (Math.atan2(Math.sin(mid) * TG.ry, Math.cos(mid) * TG.rx) * 180) / Math.PI}deg)`;
     this.sectors.forEach(([path, t], k) => { path.classList.toggle('on', k === i); t.classList.toggle('on', k === i); });
 
+    // While the enemy is at the helm the title breathes, so a quiet turn never looks frozen.
+    this.root.classList.toggle('foeTurn', p.phase === 'battle' && !mine);
     this.q('#turnTitle').textContent = p.phase === 'placement' ? 'Deploy your fleet' : p.phase === 'over' ? 'Battle over' : mine ? 'Your turn' : 'Enemy turn';
     this.q('#turnWx').textContent = p.phase === 'battle' && p.storm ? `Storm over ${(p.storm.rows ?? 3) === 1 ? `row ${p.storm.row + 1}` : `rows ${p.storm.row + 1}–${p.storm.row + (p.storm.rows ?? 3)}`} · no guns or glasses there` : '';
     this.q('#turnSub').textContent = p.phase === 'battle' ? `Round ${p.round}` : '';
@@ -851,6 +857,25 @@ export class Hud {
     }
   }
 
+  /** The turn's clock (online): seconds left of `total`, or null to hide it; it warns in the last 15 seconds. */
+  setClock(left: number | null, total = 90, mine = false) {
+    const k = this.q<HTMLElement>('#turnClock');
+    k.hidden = left === null;
+    if (left === null) return;
+    const s = Math.ceil(left);
+    k.querySelector<HTMLElement>('i')!.style.width = `calc((100% - 46px) * ${(left / total).toFixed(4)})`;
+    k.querySelector('b')!.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    k.classList.toggle('mine', mine); k.classList.toggle('low', s <= 15);
+  }
+  /** A banner when the link to the other captain (or our own) is lost; `leave` offers the way back to port. */
+  setLink(text: string | null, leave = false) {
+    const b = this.q<HTMLElement>('#linkBanner');
+    b.hidden = !text;
+    if (!text) return;
+    const span = b.querySelector('span')!;
+    if (span.textContent !== text) span.textContent = text;
+    b.querySelector<HTMLElement>('button')!.hidden = !leave;
+  }
   /** The figures of the battle on the report, and whether a rematch can be offered. */
   setResults(r: { rounds: number; shots: number; hits: number; sank: number; lost: number; gold: number; cards: number; krakens: number }, rematch: boolean) {
     const acc = r.shots ? Math.round((100 * r.hits) / r.shots) : 0;

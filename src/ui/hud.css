@@ -989,3 +989,25 @@ html.cvd .logPanel li.good span { color: #1f6fa0; }
 .tutRing { position: fixed; z-index: 39; pointer-events: none; border: 2px solid #f0d489; border-radius: 10px; box-shadow: 0 0 0 3px rgba(13, 11, 8, .5), 0 0 22px 4px rgba(240, 212, 137, .55); animation: tutPulse 1.6s ease-in-out infinite; transition: left .3s, top .3s, width .3s, height .3s; }
 @keyframes tutPulse { 50% { box-shadow: 0 0 0 3px rgba(13, 11, 8, .5), 0 0 34px 10px rgba(240, 212, 137, .8); } }
 @media (prefers-reduced-motion: reduce) { .tutRing, .tutBox.in { animation: none; } }
+
+/* ---------- online: the turn's clock, the enemy at the helm, the link banner ---------- */
+#hud .status .clock { display: flex; align-items: center; gap: 8px; width: 150px; margin: 7px auto 0; }
+#hud .status .clock[hidden] { display: none; }
+#hud .status .clock::before { content: ''; flex: 1; height: 5px; border: 1px solid rgba(176, 141, 60, .7); border-radius: 3px; background: rgba(0, 0, 0, .45); }
+#hud .status .clock i { position: absolute; }
+#hud .status .clock { position: relative; }
+#hud .status .clock i { left: 1px; top: 50%; height: 5px; margin-top: -2.5px; background: linear-gradient(90deg, #8a6a28, #f0d489); border-radius: 2px; transition: width .25s linear; }
+#hud .status .clock:not(.mine) i { background: linear-gradient(90deg, #5a4a35, #a8946a); }
+#hud .status .clock b { display: inline; font: 700 12px var(--label); letter-spacing: .08em; color: var(--parch); min-width: 34px; text-align: right; }
+#hud .status .clock.mine.low b { color: #f08a64; animation: clockLow 1s ease-in-out infinite; }
+#hud .status .clock.mine.low i { background: linear-gradient(90deg, #8c2f1b, #f08a64); }
+@keyframes clockLow { 50% { transform: scale(1.18); } }
+/* The enemy at the helm: the title's dots come and go, so a long think never looks like a freeze. */
+#hud.foeTurn #turnTitle::after { content: '…'; display: inline-block; width: 0; overflow: hidden; vertical-align: bottom; animation: foeDots 1.6s steps(4, end) infinite; }
+@keyframes foeDots { to { width: 1.1em; } }
+.linkBanner { position: absolute; left: 50%; top: 210px; transform: translateX(-50%); z-index: 8; display: flex; align-items: center; gap: 14px; max-width: min(640px, 90vw); padding: 10px 18px; background: rgba(13, 11, 8, .92); border: 1px solid var(--brass); border-radius: 4px; box-shadow: 0 8px 24px rgba(0, 0, 0, .6); pointer-events: auto; font: italic 17px var(--body); color: var(--parch); animation: screenIn .4s ease-out; }
+.linkBanner[hidden] { display: none; }
+.linkBanner span::before { content: ''; display: inline-block; width: 9px; height: 9px; margin-right: 9px; border-radius: 50%; background: #e0795c; box-shadow: 0 0 8px #e0795c; vertical-align: 1px; animation: linkBlink 1.2s ease-in-out infinite; }
+@keyframes linkBlink { 50% { opacity: .25; } }
+.linkBanner .plaque { margin: 0; flex: none; padding: 7px 14px; }
+@media (prefers-reduced-motion: reduce) { #hud.foeTurn #turnTitle::after, .linkBanner span::before, #hud .status .clock.mine.low b { animation: none; } }

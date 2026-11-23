@@ -180,7 +180,7 @@ async function start(s: Session, name: string) {
     });
   } else local?.begin();
   refresh();
-  s.listen((m) => c.receive(m), (on) => { foeOnline = on; refresh(); });
+  s.listen((m) => c.receive(m), (on) => { if (!on && foeOnline) foeGoneAt = performance.now(); foeOnline = on; refresh(); });
   // The first battle against the machine is guided, once.
   if (s instanceof LocalSession && !Tutorial.seen()) tutorial.start(c); else if (tutorial.active) tutorial.stop(false);
   Object.assign(window, { __client: c, __screen: (cell: Cell) => scene.screen(cell), __bot: (s as LocalSession).bot });
@@ -476,6 +476,29 @@ function soundtrack() {
   sfx.setWind(p.phase !== 'battle' ? 0.3 : (p.wind ?? 0) < 0 ? 0 : p.storm ? 1 : 0.55);
 }
 
+/* ---------- online: the turn's clock and the link to the other captain ---------- */
+/** An online turn lasts this long; in the last 15 seconds the clock ticks, and at 0 your turn ends by itself. */
+const TURN_SECONDS = 90;
+let turnStart = performance.now(), lastTick = -1, foeGoneAt = 0;
+const mmss = (t: number) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+setInterval(() => {
+  const online = !!session?.code;
+  if (!online || c.pub.phase !== 'battle') hud.setClock(null);
+  else {
+    const left = Math.max(0, TURN_SECONDS - (performance.now() - turnStart) / 1000);
+    hud.setClock(left, TURN_SECONDS, c.myTurn);
+    if (c.myTurn && left > 0 && left <= 15 && Math.ceil(left) !== lastTick) { lastTick = Math.ceil(left); sfx.play('tick'); }
+    if (c.myTurn && left <= 0 && c.can() && !busy) { hud.log('The glass ran out: your turn is over.', 'bad'); c.endTurn(); }
+  }
+  // The link: the other captain gone quiet, or this browser off the net.
+  const foe = c?.foeSide?.name || 'The enemy';
+  if (online && c.pub.phase !== 'over' && !foeOnline) {
+    const gone = (performance.now() - (foeGoneAt || performance.now())) / 1000;
+    hud.setLink(gone < 60 ? `${foe} has lost contact. Waiting for them to return… ${mmss(gone)}` : `${foe} has been gone for ${mmss(gone)}. They may not come back: wait, or go back to port.`, gone >= 60);
+  } else if (online && !navigator.onLine) hud.setLink('You are offline. The battle carries on when your connection returns.');
+  else hud.setLink(null);
+}, 250);
+
 let lastTurnKey = '';
 function refresh() {
   // The battle is over: against the machine it goes in the log at once; online, once the logs are checked.
@@ -493,6 +516,7 @@ function refresh() {
   scene.setTurn(c.pub.phase !== 'battle' || c.myTurn);
   // Announce each new turn once, with a ribbon across the screen.
   const turnKey = c.pub.phase === 'battle' ? `${c.pub.round}:${c.pub.current}` : '';
+  if (turnKey !== lastTurnKey) { turnStart = performance.now(); lastTick = -1; }
   if (turnKey && turnKey !== lastTurnKey && !quiet) hud.herald(c.myTurn ? 'Your turn' : 'The enemy moves', `Round ${c.pub.round} · ${(c.pub.wind ?? 0) < 0 ? 'flat calm' : `wind ${['east', 'south', 'west', 'north'][c.pub.wind ?? 0]}`}`, c.myTurn);
   if (turnKey && turnKey !== lastTurnKey) hud.setHint(c.myTurn ? HINTS[mode] || '' : 'The enemy is at the helm. Watch your waters…');
   lastTurnKey = turnKey;

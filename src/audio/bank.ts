@@ -37,6 +37,7 @@ export const SOUNDS: SoundDef[] = [
   { id: 'coin', group: 'Interfaz', channel: 'ui', label: 'Monedas', help: 'Comprar al intendente.' },
   { id: 'treasure', group: 'Interfaz', channel: 'ui', label: 'Tesoro', help: 'Al ganar doblones por un impacto.' },
   { id: 'bell', group: 'Interfaz', channel: 'ui', label: 'Campana de turno', help: 'Empieza tu turno.' },
+  { id: 'tick', group: 'Interfaz', channel: 'ui', label: 'Últimos segundos', help: 'Online: cada segundo de los últimos 15 de tu turno.' },
   { id: 'hourglass', group: 'Interfaz', channel: 'ui', label: 'Reloj de arena', help: 'Terminar el turno.' },
   { id: 'paper', group: 'Interfaz', channel: 'ui', label: 'Pergamino', help: 'Abrir una ventana, la guía o la bitácora.' },
   // Music
@@ -47,7 +48,7 @@ export const SOUNDS: SoundDef[] = [
   { id: 'stingLose', group: 'Música', channel: 'music', label: 'Derrota', help: 'Al perder (una vez).' },
 ];
 /** Names with a synthesised stand-in, heard while no recording is assigned (music never has one). */
-export const SYNTH = new Set(['cannon', 'splash', 'hit', 'clang', 'sink', 'coin', 'glass', 'click', 'bell', 'roar', 'thunder', 'creak', 'plunge', 'treasure', 'explosion', 'mast', 'steam']);
+export const SYNTH = new Set(['cannon', 'splash', 'hit', 'clang', 'sink', 'coin', 'glass', 'click', 'bell', 'roar', 'thunder', 'creak', 'plunge', 'treasure', 'explosion', 'mast', 'steam', 'tick']);
 export const SOUND = Object.fromEntries(SOUNDS.map((s) => [s.id, s])) as Record<string, SoundDef>;
 
 /** How a recording is played: the file, the part of it kept (seconds), its gain and its fades. */
