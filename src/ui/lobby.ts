@@ -2,6 +2,7 @@
 import { Mode } from '../game/engine';
 import { Lang, getLang, setLang } from './i18n';
 import { openHowTo } from './howto';
+import { openShipViewer } from './shipViewer';
 import { mountAccountBar } from './captain';
 
 export interface LobbyHandlers {
@@ -43,6 +44,7 @@ export class Lobby {
           <button class="mode" data-mode="convoy" role="radio" aria-checked="false"><b>Convoy</b><span>One escorts the cargo home, the other plunders it. Roles are drawn by lot.</span></button>
         </div>
         <div class="row"><button class="plaque" id="vsBot">Play the machine</button></div>
+        <div class="row"><button class="plaque dark" id="ships3d" type="button">3D Ships</button></div>
         <p class="or"><span>or sail against a friend</span></p>
         <div class="row"><button class="plaque dark" id="create">Create a room</button></div>
         <div class="row joinRow"><input id="code" maxlength="4" placeholder="CODE" aria-label="Room code" autocomplete="off" /><button class="plaque dark" id="join">Join</button></div>
@@ -62,6 +64,7 @@ export class Lobby {
     this.root.querySelectorAll<HTMLElement>('.langPick button').forEach((b) => (b.onclick = () => { setLang(b.dataset.lang as Lang); paintLang(); }));
     paintLang();
     this.q<HTMLElement>('#howLink').onclick = () => openHowTo();
+    this.q<HTMLElement>('#ships3d').onclick = () => void openShipViewer();
     const name = this.q<HTMLInputElement>('#capName');
     try { name.value = localStorage.getItem('tsc:name') || ''; } catch { /* storage unavailable */ }
     // A signed-in captain's name fills the field (the corner bar also opens the Captain's Log).

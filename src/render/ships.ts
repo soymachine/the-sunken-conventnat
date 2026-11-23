@@ -10,11 +10,16 @@ export const setShipTime = (t: number) => { time.value = t; };
 
 const VERT = /* glsl */ `
 uniform float uTime, uFlutter;
+uniform mat4 uToRoot;
 varying vec3 vN;
 varying vec2 vUv;
 varying vec3 vW;
+varying vec3 vRoot, vRootN;
 void main() {
   vUv = uv;
+  // Where this point lies in the prepared model's own space (hull 1.0 long, waterline at 0): decks are found there.
+  vRoot = (uToRoot * vec4(position, 1.0)).xyz;
+  vRootN = mat3(uToRoot) * normal;
   vec3 p = position;
   if (uFlutter > 0.0) {
     float w = sin(uv.x * 3.1416) * (0.35 + 0.65 * sin(uv.y * 3.1416));
@@ -29,9 +34,12 @@ uniform vec3 uColor, uTint, uLight;
 uniform float uTintAmt, uAlpha, uUseMap;
 uniform sampler2D uMap;
 uniform vec4 uClip;
+uniform vec3 uDeck;       // the band of heights decks lie in (low, high, in the model's own units) and on/off
+uniform vec3 uDeckColor;
 varying vec3 vN;
 varying vec2 vUv;
 varying vec3 vW;
+varying vec3 vRoot, vRootN;
 void main() {
   // A ship seen through the Long Glass exists only inside the patch of water it shows.
   if (uClip.z > uClip.x && (vW.x < uClip.x || vW.x > uClip.z || vW.z < uClip.y || vW.z > uClip.w)) discard;
@@ -45,7 +53,22 @@ void main() {
   if (d <= 0.38) hatch -= 0.22 * step(0.55, fract((f.x - f.y) / 5.0));
   // A model made elsewhere brings its colours as a texture; the procedural ships use one flat colour per part.
   vec3 base = uUseMap > 0.5 ? texture2D(uMap, vUv).rgb * uColor : uColor;
-  vec3 c = mix(base * band * hatch, uTint, uTintAmt);
+  // The generated decks were blotchy: any upward-facing surface at deck height is painted one clean plank colour,
+  // with only the faintest seams along the ship so it still reads as timber.
+  if (uDeck.z > 0.5 && normalize(vRootN).y > 0.4 && vRoot.y > uDeck.x && vRoot.y < uDeck.y) {
+    float seam = 1.0 - 0.06 * smoothstep(0.86, 1.0, abs(sin(vRoot.z * 230.0)));
+    base = uDeckColor * seam;
+  }
+  vec3 lit = base * band * hatch;
+  // Sail cloth on the generated models (pale texels above the decks): one clean canvas colour with soft light,
+  // no bands or hatching, so the few large folded triangles read as cloth rather than broken patches.
+  if (uDeck.z > 0.5 && uUseMap > 0.5 && vRoot.y > uDeck.x + 0.06) {
+    // (The texture arrives in linear light, where pale canvas looks more saturated: compare channels by ratio.)
+    vec3 t = texture2D(uMap, vUv).rgb;
+    float lum = dot(t, vec3(0.299, 0.587, 0.114)), mx = max(t.r, max(t.g, t.b)), mn = min(t.r, min(t.g, t.b));
+    if (lum > 0.3 && mn > 0.45 * mx) lit = vec3(0.95, 0.9, 0.8) * (0.8 + 0.2 * d);
+  }
+  vec3 c = mix(lit, uTint, uTintAmt);
   gl_FragColor = vec4(c, uAlpha);
   #include <colorspace_fragment>
 }`;
@@ -54,7 +77,7 @@ void main() {
 export function inkMaterial(color: number, flutter = 0, map: THREE.Texture | null = null): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     vertexShader: VERT, fragmentShader: FRAG, side: THREE.DoubleSide,
-    uniforms: { uColor: { value: new THREE.Color(color) }, uTint: { value: new THREE.Color(0xd9a441) }, uTintAmt: { value: 0 }, uAlpha: { value: 1 }, uLight: { value: LIGHT }, uTime: time, uFlutter: { value: flutter }, uMap: { value: map }, uUseMap: { value: map ? 1 : 0 }, uClip: { value: new THREE.Vector4(0, 0, -1, -1) } },
+    uniforms: { uToRoot: { value: new THREE.Matrix4() }, uDeck: { value: new THREE.Vector3(0, 0, 0) }, uDeckColor: { value: new THREE.Color(0x8a6a42) }, uColor: { value: new THREE.Color(color) }, uTint: { value: new THREE.Color(0xd9a441) }, uTintAmt: { value: 0 }, uAlpha: { value: 1 }, uLight: { value: LIGHT }, uTime: time, uFlutter: { value: flutter }, uMap: { value: map }, uUseMap: { value: map ? 1 : 0 }, uClip: { value: new THREE.Vector4(0, 0, -1, -1) } },
   });
 }
 
@@ -161,6 +184,19 @@ export function propModel(kind: 'gold' | 'seal', faded: boolean): THREE.Object3D
   return g;
 }
 
+/** Clean flat decks on the generated models (the viewer can switch it off to compare). */
+let deckMode = true;
+export const setDeckMode = (on: boolean) => { deckMode = on; };
+/**
+ * Deck colour and the band of heights each model's decks lie in (hull lengths, measured from the upward-facing
+ * surfaces of each .glb): main deck up to quarterdeck and forecastle, below the rails' tops. The ironclad's iron
+ * casemate roof stands above its band and keeps its own colour.
+ */
+const DECK: Partial<Record<Kind, { color: number; lo: number; hi: number }>> = {
+  line: { color: 0x8a6a42, lo: 0.04, hi: 0.14 }, frigate: { color: 0x8a6a42, lo: 0.0, hi: 0.1 }, ironclad: { color: 0x58534c, lo: 0.0, hi: 0.06 },
+  schooner: { color: 0x94744a, lo: 0.03, hi: 0.17 }, cutter: { color: 0x94744a, lo: 0.09, hi: 0.17 }, merchant: { color: 0x86663e, lo: 0.04, hi: 0.18 },
+};
+
 export async function loadShipModels(): Promise<number> {
   const loader = new GLTFLoader();
   await Promise.all((Object.keys(SPECS) as Kind[]).map(async (kind) => {
@@ -219,11 +255,20 @@ export function buildShip(kind: Kind, len: number): ShipModel {
       const c = box.getCenter(new THREE.Vector3());
       o.position.sub(new THREE.Vector3(c.x - len / 2, box.min.y, c.z));
     }
+    // Each part learns how to reach the model's own space, so decks can be found whatever the ship's size.
+    o.updateMatrixWorld(true);
+    const rootInv = o.matrixWorld.clone().invert(), deckH = (prepared as { deck?: number } | null)?.deck, dk = DECK[kind];
     o.traverse((n) => {
       const m = n as THREE.Mesh;
       if (!m.isMesh) return;
       const src = m.material as THREE.MeshStandardMaterial;
-      m.material = src.map ? mat(0xffffff, 0, src.map) : mat(src.color ? src.color.getHex() : s.hull);
+      const im = src.map ? mat(0xffffff, 0, src.map) : mat(src.color ? src.color.getHex() : s.hull);
+      (im.uniforms.uToRoot.value as THREE.Matrix4).multiplyMatrices(rootInv, m.matrixWorld);
+      if (deckMode && deckH !== undefined && dk && !/sail|flag|crate|cannon|barrel|gun/i.test(m.name)) {
+        (im.uniforms.uDeck.value as THREE.Vector3).set(dk.lo, dk.hi, 1);
+        (im.uniforms.uDeckColor.value as THREE.Color).setHex(dk.color);
+      }
+      m.material = im;
       m.castShadow = true;
     });
     inner.add(o);
