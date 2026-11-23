@@ -84,6 +84,28 @@ expensive at scale:
 | Authoritative server (Cloud Run), Option B in `multiplayer-plan.md` | ranked play without cheating | only for ranked play | ~$10–40/month base |
 | Several RTDB instances (sharding) | RTDB allows ~200,000 simultaneous connections per database | far off (> 200k players online at once) | — |
 
+### Done (0.30.0)
+
+- **Finished rooms are deleted.**
+  - Each captain marks the room `done` once the battle is over and they have checked the other's log; the second to
+    do so deletes the room and its index entry.
+  - The rules allow that only to the two captains, and only when both are done.
+- **Abandoned rooms are swept, without a server.**
+  - Each new room records its creation time in `roomsByAge` (server time; the rules refuse a back-dated room).
+  - Whenever someone creates or joins a room, their browser clears up to 25 rooms older than a day.
+  - The rules let anyone signed in delete a room only once it is a day old.
+- **Art is cached for a year.**
+  - After `vite build`, `tools/version-assets.mjs` moves `ui/`, `models/` and `sfx/` to `/a/<hash>/` and rewrites every
+    reference.
+  - `firebase.json` serves `/a/**` and `/assets/**` as immutable for a year, and the page itself with `no-cache`.
+  - A returning player downloads almost nothing, and a change to any picture yields a new path.
+- **Tested.**
+  - The rules were run in the Firebase emulator against hostile cases: a stranger deleting a fresh room, a captain
+    deleting before both are done, marking the other seat done, back-dating a room. All were refused.
+  - A full online battle between two browsers on the emulator ended with both verdicts clean and the room gone.
+- **Rooms created before 0.30.0** have no `roomsByAge` entry, so the sweep cannot find them. Delete them once from the
+  Firebase console (Realtime Database → `rooms`).
+
 ## 2. Accounts, payments, personalisation, history and stats
 
 ### Accounts

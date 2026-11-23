@@ -132,7 +132,7 @@ export async function loadPropModels(): Promise<number> {
   const loader = new GLTFLoader();
   await Promise.all((['gold', 'seal'] as const).map(async (kind) => {
     try {
-      const g = (await loader.loadAsync(`${import.meta.env.BASE_URL}models/${kind === 'gold' ? 'treasure' : 'seal'}.glb`)).scene;
+      const g = (await loader.loadAsync(`/models/${kind === 'gold' ? 'treasure' : 'seal'}.glb`)).scene;
       g.traverse((o) => {
         const m = o as THREE.Mesh;
         if (!m.isMesh) return;
@@ -164,7 +164,7 @@ export function propModel(kind: 'gold' | 'seal', faded: boolean): THREE.Object3D
 export async function loadShipModels(): Promise<number> {
   const loader = new GLTFLoader();
   await Promise.all((Object.keys(SPECS) as Kind[]).map(async (kind) => {
-    const url = `${import.meta.env.BASE_URL}models/${kind}.glb`;
+    const url = `/models/${kind}.glb`;
     try {
       const head = await fetch(url, { method: 'HEAD' });
       if (!head.ok || (head.headers.get('content-type') || '').includes('html')) return;

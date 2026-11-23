@@ -12,6 +12,8 @@ export interface Session {
   send(m: Msg): void;
   /** Start delivering messages (including any history) to `cb`. */
   listen(cb: (m: Msg) => void, onPresence?: (online: boolean) => void): void;
+  /** The battle is over and this captain has checked the other's log: the room may go. */
+  finished?(): void;
   close(): void;
 }
 

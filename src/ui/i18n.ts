@@ -23,7 +23,7 @@ const EXACT: Record<string, string> = {
   Copied: 'Copiado', 'Link copied': 'Enlace copiado', 'A room code has four characters.': 'El código de sala tiene cuatro caracteres.',
   'Send the code or the link to your rival. The battle begins as soon as they join…': 'Envía el código o el enlace a tu rival. La batalla empieza en cuanto se una…',
   'Online rooms need a Firebase project — see docs/FIREBASE_SETUP.md.': 'Las salas online necesitan un proyecto de Firebase: mira docs/FIREBASE_SETUP.md.',
-  'Hailing the room…': 'Llamando a la sala…',
+  'Hailing the room…': 'Llamando a la sala…', 'No room with that code, or its battle is over.': 'No hay ninguna sala con ese código, o su batalla ya terminó.',
   // Settings
   Settings: 'Ajustes', Sound: 'Sonido', On: 'Sí', Off: 'No', '3D quality': 'Calidad 3D', Auto: 'Auto', High: 'Alta', Low: 'Baja', Language: 'Idioma',
   'Auto steps down by itself if the game runs slowly. Low drops shadows, glow and the print grade.': 'Auto baja la calidad sola si el juego va lento. Baja quita sombras, brillos y el tono de grabado.',

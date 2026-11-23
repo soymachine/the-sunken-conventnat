@@ -1,11 +1,11 @@
 {
   "name": "the-sunken-covenant",
   "private": true,
-  "version": "0.29.4",
+  "version": "0.30.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && vite build && node tools/version-assets.mjs",
     "preview": "vite preview",
     "test": "vitest run",
     "emulators": "npx firebase-tools emulators:start --only auth,database --project demo-sunken-covenant",

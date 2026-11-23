@@ -266,7 +266,7 @@ class Gulls {
   private present = false;
   private area = new THREE.Vector3(); private w = 16; private d = 8;
   constructor() {
-    new GLTFLoader().loadAsync(`${import.meta.env.BASE_URL}models/gull.glb`).then((gltf) => {
+    new GLTFLoader().loadAsync(`/models/gull.glb`).then((gltf) => {
       gltf.scene.traverse((o) => {
         const m = o as THREE.Mesh;
         if (!m.isMesh) return;

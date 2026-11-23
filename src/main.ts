@@ -289,7 +289,16 @@ function describe(m: Msg, mine: boolean) {
       weather();
       break;
     case 'reveal':
-      if (!mine && session?.code) void verify(c.log, c.foe, roleOf(c.pub, c.foe), session.seed, session.mode).then((bad) => hud.setVerdict(bad ? `The enemy's log does not add up: ${bad}.` : "The enemy's log checks out: every shot was answered truthfully."));
+      if (!mine && session?.code) {
+        const s = session;
+        void verify(c.log, c.foe, roleOf(c.pub, c.foe), s.seed, s.mode).then((bad) => {
+          hud.setVerdict(bad ? `The enemy's log does not add up: ${bad}.` : "The enemy's log checks out: every shot was answered truthfully.");
+          // Once both captains have revealed and this one has checked, the room can be cleared away.
+          if (c.log.some((x) => x.t === 'reveal' && x.by === c.me)) s.finished?.();
+        });
+      }
+      // My own reveal may arrive after theirs: then the check above has already run.
+      if (mine && session?.code && c.log.some((x) => x.t === 'reveal' && x.by === c.foe)) session.finished?.();
       break;
   }
 }
