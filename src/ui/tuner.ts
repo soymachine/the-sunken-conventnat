@@ -13,6 +13,7 @@ const KNOBS: Knob[] = [
   { v: '--glass-h', label: 'Glass size', min: 60, max: 320, step: 2, unit: 'px', def: 126 },
   { v: '--belt-y', label: 'Cards at rest (Y)', min: -120, max: 80, step: 2, unit: 'px', def: 26 },
   { v: '--card-lift', label: 'Card raised (Y)', min: 0, max: 200, step: 2, unit: 'px', def: 20 },
+  { v: '--cursor-rot', label: 'Pointer rotation (about its tip)', min: -45, max: 45, step: 1, unit: 'deg', def: 0 },
   { v: '--wind', label: 'Wind strength', min: 0, max: 3, step: 0.1, unit: '', def: 1 },
   { v: '--mael-x', label: 'Gauge: X from centre', min: -700, max: 700, step: 2, unit: 'px', def: 288 },
   { v: '--windg-x', label: 'Wind gauge: X left of centre', min: -700, max: 700, step: 2, unit: 'px', def: 288 },
