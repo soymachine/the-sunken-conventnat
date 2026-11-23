@@ -461,3 +461,87 @@ pictures, and name the files as in the first column. The game draws the frame, t
 | `double.png` | Double-Shotted | a heavy cannon firing two iron balls that fly one behind the other, the first smashing through a ship's hull in a burst of splinters and the second flying on beyond it, thick gun smoke |
 
 The Deepspeaker has no card of their own: their power changes the Kraken's card, which keeps its picture.
+
+## 16. The account corner and the language switch
+
+The home has two small corner bars:
+- **Top left:** the captain's account, showing "Sign in", or the anchor, the captain's name, "Captain's Log" and
+  "Sign out".
+- **Top right:** the language switch, EN | ES.
+
+Today these are plain dark boxes. They can become pieces of ship's furniture: a small oak board with brass
+nameplates screwed onto it, a captain's insignia beside the name, and two cloth signal pennants for the languages.
+
+The game keeps writing the words itself, so every picture must be **blank**. Make them all face-on, transparent
+background, warm light from the upper left, no text and no letters. Drop them in `images/` with the names given, and
+I will cut and place them.
+
+**a. `nameplate.png` — the plate behind each button (stretched to fit the word)**
+```
+A single small engraved brass nameplate seen exactly face-on, a long rounded rectangle about 4:1, polished
+but worn brass with darker tarnish in the corners, a fine engraved double border line inset from the edge,
+a small domed brass screw at each end. The middle is completely blank and flat. Nothing else, no background.
+Transparent background, PNG with alpha. Warm light from the upper left. Photorealistic. No text, no letters.
+```
+
+**b. `nameplate_hot.png` — the same plate under the pointer**
+```
+The same small engraved brass nameplate, face-on, freshly polished so it gleams brighter, with a soft warm
+highlight across its upper half. Blank middle, a domed screw at each end. Transparent background, PNG with
+alpha. Photorealistic. No text, no letters.
+```
+
+**c. `account_board.png` — the strip of wood they are fixed to (optional)**
+```
+A short horizontal strip of dark varnished oak seen face-on, about 6:1, with softly rounded ends, fine grain,
+small dents and a thin brass edge band along the top and bottom. Nothing on it. Transparent background, PNG with
+alpha. Warm light from the upper left. Photorealistic. No text.
+```
+
+**d. `insignia.png` — the captain's mark beside the name (replaces the ⚓ sign)**
+```
+A small round captain's insignia badge seen exactly face-on: a gilt brass fouled anchor (an anchor wrapped
+with a length of rope) on a dark navy enamel disc, ringed by a thin rope-twist gilt border, with a tiny crown
+of laurel leaves above the anchor. Polished, slightly worn. Only the badge. Centred, square. Transparent
+background, PNG with alpha. Warm light from the upper left. Photorealistic. No text, no letters.
+```
+
+Alternative, if a badge feels too military:
+```
+A small round red wax seal seen from above, pressed with a fouled anchor (an anchor wrapped in rope), glossy
+wax with irregular poured edges. Only the seal, centred, square. Transparent background, PNG with alpha.
+Photorealistic. No text.
+```
+
+**e. `logbook.png` — a small icon for "Captain's Log" (inside its nameplate, left of the words)**
+```
+A small closed ship's logbook seen face-on, slightly turned: worn brown leather cover with a brass corner on
+each corner, a red ribbon bookmark hanging out at the bottom, a brass clasp. Only the book. Centred, square.
+Transparent background, PNG with alpha. Warm light from the upper left. Photorealistic. No text, no letters.
+```
+
+**f. `pennant.png` and `pennant_raised.png` — the language switch**
+
+Two signal pennants side by side, one per language. The game writes "EN" and "ES" on them, and the one in use hangs
+raised.
+```
+A single small swallow-tailed cloth signal pennant seen face-on, hanging from a short horizontal brass rod
+with a ring at each end, made of faded cream sailcloth with a thin red border stitched along its edges, the
+cloth gently rippled. The middle of the cloth is plain and blank. Nothing else. Transparent background, PNG with
+alpha. Warm light from the upper left. Photorealistic. No text, no letters, no symbols.
+```
+```
+The same small swallow-tailed signal pennant, face-on, but caught by a breeze so it streams out more fully,
+the cloth brighter, a deeper red border. Plain blank middle. Transparent background, PNG with alpha.
+Photorealistic. No text, no letters, no symbols.
+```
+
+### How they come together
+
+- **Top left:**
+  - signed out: the insignia, then a "Sign in" nameplate;
+  - signed in: the insignia, the name in gilt italic, then "Captain's Log" (with the logbook) and "Sign out", all on
+    the oak strip.
+- **Top right:** two pennants hanging side by side.
+- **Words:** engraved-looking dark text on the plates, drawn by the game. They stay sharp and switch between English
+  and Spanish.
