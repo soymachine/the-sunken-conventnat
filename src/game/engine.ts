@@ -518,7 +518,9 @@ export class Client {
     this.streak = s.streak; this.hurt = s.hurt; this.skip = s.count; this.escort = !!s.escort; this.laden = s.laden || 0; this.ringSeen = s.ring || 0; if (s.cmd) this.cmd = s.cmd;
   }
 
-  private send(b: Body) { this.inFlight++; this.out({ ...b, by: this.me } as Msg); }
+  /** How many messages this captain has sent: a click that sent one did something. */
+  sent = 0;
+  private send(b: Body) { this.inFlight++; this.sent++; this.out({ ...b, by: this.me } as Msg); }
 
   receive(m: Msg) {
     const ok = reduce(this.pub, m);

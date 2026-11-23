@@ -25,7 +25,7 @@ export interface View { pub: Pub; me: 0 | 1; ships: Ship[]; selectedId?: number 
 export interface Ghost { kind: Kind; len: number; x: number; y: number; dir: 'h' | 'v'; rev: boolean; from: [number, number]; pivot: [number, number]; state: 'hot' | 'idle' | 'bad';
   /** Draw the translucent ship itself (only for the turn being pointed at), not just its arrow. */
   ship: boolean }
-export type Sound = 'cannon' | 'splash' | 'hit' | 'clang' | 'sink' | 'coin' | 'glass' | 'roar' | 'thunder' | 'gull' | 'treasure' | 'plunge';
+export type Sound = 'cannon' | 'splash' | 'hit' | 'clang' | 'sink' | 'coin' | 'glass' | 'roar' | 'thunder' | 'gull' | 'treasure' | 'plunge' | 'whistle' | 'slam' | 'explosion' | 'mast';
 
 const C = { ink: 0x0d0b08, amber: 0xd9a441, parch: 0xe8d5a3, brass: 0xb08d3c, wax: 0x8c2f1b };
 const HALF = N / 2;
@@ -948,7 +948,7 @@ export class SeaScene {
     const wreck = (o: ShipObj) => {
       if (o.state !== 'afloat') return;
       if (v.quiet) { o.state = 'wreck'; o.sink = 1; o.model.sails.visible = false; o.root.visible = false; }
-      else { o.state = 'sinking'; this.sound('sink'); }
+      else { o.state = 'sinking'; this.sound('explosion'); this.sound('sink'); setTimeout(() => this.sound('mast'), 700); }
     };
     for (const s of v.ships) {
       const key = 'o' + s.id, o = this.ship(key, s.kind, s.len, 'own');
@@ -1167,6 +1167,7 @@ export class SeaScene {
       }
     }
     this.sound('cannon');
+    setTimeout(() => this.sound('whistle'), 180);
     const ball = new THREE.Mesh(G.ball, M.ball);
     this.misc.add(ball);
     const t0 = performance.now(), dur = 560 + from.distanceTo(to) * 9, arc = 3 + from.distanceTo(to) * 0.18;
@@ -1197,6 +1198,7 @@ export class SeaScene {
   /** The Kraken brings a tentacle down on a cell. Resolves on impact. */
   async lash(target: Cell, outcome: ShotOutcome): Promise<void> {
     if (this.kraken.active) await this.kraken.slam(cellCenter(target));
+    this.sound('slam');
     this.shake(0.2);
     this.impact(target, outcome);
   }

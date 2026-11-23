@@ -82,7 +82,9 @@ export interface HudHandlers {
   /** Debug only: call up a sky (shafts of sun, an aurora) or clear it. */
   sky?(what: 'sun' | 'aurora' | 'clear'): void;
   /** A sound for the HUD's own flourishes. */
-  sound?(name: 'roar' | 'splash'): void;
+  sound?(name: 'roar' | 'splash' | 'cardHover' | 'cardPlay' | 'cardDeal' | 'denied' | 'paper' | 'click'): void;
+  /** A channel's volume, 0..1 (music, effects, ambience, interface). */
+  volume?(k: 'music' | 'sfx' | 'ambience' | 'ui', v: number): void;
   letterRead(): void;
   buy(item: Item): void;
   endTurn(): void;
@@ -101,6 +103,14 @@ export class Hud {
   private krakenReady = false;
   private cursor: CursorStyle = (() => { try { const v = localStorage.getItem('tsc:cursor'); return v === 'quill' || v === 'system' ? v : 'brass'; } catch { return 'brass' as const; } })();
   private krakenSeen: boolean | null = null;
+  /** What the hand, the action points and the purse were at the last redraw, to animate what changed. */
+  private prevHand: Set<string> | null = null;
+  private prevAp = -1; private prevGold = -1; private prevSeals = -1; private goldTween = 0;
+  private hoverCard = '';
+  private logEntries: { text: string; kind: string; round: number }[] = [];
+  private round = 0;
+  /** Open or close the battle's log (set up in the constructor). */
+  toggleLog: (open?: boolean) => void = () => {};
   private sealHelp = '';
   private maelHelp = '';
   private muted = false;
@@ -111,7 +121,7 @@ export class Hud {
     this.root = document.getElementById('hud')!;
     this.root.innerHTML = `
       <header class="rail top">
-        <div class="turn"><button id="menuBtn" class="mini" aria-expanded="false" aria-controls="menu">Settings</button><button id="howBtn" class="mini" aria-label="How to play" title="How to play">?</button></div>
+        <div class="turn"><button id="menuBtn" class="mini" aria-expanded="false" aria-controls="menu">Settings</button><button id="howBtn" class="mini" aria-label="How to play" title="How to play">?</button><button id="logBtn" class="mini" aria-expanded="false" aria-controls="logPanel" title="Everything that has happened in this battle (L)">Log</button></div>
         <h1 class="title"><span>The Sunken Covenant</span></h1>
         <div class="windg" id="windg" hidden tabindex="0" aria-label="Wind">
             <img class="hanger" src="/ui/mael_hanger.webp" alt="" draggable="false">
@@ -143,17 +153,21 @@ export class Hud {
         <button type="button" class="plaque dark howRow" id="howMenu">How to play</button>
         <button type="button" class="plaque dark howRow" id="logMenu">Captain's Log</button>
         <button type="button" class="plaque dark howRow" id="shipsMenu">3D Ships</button>
+        <button type="button" class="plaque dark howRow" id="fullMenu">Full screen</button>
         <p class="opt">Language</p>
         <div class="seg" data-pref="lang" role="radiogroup" aria-label="Language" translate="no"><button data-v="en" role="radio">English</button><button data-v="es" role="radio">Español</button></div>
         <p class="opt">Sound</p>
         <div class="seg" data-pref="sound" role="radiogroup" aria-label="Sound"><button data-v="on" role="radio">On</button><button data-v="off" role="radio">Off</button></div>
+        <div class="vols">${[['music', 'Music'], ['sfx', 'Effects'], ['ambience', 'Ambience'], ['ui', 'Interface']].map(([k, n]) => `<label><span>${n}</span><input type="range" min="0" max="1" step="0.05" data-vol="${k}" aria-label="${n}"></label>`).join('')}</div>
         <p class="opt">3D quality</p>
         <div class="seg" data-pref="quality" role="radiogroup" aria-label="3D quality"><button data-v="auto" role="radio">Auto</button><button data-v="high" role="radio">High</button><button data-v="low" role="radio">Low</button></div>
         <div class="debug" hidden><p class="opt">Debug</p><div class="seg three"><button type="button" data-cheat="gold">+100 gold</button><button type="button" data-cheat="seals">+3 seals</button><button type="button" data-cheat="ap">+3 AP</button></div>
           <p class="opt">Sky</p><div class="seg three" data-pref="sky"><button type="button" data-v="sun">Sun rays</button><button type="button" data-v="aurora">Aurora</button><button type="button" data-v="clear">Clear</button></div>
-          <p class="opt">Pointer</p><div class="seg three" data-pref="cursor"><button type="button" data-v="brass">Brass</button><button type="button" data-v="quill">Quill</button><button type="button" data-v="system">System</button></div></div>
+          <p class="opt">Pointer</p><div class="seg three" data-pref="cursor"><button type="button" data-v="brass">Brass</button><button type="button" data-v="quill">Quill</button><button type="button" data-v="system">System</button></div>
+          <p class="opt">Sounds</p><a class="plaque dark howRow" href="/admin.html" target="_blank" rel="noopener">Sound desk</a></div>
         <p class="meta">Auto steps down by itself if the game runs slowly. Low drops shadows, glow and the print grade.</p>
       </div>
+      <div class="logPanel card" id="logPanel" hidden><h2>Captain's log</h2><ol></ol><p class="meta">Newest first. Press L to open or close.</p></div>
       <div class="shopTip" id="shopTip" role="tooltip" hidden></div>
       <div class="shipMenu" id="shipMenu" hidden><button type="button"></button></div>
       <form class="compose card" id="compose" hidden>
@@ -223,7 +237,7 @@ export class Hud {
     this.q<HTMLElement>('#roleOk').onclick = () => { this.q<HTMLElement>('.role').hidden = true; };
     // Settings: sound and 3D quality, in a small parchment menu at the top left.
     const menu = this.q<HTMLElement>('#menu'), menuBtn = this.q<HTMLElement>('#menuBtn');
-    const show = (open: boolean) => { menu.hidden = !open; menuBtn.setAttribute('aria-expanded', String(open)); };
+    const show = (open: boolean) => { if (open && menu.hidden) on.sound?.('paper'); menu.hidden = !open; menuBtn.setAttribute('aria-expanded', String(open)); };
     menuBtn.onclick = (e) => { e.stopPropagation(); show(menu.hidden === true); };
     addEventListener('pointerdown', (e) => { if (!menu.hidden && !menu.contains(e.target as Node) && e.target !== menuBtn) show(false); });
     addEventListener('keydown', (e) => { if (e.key === 'Escape') { show(false); this.shipMenu(null); } });
@@ -233,6 +247,14 @@ export class Hud {
       installTuner(this.root);
       this.root.querySelectorAll<HTMLElement>('[data-cheat]').forEach((b) => (b.onclick = () => on.cheat!(b.dataset.cheat as 'gold' | 'seals' | 'ap')));
     }
+    menu.addEventListener('input', (e) => {
+      const i = e.target as HTMLInputElement;
+      if (i.dataset.vol) on.volume?.(i.dataset.vol as 'music', +i.value);
+    });
+    // Full screen, and the button says which way it goes.
+    const full = this.q<HTMLElement>('#fullMenu');
+    full.onclick = () => { if (document.fullscreenElement) void document.exitFullscreen(); else void document.documentElement.requestFullscreen?.(); };
+    addEventListener('fullscreenchange', () => { full.textContent = document.fullscreenElement ? 'Leave full screen' : 'Full screen'; });
     menu.onclick = (e) => {
       const b = (e.target as Element).closest<HTMLElement>('.seg button');
       if (!b) return;
@@ -345,12 +367,27 @@ export class Hud {
     this.q<HTMLElement>('#noteCancel').onclick = () => showCompose(false);
     compose.onsubmit = (e) => { e.preventDefault(); if (!noteText.value.trim()) return; on.note(noteText.value); noteText.value = ''; this.q('#noteCount').textContent = '0 / 80'; showCompose(false); };
     this.q<HTMLElement>('#letterOk').onclick = () => { this.q<HTMLElement>('#letter').hidden = true; on.letterRead(); };
-    this.q<HTMLElement>('#belt').onclick = (e) => { const b = (e.target as Element).closest('button'); if (b && !b.classList.contains('off')) on.mode(b.dataset.tool as Mode); };
+    this.q<HTMLElement>('#belt').onclick = (e) => {
+      const b = (e.target as Element).closest<HTMLElement>('button'); if (!b) return;
+      if (!b.classList.contains('off')) { on.mode(b.dataset.tool as Mode); return; }
+      // A card that cannot be played shakes its head.
+      on.sound?.('denied');
+      b.classList.remove('nope'); void b.offsetWidth; b.classList.add('nope');
+    };
+    // The log of the battle, folded away under its button (L).
+    const logBtn = this.q<HTMLElement>('#logBtn'), logPanel = this.q<HTMLElement>('#logPanel');
+    this.toggleLog = (open: boolean = logPanel.hidden === true) => {
+      if (open && logPanel.hidden) { this.paintLog(); on.sound?.('paper'); }
+      logPanel.hidden = !open; logBtn.setAttribute('aria-expanded', String(open));
+    };
+    logBtn.onclick = (e) => { e.stopPropagation(); this.toggleLog(); };
+    addEventListener('pointerdown', (e) => { if (!logPanel.hidden && !logPanel.contains(e.target as Node) && e.target !== logBtn) this.toggleLog(false); });
     // The same tooltip explains the special actions above the helm, shown above the button.
     const belt = this.q<HTMLElement>('#belt');
     belt.addEventListener('pointerover', (e) => {
       const b = (e.target as Element).closest<HTMLElement>('button[data-tool]');
       if (!b) return;
+      if (b.dataset.tool !== this.hoverCard) { this.hoverCard = b.dataset.tool!; on.sound?.('cardHover'); }
       tip.innerHTML = `<b>${esc(b.dataset.name!)}</b><span class="cost">${b.dataset.ap} AP</span><p>${esc(b.dataset.help!)}</p>${b.dataset.why ? `<p class="why">${esc(b.dataset.why)}</p>` : ''}`;
       tip.hidden = false;
       // Above the card once it has risen out of the hand.
@@ -358,7 +395,7 @@ export class Hud {
       tip.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left + r.width / 2 - w / 2)) + 'px';
       tip.style.top = risen - tip.offsetHeight - 14 + 'px';
     });
-    belt.addEventListener('pointerleave', () => { tip.hidden = true; });
+    belt.addEventListener('pointerleave', () => { tip.hidden = true; this.hoverCard = ''; });
   }
 
   show(v: boolean) { this.root.hidden = !v; if (!v) this.q<HTMLElement>('.role').hidden = true; }
@@ -517,7 +554,10 @@ export class Hud {
   }
 
   /** Show the saved settings in the menu. */
-  setPrefs(muted: boolean, quality: string) { this.muted = muted; this.qualityPref = quality; this.paintPrefs(); }
+  setPrefs(muted: boolean, quality: string, vol?: Record<string, number>) {
+    this.muted = muted; this.qualityPref = quality; this.paintPrefs();
+    if (vol) this.root.querySelectorAll<HTMLInputElement>('[data-vol]').forEach((i) => { i.value = String(vol[i.dataset.vol!] ?? 1); });
+  }
   private paintPrefs() {
     this.root.querySelectorAll<HTMLElement>('#menu .seg button').forEach((b) => {
       const pref = b.parentElement!.dataset.pref, v = b.dataset.v;
@@ -577,6 +617,7 @@ export class Hud {
 
   update(c: Client, mode: Mode, note = '') {
     const p = c.pub, me = c.side, foe = c.foeSide, mine = c.myTurn;
+    this.round = p.phase === 'battle' ? p.round : 0;
     // When the battle opens the desk is laid out piece by piece instead of appearing all at once.
     if (p.phase === 'battle' && this.root.dataset.phase !== 'battle') {
       this.root.classList.remove('deal'); void this.root.offsetWidth; this.root.classList.add('deal');
@@ -600,7 +641,9 @@ export class Hud {
     this.windHelp = w < 0 ? 'A flat calm this round: the wind helps and hinders no ship.'
       : `The wind blows ${['east', 'south', 'west', 'north'][w]} this round. A ship sailing with it makes a square more; square-rigged ships (Ship of the Line, Frigate) cannot sail into it, and fore-and-aft rigs lose a square against it. Across the wind it changes nothing, and the Ironclad's steam ignores it. It veers each round, and one round in five is a flat calm.`;
     const need = krakenSeals(me);
-    this.q('#seals').innerHTML = Array.from({ length: need }, (_, i) => `<i class="${i < me.seals ? 'lit' : ''}"></i>`).join('') + `<span>${me.seals >= need ? 'The Kraken will answer.' : `${Math.min(me.seals, need)} of ${need} seals`}</span>`;
+    // A seal just won is pressed into place.
+    const stamp = this.prevSeals >= 0 && me.seals > this.prevSeals;
+    this.q('#seals').innerHTML = Array.from({ length: need }, (_, i) => `<i class="${i < me.seals ? 'lit' : ''}${stamp && i >= this.prevSeals && i < me.seals ? ' stamp' : ''}"></i>`).join('') + `<span>${me.seals >= need ? 'The Kraken will answer.' : `${Math.min(me.seals, need)} of ${need} seals`}</span>`;
     // Each captain's commander, named in their panel; the full card shows on hover.
     // Mine shows as soon as it is chosen (before Ready makes it public); theirs once they are ready.
     for (const [id, side] of [['#myCmd', { ...me, cmd: me.cmd ?? c.cmd }], ['#foeCmd', foe]] as const) {
@@ -644,7 +687,7 @@ export class Hud {
 
     this.q('#orderText').textContent = c.order ? c.order.text : p.phase === 'placement' ? 'Sealed until the battle begins.' : '—';
     this.q('#orderMeta').textContent = c.order ? `Reward ${c.order.reward} doubloons · ${Math.max(0, c.order.deadline - p.round + 1)} rounds left` : '';
-    this.q('#gold').textContent = String(me.doubloons);
+    this.purse(me.doubloons);
     this.q('#shop').innerHTML = ITEM_IDS.map((id) => {
       const it = ITEMS[id];
       const cost = price(me, id);
@@ -720,6 +763,21 @@ export class Hud {
     // A big hand overlaps more, so it never runs under the bottle or the hourglass.
     this.q<HTMLElement>('#belt').style.setProperty('--overlap', `${-16 - Math.max(0, n - 6) * 8}px`);
     cards.forEach((el, i) => { const k = i - (n - 1) / 2; el.style.setProperty('--r', `${k * 4}deg`); el.style.setProperty('--y', `${Math.abs(k) * 4}px`); el.style.zIndex = String(10 + n - i); });
+    // Shortcut keys, shown on the cards: the orders keep their letters, the other cards take 5 to 9 in hand order.
+    const LETTER: Record<string, string> = { fire: 'F', sail: 'S', turn: 'T', broadside: 'A' };
+    let num = 5;
+    for (const el of cards) {
+      const key = LETTER[el.dataset.tool!] ?? (num <= 9 ? String(num++) : '');
+      if (key) { el.dataset.key = key; el.insertAdjacentHTML('beforeend', `<kbd class="key" aria-hidden="true">${key}</kbd>`); }
+    }
+    // Cards new to the hand are dealt in from the deck, one after another.
+    if (p.phase === 'battle') {
+      const now = new Set(cards.map((el) => el.dataset.tool!));
+      const fresh = cards.filter((el) => !this.prevHand?.has(el.dataset.tool!));
+      fresh.forEach((el, i) => { el.style.setProperty('--d', `${i * 70}ms`); el.classList.add('dealt'); el.addEventListener('animationend', () => el.classList.remove('dealt'), { once: true }); });
+      if (fresh.length && this.prevHand) this.on.sound?.('cardDeal');
+      this.prevHand = now;
+    }
     const was = wasOn && wasOn !== mode ? cards.find((el) => el.dataset.tool === wasOn) : undefined;
     if (was) {
       was.style.transition = 'none'; was.classList.add('on'); void was.offsetWidth;
@@ -733,7 +791,11 @@ export class Hud {
     this.krakenReady = !!kcard && c.canKraken();
     this.q('#seals').classList.toggle('ready', this.krakenReady);
     const shownAp = Math.max(3, mine ? p.ap : 0);
-    this.q('#apSeals').innerHTML = Array.from({ length: shownAp }, (_, k) => `<i class="${mine && k < p.ap ? '' : 'spent'}"></i>`).join('');
+    // A seal spent cracks in two and falls away.
+    const crack = (k: number) => mine && this.prevAp > p.ap && k >= p.ap && k < this.prevAp;
+    this.q('#apSeals').innerHTML = Array.from({ length: shownAp }, (_, k) => `<i class="${mine && k < p.ap ? '' : 'spent'}${crack(k) ? ' crack' : ''}"></i>`).join('');
+    this.prevAp = mine ? p.ap : -1;
+    this.prevSeals = me.seals;
 
     const obj = this.q<HTMLElement>('#objective'), parts: string[] = [];
     if (role !== 'classic') {
@@ -781,6 +843,9 @@ export class Hud {
     if (kind === 'head') return;
     // Never over the turn ribbon: wait until it has passed.
     if (this.heralding) { this.held.push([text, kind]); return; }
+    this.logEntries.push({ text, kind, round: this.round });
+    if (this.logEntries.length > 200) this.logEntries.shift();
+    if (!this.q<HTMLElement>('#logPanel').hidden) this.paintLog();
     const t = this.q<HTMLElement>('#toast');
     t.textContent = text;
     t.className = 'toast show ' + kind;
@@ -788,5 +853,55 @@ export class Hud {
     void t.offsetWidth; // restart the fade
     t.style.animation = '';
   }
-  clearLog() { this.q('#toast').className = 'toast'; this.setVerdict(''); }
+  clearLog() { this.q('#toast').className = 'toast'; this.setVerdict(''); this.logEntries = []; this.prevHand = null; this.prevAp = this.prevGold = this.prevSeals = -1; this.toggleLog(false); }
+  private paintLog() {
+    const ol = this.q('#logPanel ol');
+    ol.innerHTML = this.logEntries.length
+      ? [...this.logEntries].reverse().map((e) => `<li class="${e.kind}">${e.round ? `<b>${e.round}</b>` : '<b>·</b>'}<span>${esc(e.text)}</span></li>`).join('')
+      : '<li class="none"><span>Nothing has happened yet.</span></li>';
+  }
+
+  /** A copy of a card as it stands in the hand, to fly it to where it was played (taken before the hand redraws). */
+  snapCard(tool: string): HTMLElement | null {
+    const b = this.root.querySelector<HTMLElement>(`#belt .ocard[data-tool="${tool}"]`);
+    if (!b) return null;
+    const r = b.getBoundingClientRect(), g = b.cloneNode(true) as HTMLElement;
+    g.classList.remove('on', 'off', 'dealt', 'nope'); g.classList.add('flying');
+    // Out of the hand, the card keeps the look it had there.
+    const cs = getComputedStyle(b);
+    Object.assign(g.style, { position: 'fixed', left: r.left + 'px', top: r.top + 'px', width: b.offsetWidth + 'px', height: b.offsetHeight + 'px', margin: '0', transform: 'none', transition: 'none', zIndex: '60',
+      backgroundImage: cs.backgroundImage, backgroundSize: '100% 100%', backgroundRepeat: 'no-repeat', borderRadius: cs.borderRadius, border: '0', padding: '0' });
+    return g;
+  }
+  /** The played card flies to the square it was played on and burns away there. */
+  flyCard(g: HTMLElement, x: number, y: number) {
+    this.on.sound?.('cardPlay');
+    this.root.appendChild(g);
+    const r = g.getBoundingClientRect(), dx = x - (r.left + r.width / 2), dy = y - (r.top + r.height / 2), spin = (Math.random() < 0.5 ? -1 : 1) * (10 + Math.random() * 14);
+    const a = g.animate([
+      { transform: 'translate(0,0) rotate(0) scale(1)', opacity: 1, filter: 'none' },
+      { transform: `translate(${dx * 0.55}px,${dy * 0.55 - 60}px) rotate(${spin / 2}deg) scale(.7)`, opacity: 1, filter: 'none', offset: 0.45 },
+      { transform: `translate(${dx}px,${dy}px) rotate(${spin}deg) scale(.32)`, opacity: 1, filter: 'brightness(1.6) sepia(.6)', offset: 0.75 },
+      { transform: `translate(${dx}px,${dy - 14}px) rotate(${spin}deg) scale(.26)`, opacity: 0, filter: 'brightness(3) sepia(1) saturate(4) blur(3px)' },
+    ], { duration: 620, easing: 'cubic-bezier(.3,.6,.4,1)' });
+    a.onfinish = () => g.remove();
+  }
+  /** The card for a shortcut key (5 to 9: the cards with no letter of their own, in the order of the hand). */
+  /** The purse counts up (or down) to its new sum; money coming in shows as a rising "+N". */
+  private purse(n: number) {
+    const el = this.q<HTMLElement>('#gold'), from = this.prevGold;
+    this.prevGold = n;
+    cancelAnimationFrame(this.goldTween);
+    if (from < 0 || from === n) { el.textContent = String(n); return; }
+    const t0 = performance.now(), dur = Math.min(900, 250 + Math.abs(n - from) * 12);
+    const step = () => { const u = Math.min(1, (performance.now() - t0) / dur), e = 1 - (1 - u) ** 3; el.textContent = String(Math.round(from + (n - from) * e)); if (u < 1) this.goldTween = requestAnimationFrame(step); };
+    step();
+    if (n > from) {
+      const money = this.q<HTMLElement>('#money');
+      money.classList.remove('gain'); void money.offsetWidth; money.classList.add('gain');
+      const f = Object.assign(document.createElement('b'), { className: 'plus', textContent: `+${n - from}` });
+      el.parentElement!.appendChild(f); f.addEventListener('animationend', () => f.remove());
+    }
+  }
+  cardForKey(k: string) { return this.root.querySelector<HTMLElement>(`#belt .ocard[data-key="${k.toUpperCase()}"]`); }
 }

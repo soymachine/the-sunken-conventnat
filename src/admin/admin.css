@@ -1,0 +1,38 @@
+:root { --ink: #14100a; --panel: #1f1810; --line: #4a3a22; --parch: #efe3c4; --amber: #d9a441; --wax: #b3382a; --dim: #a8987a; --body: "IM Fell English", Georgia, serif; --label: Cinzel, Georgia, serif; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--ink); color: var(--parch); font: 16px/1.4 var(--body); }
+header { position: sticky; top: 0; z-index: 5; display: flex; gap: 24px; align-items: center; justify-content: space-between; padding: 14px 28px; background: rgba(20, 16, 10, .96); border-bottom: 1px solid var(--line); }
+header h1 { margin: 0 0 4px; font: 700 22px var(--label); letter-spacing: .14em; color: var(--amber); text-transform: uppercase; }
+header p { margin: 0; max-width: 900px; color: var(--dim); font-size: 15px; }
+.actions { display: flex; gap: 10px; flex: none; }
+main { max-width: 1180px; margin: 0 auto; padding: 8px 28px 80px; }
+h2 { font: 700 15px var(--label); letter-spacing: .2em; text-transform: uppercase; color: var(--amber); margin: 30px 0 10px; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+button, .btn { font: 600 12px var(--label); letter-spacing: .06em; color: var(--parch); background: #2c2215; border: 1px solid var(--line); border-radius: 4px; padding: 7px 12px; cursor: pointer; text-decoration: none; }
+button:hover:not(:disabled), .btn:hover { border-color: var(--amber); }
+button:disabled { opacity: .35; cursor: default; }
+button.primary { background: var(--amber); color: var(--ink); border-color: var(--amber); }
+.snd { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; margin: 10px 0; transition: border-color .15s, box-shadow .15s; }
+.snd.over { border-color: var(--amber); box-shadow: 0 0 0 2px rgba(217, 164, 65, .35); }
+.snd.playing { border-color: #8a6a32; }
+.head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
+.head b { font: 700 15px var(--label); letter-spacing: .04em; }
+.head code { font: 12px ui-monospace, monospace; color: var(--dim); background: #120e08; padding: 1px 6px; border-radius: 3px; }
+.head p { flex-basis: 100%; margin: 0; color: var(--dim); font-size: 14px; font-style: italic; }
+.state { font: 600 11px var(--label); letter-spacing: .05em; padding: 2px 8px; border-radius: 10px; background: #2a2116; color: var(--dim); }
+.state.local { background: #4a3514; color: #ffd98a; }
+.state.published { background: #1f3322; color: #a9dcae; }
+.state.silent { background: #3d1712; color: #f0a090; }
+.wave { position: relative; height: 84px; margin: 10px 0; background: #120e08; border: 1px dashed var(--line); border-radius: 4px; }
+.wave canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: ew-resize; }
+.drop { position: absolute; inset: 0; display: none; place-items: center; text-align: center; color: var(--dim); font-size: 14px; pointer-events: none; }
+.snd.empty .drop { display: grid; }
+.snd.empty canvas { cursor: default; }
+.snd.over .drop { display: grid; color: var(--amber); background: rgba(217, 164, 65, .08); }
+.ctl { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; font-size: 14px; }
+.ctl label { display: inline-flex; align-items: center; gap: 6px; color: var(--dim); }
+.ctl input[type=number] { width: 72px; background: #120e08; color: var(--parch); border: 1px solid var(--line); border-radius: 3px; padding: 4px 6px; font: 13px ui-monospace, monospace; }
+.ctl input[type=range] { width: 120px; accent-color: var(--amber); }
+.ctl output { min-width: 44px; font: 12px ui-monospace, monospace; color: var(--parch); }
+.ctl .play, .ctl [data-act=stop] { width: 34px; padding: 6px 0; font-size: 13px; }
+.ctl .play { background: #3a2c16; }
+.grow { flex: 1; }

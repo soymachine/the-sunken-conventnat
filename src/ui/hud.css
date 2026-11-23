@@ -35,6 +35,9 @@ button { font-family: inherit; }
 .menu .seg button { flex: 1; font: 700 11px var(--label); letter-spacing: .12em; text-transform: uppercase; color: var(--ink); background: rgba(255, 250, 232, .22); border: 1px solid rgba(13, 11, 8, .28); border-radius: 3px; padding: 7px 4px; cursor: pointer; transition: background .2s, border-color .2s, color .2s; }
 .menu .seg button:hover { border-color: rgba(13, 11, 8, .55); }
 .menu .seg button.on { background: rgba(122, 84, 30, .14); border-color: rgba(13, 11, 8, .75); color: var(--wax); box-shadow: inset 0 1px 3px rgba(13, 11, 8, .2); }
+.menu .vols { display: grid; gap: 4px; margin-top: 8px; }
+.menu .vols label { display: grid; grid-template-columns: 84px 1fr; align-items: center; gap: 8px; font: 700 10px var(--label); letter-spacing: .1em; text-transform: uppercase; color: #4a3720; }
+.menu .vols input { width: 100%; accent-color: #7a3b1c; cursor: pointer; }
 .menu .meta { font-style: italic; font-size: 13.5px; line-height: 1.3; margin: 12px 0 0; color: #4a3720; }
 .foe { width: 280px; text-align: right; font-style: italic; color: var(--muted); font-size: 14px; display: flex; flex-direction: column; gap: 5px; align-items: flex-end; }
 #foeFleet { display: flex; gap: 9px; }
@@ -882,3 +885,54 @@ canvas[data-cur="helm"] { cursor: var(--cur-helm, pointer); }
 .shipViewer .help, .shipViewer .info { font: italic 13px var(--body); color: #b8a780; margin: 4px 0 0; }
 .shipViewer .close { margin-top: auto; text-align: center; }
 .shipViewer canvas { width: 100%; height: 100%; display: block; cursor: grab; }
+
+/* ---------- 0.34: life in the interface — cards dealt and played, seals that crack, a purse that counts, the log ---------- */
+/* Cards new to the hand slide in from the deck at the right, one after another. */
+.belt .ocard.dealt { animation: cardDeal .5s cubic-bezier(.2, .8, .3, 1.15) var(--d, 0ms) backwards; }
+@keyframes cardDeal { from { transform: translate(260px, 120px) rotate(28deg); opacity: 0; } to { transform: translateY(var(--y)) rotate(var(--r)); opacity: 1; } }
+/* A card that cannot be played shakes its head. */
+.belt .ocard.nope { animation: cardNope .38s ease-out; }
+@keyframes cardNope { 0%, 100% { transform: translateY(var(--y)) rotate(var(--r)); } 20% { transform: translate(-7px, var(--y)) rotate(calc(var(--r) - 3deg)); } 45% { transform: translate(6px, var(--y)) rotate(calc(var(--r) + 3deg)); } 70% { transform: translate(-3px, var(--y)) rotate(var(--r)); } }
+.ocard.flying { pointer-events: none; box-shadow: 0 0 18px rgba(255, 170, 80, .7), 0 10px 20px rgba(0, 0, 0, .6); }
+.ocard.flying .key { display: none; }
+/* The shortcut key, a small brass tag at the card's foot. */
+.ocard .key { position: absolute; left: 50%; bottom: -9px; transform: translateX(-50%); min-width: 17px; height: 17px; padding: 0 4px; box-sizing: border-box; display: grid; place-items: center; font: 700 10px var(--label); color: var(--ink); background: linear-gradient(#f6dc95, #b08d3c); border: 1px solid #5e4717; border-radius: 3px; box-shadow: 0 1px 3px rgba(0, 0, 0, .6); opacity: 0; transition: opacity .2s; pointer-events: none; }
+.belt .ocard:hover .key, .belt .ocard.on .key, .belt:hover .ocard .key { opacity: 1; }
+.belt .ocard.off .key { opacity: .4 !important; }
+/* An action-point seal spent: it splits in two and the halves fall away. */
+.apSeals i { position: relative; }
+.apSeals i.crack::before, .apSeals i.crack::after { content: ''; position: absolute; inset: -2px; background: url('/ui/ap_seal.webp') center / contain no-repeat; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .7)); pointer-events: none; }
+.apSeals i.crack::before { clip-path: polygon(0 0, 55% 0, 42% 35%, 58% 60%, 45% 100%, 0 100%); animation: sealHalfL .75s cubic-bezier(.3, 0, .7, 1) forwards; }
+.apSeals i.crack::after { clip-path: polygon(55% 0, 100% 0, 100% 100%, 45% 100%, 58% 60%, 42% 35%); animation: sealHalfR .75s cubic-bezier(.3, 0, .7, 1) forwards; }
+@keyframes sealHalfL { 0% { transform: scale(1.15); } 25% { transform: translate(-2px, 0) rotate(-6deg) scale(1.1); opacity: 1; } 100% { transform: translate(-12px, 26px) rotate(-40deg) scale(.8); opacity: 0; } }
+@keyframes sealHalfR { 0% { transform: scale(1.15); } 25% { transform: translate(2px, 0) rotate(6deg) scale(1.1); opacity: 1; } 100% { transform: translate(12px, 30px) rotate(45deg) scale(.8); opacity: 0; } }
+/* A covenant seal just won is pressed into the paper. */
+.seals i.stamp { animation: sealStamp .55s cubic-bezier(.3, 1.6, .5, 1) backwards; }
+@keyframes sealStamp { 0% { transform: scale(2.4) rotate(-30deg); opacity: 0; } 60% { transform: scale(.88) rotate(4deg); opacity: 1; } 100% { transform: none; } }
+/* The purse: a warm pulse and a rising "+N" when money comes in. */
+#money > span { position: relative; }
+#money.gain #gold { animation: goldPulse .7s ease-out; display: inline-block; }
+@keyframes goldPulse { 30% { transform: scale(1.35); color: #c98a1c; text-shadow: 0 0 8px rgba(255, 200, 90, .8); } }
+#money .plus { position: absolute; left: 0; top: -4px; font: 700 13px var(--label); color: #b8781a; text-shadow: 0 1px 0 rgba(255, 245, 220, .8); pointer-events: none; animation: plusRise 1.2s ease-out forwards; }
+@keyframes plusRise { from { transform: translateY(0); opacity: 1; } to { transform: translateY(-26px); opacity: 0; } }
+/* The battle's log. */
+#hud #logBtn { position: absolute; left: calc(50% + 252px); top: 17px; margin: 0; background: var(--parch); color: var(--ink); border-color: var(--brass); font-size: 10px; padding: 6px 11px; box-shadow: 0 2px 6px rgba(0, 0, 0, .5); }
+#hud #logBtn:hover, #hud #logBtn[aria-expanded="true"] { color: var(--wax); background: #fff8e6; }
+.logPanel { position: absolute; top: 58px; left: calc(50% + 120px); width: 400px; max-height: min(60vh, 520px); display: flex; flex-direction: column; z-index: 6; pointer-events: auto; }
+.logPanel h2 { margin-bottom: 8px; }
+.logPanel ol { list-style: none; margin: 0; padding: 0 6px 0 0; overflow-y: auto; flex: 1; }
+.logPanel li { display: grid; grid-template-columns: 26px 1fr; gap: 6px; padding: 5px 0; border-bottom: 1px solid rgba(13, 11, 8, .14); font-size: 15px; line-height: 1.3; color: var(--ink); }
+.logPanel li b { font: 700 10px var(--label); color: #7a6040; padding-top: 3px; text-align: right; }
+.logPanel li.good span { color: #6d4a10; } .logPanel li.bad span { color: var(--wax); }
+.logPanel li.none { grid-template-columns: 1fr; font-style: italic; color: #6b5233; }
+.logPanel .meta { margin-top: 8px; }
+/* Windows unfold like paper; the desk and the home fade in. */
+.menu:not([hidden]), .logPanel:not([hidden]), .compose:not([hidden]), .over:not([hidden]) .card { animation: paperUnfold .28s cubic-bezier(.2, .8, .3, 1.1); transform-origin: 50% 0; }
+@keyframes paperUnfold { from { opacity: 0; transform: perspective(700px) rotateX(-24deg) scaleY(.9); } to { opacity: 1; transform: none; } }
+#hud:not([hidden]), #lobby:not([hidden]) { animation: screenIn .6s ease-out; }
+@keyframes screenIn { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .belt .ocard.dealt, .belt .ocard.nope, .apSeals i.crack::before, .apSeals i.crack::after, .seals i.stamp, #money.gain #gold, #money .plus,
+  .menu:not([hidden]), .logPanel:not([hidden]), .compose:not([hidden]), .over:not([hidden]) .card, #hud:not([hidden]), #lobby:not([hidden]) { animation: none !important; }
+}
+.menu a.howRow { display: block; box-sizing: border-box; text-align: center; text-decoration: none; }

@@ -25,7 +25,7 @@ const EXACT: Record<string, string> = {
   'Online rooms need a Firebase project — see docs/FIREBASE_SETUP.md.': 'Las salas online necesitan un proyecto de Firebase: mira docs/FIREBASE_SETUP.md.',
   'Hailing the room…': 'Llamando a la sala…', 'No room with that code, or its battle is over.': 'No hay ninguna sala con ese código, o su batalla ya terminó.',
   // Settings
-  Settings: 'Ajustes', Sound: 'Sonido', On: 'Sí', Off: 'No', '3D quality': 'Calidad 3D', Auto: 'Auto', High: 'Alta', Low: 'Baja', Language: 'Idioma',
+  Settings: 'Ajustes', Sound: 'Sonido', On: 'Sí', Off: 'No', '3D quality': 'Calidad 3D', Auto: 'Auto', High: 'Alta', Low: 'Baja', Language: 'Idioma', Music: 'Música', Effects: 'Efectos', Ambience: 'Ambiente', Interface: 'Interfaz', 'Full screen': 'Pantalla completa', 'Leave full screen': 'Salir de pantalla completa',
   'Auto steps down by itself if the game runs slowly. Low drops shadows, glow and the print grade.': 'Auto baja la calidad sola si el juego va lento. Baja quita sombras, brillos y el tono de grabado.',
   Debug: 'Depuración', Sky: 'Cielo', 'Sun rays': 'Rayos de sol', Aurora: 'Aurora', Clear: 'Despejado', Pointer: 'Puntero', Brass: 'Latón', Quill: 'Pluma', System: 'Sistema',
   // Panels and desk
@@ -148,7 +148,7 @@ const EXACT: Record<string, string> = {
   'Double-Shotted — pick a square of enemy water. If it hits, the ball flies on one square further. Press R to turn which way.': 'Doble carga: elige una casilla de agua enemiga. Si impacta, la bala sigue una casilla más. Pulsa R para cambiar la dirección.',
   'into the wind': 'contra el viento', 'she cannot sail into the wind — turn her across it': 'no puede navegar contra el viento: vírala de través', 'she is holed and taking water': 'tiene una vía de agua',
   'the Kraken holds her': 'el Kraken la retiene', 'she is pinned by chain shot': 'está inmovilizada por palanqueta', 'she is too badly damaged': 'está demasiado dañada', 'there is no sea room': 'no hay espacio en el mar',
-  "Captain's Log": 'Cuaderno de bitácora', 'How to play ›': 'Cómo se juega ›', 'How to play': 'Cómo se juega',
+  "Captain's Log": 'Cuaderno de bitácora', Log: 'Bitácora', "Captain's log": 'Bitácora de la batalla', 'Newest first. Press L to open or close.': 'Lo más reciente arriba. Pulsa L para abrir o cerrar.', 'Nothing has happened yet.': 'Aún no ha pasado nada.', 'Everything that has happened in this battle (L)': 'Todo lo ocurrido en esta batalla (L)', 'How to play ›': 'Cómo se juega ›', 'How to play': 'Cómo se juega',
   'Flat calm': 'Calma chicha', 'flat calm': 'calma chicha', east: 'este', south: 'sur', west: 'oeste', north: 'norte', 'The wind': 'El viento', Wind: 'Viento',
   'A flat calm this round: the wind helps and hinders no ship.': 'Calma chicha esta ronda: el viento no ayuda ni frena a ningún barco.',
   // Maelstrom gauge and misc

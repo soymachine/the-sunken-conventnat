@@ -6,4 +6,6 @@ const { version } = JSON.parse(readFileSync(new URL('./package.json', import.met
 
 export default defineConfig({
   define: { __APP_VERSION__: JSON.stringify(version) },
+  // Two pages: the game, and the sound desk (admin.html).
+  build: { rollupOptions: { input: { main: 'index.html', admin: 'admin.html' } } },
 });

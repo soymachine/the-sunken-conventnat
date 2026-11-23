@@ -1,0 +1,68 @@
+{
+ "deck": {
+  "file": "boat-deck-at-sea-loop.mp3",
+  "start": 0.06,
+  "end": 9.97,
+  "gain": 1.05,
+  "fadeIn": 0,
+  "fadeOut": 0,
+  "loop": true
+ },
+ "rain": {
+  "file": "rain-heavy.mp3",
+  "start": 0.2,
+  "end": 31.46,
+  "gain": 1.95,
+  "fadeIn": 0,
+  "fadeOut": 0,
+  "loop": true
+ },
+ "thunder": {
+  "file": "thunder.mp3",
+  "start": 0,
+  "end": 8.6,
+  "gain": 1.15,
+  "fadeIn": 0,
+  "fadeOut": 2.5
+ },
+ "cannon": {
+  "file": "cannon-fire-distant.mp3",
+  "start": 0,
+  "end": null,
+  "gain": 1.0,
+  "fadeIn": 0,
+  "fadeOut": 0
+ },
+ "gull": {
+  "file": "seagull-cry.mp3",
+  "start": 0,
+  "end": null,
+  "gain": 0.45,
+  "fadeIn": 0,
+  "fadeOut": 0
+ },
+ "treasure": {
+  "file": "treasure-reveal.mp3",
+  "start": 0,
+  "end": null,
+  "gain": 1.05,
+  "fadeIn": 0,
+  "fadeOut": 0
+ },
+ "plunge": {
+  "file": "explosion-underwater.mp3",
+  "start": 0,
+  "end": null,
+  "gain": 1.05,
+  "fadeIn": 0,
+  "fadeOut": 0
+ },
+ "hit": {
+  "file": "fire-crackle-after-blast.mp3",
+  "start": 0,
+  "end": null,
+  "gain": 0.65,
+  "fadeIn": 0,
+  "fadeOut": 0
+ }
+}

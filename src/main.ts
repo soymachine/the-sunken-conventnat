@@ -81,6 +81,7 @@ const hud = new Hud({
   },
   sky: (what) => scene.sky(what),
   sound: (s) => sfx.play(s),
+  volume: (k, v) => sfx.setVolume(k, v),
   note: (text) => { if (!c.note(text)) hud.log('One bottle a turn: yours is already cast.', 'bad'); },
   letterRead: () => scene.clearBottles(),
   buy: (item) => { if (c.buy(item)) setMode(item === 'winds' ? mode : item); },
@@ -90,7 +91,7 @@ const hud = new Hud({
   ready: () => { if (!canPlace() || lifted) return; if (!legalPlacement(c.ships)) hud.log('The merchantman must start in the Colony: columns A to C.', 'bad'); else void c.ready(); },
   leave,
 });
-hud.setPrefs(sfx.muted, scene.getQuality());
+hud.setPrefs(sfx.muted, scene.getQuality(), sfx.vol);
 // ?debug exposes the scene and HUD to the console, to trigger weather and notices by hand.
 // Debug tuning that reaches into the 3D scene.
 addEventListener('tsc:tune', (e) => { const { v, n } = (e as CustomEvent<{ v: string; n: number }>).detail; if (v === '--wind') scene.setWindStrength(n); if (v === '--cursor-rot') setCursorRotation(n); });
@@ -226,6 +227,7 @@ async function drain() {
     if (m.t === 'move' && mine) sfx.play('creak');
     if (m.t === 'buy' && mine) sfx.play('coin');
     if (m.t === 'endTurn' && c.myTurn) sfx.play('bell');
+    if (m.t === 'endTurn' && !c.myTurn && mine) sfx.play('hourglass');
     describe(m, mine);
     refresh();
   }
@@ -348,6 +350,7 @@ function weather() {
   // Say plainly when a covenant seal comes in, and when three of them can wake the Kraken.
   const n = c.side.seals;
   if (seen.seals >= 0 && n > seen.seals && p.phase === 'battle') {
+    sfx.play('seal');
     hud.log(n >= 3 ? 'Three covenant seals! The Kraken will answer: choose Summon the Kraken above the helm.' : `A covenant seal is yours: ${n} of 3. Three summon the Kraken.`, 'good');
   }
   seen.seals = n;
@@ -426,6 +429,23 @@ function refreshHud() {
   hud.update(c, mode, foeOnline ? '' : 'lost at sea (disconnected)');
 }
 
+/** Music and the wind for where the game stands: the home, the battle (tense when a fleet is down to its
+ * last ship), and a sting once it is over. Nothing assigned in the sound bank: silence. */
+let stung = '';
+function soundtrack() {
+  if (!session) { sfx.setMusic('musicHome'); sfx.setWind(0); return; }
+  const p = c.pub;
+  if (p.phase === 'over') {
+    sfx.setWind(0);
+    const k = `${session.code ?? 'machine'}:${session.seed}`;
+    if (stung !== k) { stung = k; sfx.sting(p.winner === c.me ? 'stingWin' : 'stingLose'); }
+    return;
+  }
+  const mineLeft = c.ships.filter((s) => !s.sunk).length, foeLeft = c.ships.length - c.foeSide.sunk.length;
+  sfx.setMusic(p.phase === 'battle' && (mineLeft <= 1 || foeLeft <= 1) ? 'musicTense' : 'musicBattle');
+  sfx.setWind(p.phase !== 'battle' ? 0.3 : (p.wind ?? 0) < 0 ? 0 : p.storm ? 1 : 0.55);
+}
+
 let lastTurnKey = '';
 function refresh() {
   // The battle is over: against the machine it goes in the log at once; online, once the logs are checked.
@@ -433,6 +453,7 @@ function refresh() {
     if (!session.code) recordBattle(); else setTimeout(() => recordBattle(), 20000);
   }
   pointerFor();
+  soundtrack();
   if (!session) return;
   refreshHud();
   const invalid = !!lifted && (!fits(c.ships, selected!, selected!.id) || !legalPlacement(c.ships));
@@ -635,7 +656,12 @@ canvas.addEventListener('click', (e) => {
   if (!cell) return;
   hover = cell;
   if (c.pub.phase === 'placement') placementClick(cell);
-  else if (c.pub.phase === 'battle') battleClick(cell);
+  else if (c.pub.phase === 'battle') {
+    // A special card that did something flies from the hand to where it was played.
+    const m = mode, sent = c.sent, card = ['fire', 'sail', 'turn'].includes(m) ? null : hud.snapCard(m);
+    battleClick(cell);
+    if (card && c.sent > sent) hud.flyCard(card, e.clientX, e.clientY);
+  }
 });
 addEventListener('keydown', (e) => {
   if (!session || (e.target as Element).tagName === 'INPUT') return;
@@ -653,6 +679,8 @@ addEventListener('keydown', (e) => {
   if (k === 'a' || k === '4') setMode('broadside');
   if (k === 'r') { if (mode === 'double') dblDir = (dblDir + 1) % 4; else aimDir = aimDir === 'h' ? 'v' : 'h'; refresh(); }
   if (k === ' ' && myTurn()) { e.preventDefault(); c.endTurn(); }
+  if (k === 'l') hud.toggleLog();
+  if (k >= '5' && k <= '9') hud.cardForKey(k)?.click();
 });
 
 hud.show(false);
