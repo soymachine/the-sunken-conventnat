@@ -50,3 +50,15 @@ texture to 1024 px JPEG, and writes the deck height into the file. Options:
 The game keeps the model's texture and applies its own engraving shading over it. A model that is not
 prepared still loads: it is laid along its longest side, scaled to the hull length and set on the water,
 but its bow may face the wrong way and it may be too wide for its row.
+
+## Flat colours (0.33.1)
+
+The six ships no longer carry a texture. `tools/flatten_colors.py` gave every triangle one colour: the texture's
+dominant colour under it, snapped to a ten-colour palette per ship, with stray triangles taking their
+neighbours' colour. The colours are stored per vertex (COLOR_0). This removes the blur that came from the texture's
+many small UV islands. The originals are in git history (before 0.33.1); to redo one:
+
+    python3 tools/flatten_colors.py <original.glb> public/models/<kind>.glb --colors 10
+
+In the game, `src/render/ships.ts` paints the deck band, the inside of the bulwarks and the rail tops one plank
+colour, and draws pale canvas as clean cloth.

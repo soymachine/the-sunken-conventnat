@@ -15,8 +15,14 @@ varying vec3 vN;
 varying vec2 vUv;
 varying vec3 vW;
 varying vec3 vRoot, vRootN;
+varying vec3 vCol;
 void main() {
   vUv = uv;
+  #ifdef USE_COLOR
+  vCol = color.rgb;
+  #else
+  vCol = vec3(1.0);
+  #endif
   // Where this point lies in the prepared model's own space (hull 1.0 long, waterline at 0): decks are found there.
   vRoot = (uToRoot * vec4(position, 1.0)).xyz;
   vRootN = mat3(uToRoot) * normal;
@@ -40,6 +46,7 @@ varying vec3 vN;
 varying vec2 vUv;
 varying vec3 vW;
 varying vec3 vRoot, vRootN;
+varying vec3 vCol;
 void main() {
   // A ship seen through the Long Glass exists only inside the patch of water it shows.
   if (uClip.z > uClip.x && (vW.x < uClip.x || vW.x > uClip.z || vW.z < uClip.y || vW.z > uClip.w)) discard;
@@ -52,19 +59,26 @@ void main() {
   if (d <= 0.6) hatch -= 0.24 * step(0.55, fract((f.x + f.y) / 5.0));
   if (d <= 0.38) hatch -= 0.22 * step(0.55, fract((f.x - f.y) / 5.0));
   // A model made elsewhere brings its colours as a texture; the procedural ships use one flat colour per part.
-  vec3 base = uUseMap > 0.5 ? texture2D(uMap, vUv).rgb * uColor : uColor;
+  // Models flattened by tools/flatten_colors.py carry one colour per triangle (vCol is white otherwise).
+  vec3 base = (uUseMap > 0.5 ? texture2D(uMap, vUv).rgb * uColor : uColor) * vCol;
   // The generated decks were blotchy: any upward-facing surface at deck height is painted one clean plank colour,
   // with only the faintest seams along the ship so it still reads as timber.
   if (uDeck.z > 0.5 && normalize(vRootN).y > 0.4 && vRoot.y > uDeck.x && vRoot.y < uDeck.y) {
     float seam = 1.0 - 0.06 * smoothstep(0.86, 1.0, abs(sin(vRoot.z * 230.0)));
     base = uDeckColor * seam;
   }
+  // The inside of the bulwarks, just above the deck and facing in towards the centre line: a shade of the deck,
+  // so no dark broken patches ring the deck.
+  vec3 rn = normalize(vRootN);
+  // Likewise the rail tops and any slope there that does not face out over the side.
+  float outward = rn.z * sign(vRoot.z);
+  if (uDeck.z > 0.5 && vRoot.y > uDeck.x && vRoot.y < uDeck.y + 0.03 && (outward < 0.35 || rn.y > 0.15) && rn.y > -0.2 && !(rn.y > 0.4)) base = uDeckColor * (outward < -0.45 ? 0.82 : 0.9);
   vec3 lit = base * band * hatch;
   // Sail cloth on the generated models (pale texels above the decks): one clean canvas colour with soft light,
   // no bands or hatching, so the few large folded triangles read as cloth rather than broken patches.
-  if (uDeck.z > 0.5 && uUseMap > 0.5 && vRoot.y > uDeck.x + 0.06) {
-    // (The texture arrives in linear light, where pale canvas looks more saturated: compare channels by ratio.)
-    vec3 t = texture2D(uMap, vUv).rgb;
+  if (uDeck.z > 0.5 && vRoot.y > uDeck.x + 0.06) {
+    // (Colours arrive in linear light, where pale canvas looks more saturated: compare channels by ratio.)
+    vec3 t = uUseMap > 0.5 ? texture2D(uMap, vUv).rgb * vCol : vCol;
     float lum = dot(t, vec3(0.299, 0.587, 0.114)), mx = max(t.r, max(t.g, t.b)), mn = min(t.r, min(t.g, t.b));
     if (lum > 0.3 && mn > 0.45 * mx) lit = vec3(0.95, 0.9, 0.8) * (0.8 + 0.2 * d);
   }
@@ -262,7 +276,9 @@ export function buildShip(kind: Kind, len: number): ShipModel {
       const m = n as THREE.Mesh;
       if (!m.isMesh) return;
       const src = m.material as THREE.MeshStandardMaterial;
-      const im = src.map ? mat(0xffffff, 0, src.map) : mat(src.color ? src.color.getHex() : s.hull);
+      // A flattened model brings a colour per vertex; a textured one its texture; a plain part its own colour.
+      const im = src.map ? mat(0xffffff, 0, src.map) : m.geometry.attributes.color ? mat(0xffffff) : mat(src.color ? src.color.getHex() : s.hull);
+      if (m.geometry.attributes.color) im.vertexColors = true;
       (im.uniforms.uToRoot.value as THREE.Matrix4).multiplyMatrices(rootInv, m.matrixWorld);
       if (deckMode && deckH !== undefined && dk && !/sail|flag|crate|cannon|barrel|gun/i.test(m.name)) {
         (im.uniforms.uDeck.value as THREE.Vector3).set(dk.lo, dk.hi, 1);
