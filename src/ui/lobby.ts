@@ -1,6 +1,7 @@
 // The port: choose a name and how to play.
 import { Mode } from '../game/engine';
 import { Lang, getLang, setLang } from './i18n';
+import { openHowTo } from './howto';
 
 export interface LobbyHandlers {
   bot(name: string, mode: Mode): void;
@@ -31,6 +32,7 @@ export class Lobby {
         <img class="tentacle right" src="/ui/home_tentacle.webp" alt="" draggable="false" onerror="this.classList.add('missing')">
       <div class="card">
         <p class="claim">A competitive multiplayer naval strategy game inspired by the golden age of sailing warfare.</p>
+        <button type="button" class="howLink" id="howLink">How to play ›</button>
         <div class="flourish" aria-hidden="true">&#10086;</div>
         <label for="capName">Captain's name</label>
         <input id="capName" maxlength="20" autocomplete="off" placeholder="Sign your name" />
@@ -58,6 +60,7 @@ export class Lobby {
     const paintLang = () => this.root.querySelectorAll<HTMLElement>('.langPick button').forEach((b) => b.classList.toggle('on', b.dataset.lang === getLang()));
     this.root.querySelectorAll<HTMLElement>('.langPick button').forEach((b) => (b.onclick = () => { setLang(b.dataset.lang as Lang); paintLang(); }));
     paintLang();
+    this.q<HTMLElement>('#howLink').onclick = () => openHowTo();
     const name = this.q<HTMLInputElement>('#capName');
     try { name.value = localStorage.getItem('tsc:name') || ''; } catch { /* storage unavailable */ }
     const who = () => { const n = name.value.trim() || 'Captain'; try { localStorage.setItem('tsc:name', n); } catch { /* ignore */ } return n; };

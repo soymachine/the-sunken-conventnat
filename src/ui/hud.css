@@ -727,3 +727,36 @@ canvas[data-cur="helm"] { cursor: var(--cur-helm, pointer); }
 /* The heading's name sits inside the dial, below the boss, clear of the chart. */
 .windg small { left: 0; right: 0; top: 64%; margin: 0; font-size: 6.5px; letter-spacing: .12em; z-index: 1; pointer-events: none; }
 .windg .rose .pt { font-size: 8px; }
+
+/* ---------- how to play ---------- */
+#lobby .howLink { display: block; margin: 4px auto 0; background: none; border: 0; padding: 2px 6px; font: italic 600 15px var(--body); color: var(--wax); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+#lobby .howLink:hover { color: #7a1c14; }
+#hud #howBtn { position: absolute; right: calc(50% + 252px); top: 17px; margin: 0; width: 26px; padding: 6px 0; background: var(--parch); color: var(--ink); border-color: var(--brass); font-size: 11px; box-shadow: 0 2px 6px rgba(0, 0, 0, .5); }
+#hud #menuBtn { right: calc(50% + 252px + 32px); }
+#hud #howBtn:hover { color: var(--wax); }
+.menu .howRow { width: 100%; margin: 2px 0 12px; padding: 9px 10px; font-size: 11px; }
+.guide { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; background: rgba(13, 11, 8, .66); pointer-events: auto; }
+.guide .card { position: relative; width: min(980px, calc(100vw - 32px)); max-height: min(760px, calc(100vh - 32px)); display: flex; flex-direction: column; padding: 24px 28px 18px; }
+.guide h2 { font: 400 26px var(--display); letter-spacing: .04em; margin: 0 0 12px; padding-bottom: 8px; }
+.guide .x { position: absolute; top: 14px; right: 18px; background: none; border: 0; font: 400 28px var(--body); color: var(--ink); cursor: pointer; line-height: 1; }
+.guide .x:hover { color: var(--wax); }
+.guide .cols { display: grid; grid-template-columns: 230px 1fr; gap: 22px; min-height: 0; flex: 1; }
+.guide nav { display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
+.guide nav button { display: flex; align-items: center; gap: 9px; text-align: left; background: none; border: 0; border-radius: 3px; padding: 7px 8px; font: 15px var(--body); color: var(--ink); cursor: pointer; }
+.guide nav button i { flex: none; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; font: 700 10px var(--label); font-style: normal; color: #f3e6c4; background: radial-gradient(circle at 35% 30%, #c0563c, var(--wax) 60%, #4a160c); }
+.guide nav button:hover { background: rgba(13, 11, 8, .06); }
+.guide nav button.on { background: rgba(184, 49, 42, .12); box-shadow: inset 3px 0 0 var(--wax); font-weight: 600; }
+.guide section { overflow-y: auto; padding-right: 6px; min-height: 0; }
+.guide h3 { font: 700 13px var(--label); letter-spacing: .16em; text-transform: uppercase; color: var(--wax); margin: 2px 0 10px; }
+.guide section p { font: 16.5px/1.45 var(--body); margin: 0 0 10px; color: #2a1a0c; }
+.guide .shot { display: block; width: 100%; max-width: 560px; border-radius: 4px; border: 2px solid #8a6a3a; box-shadow: 0 4px 10px rgba(0, 0, 0, .35); margin: 0 0 12px; }
+.guide .shot.wide { max-width: 640px; }
+.guide .diagram { display: block; width: 100%; max-width: 520px; margin: 4px 0 12px; border-radius: 6px; border: 2px solid #8a6a3a; }
+.guide .faces { display: flex; gap: 10px; margin: 0 0 12px; }
+.guide .faces img { width: 64px; height: 64px; border-radius: 50%; border: 2px solid #b08d3c; box-shadow: 0 2px 5px rgba(0, 0, 0, .45); }
+.guide .foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(13, 11, 8, .25); }
+.guide .foot span { font: 700 11px var(--label); letter-spacing: .14em; color: #6b5233; }
+.guide .foot .plaque { padding: 9px 20px; font-size: 12px; min-width: 130px; }
+.guide .foot .plaque.dark { background: none; color: var(--ink); border: 1px solid rgba(13, 11, 8, .6); }
+.guide .foot .plaque:disabled { opacity: .35; }
+.guide .card { height: min(720px, calc(100vh - 32px)); }

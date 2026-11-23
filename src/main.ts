@@ -92,7 +92,7 @@ hud.setPrefs(sfx.muted, scene.getQuality());
 // ?debug exposes the scene and HUD to the console, to trigger weather and notices by hand.
 // Debug tuning that reaches into the 3D scene.
 addEventListener('tsc:tune', (e) => { const { v, n } = (e as CustomEvent<{ v: string; n: number }>).detail; if (v === '--wind') scene.setWindStrength(n); });
-if (new URLSearchParams(location.search).has('debug')) { Object.assign(window, { scene, hud }); Object.defineProperty(window, 'game', { get: () => ({ c, session }) }); }
+if (new URLSearchParams(location.search).has('debug')) { Object.assign(window, { scene, hud }); Object.defineProperty(window, 'game', { get: () => ({ c, session }) }); Object.assign(window, { refresh: () => refresh() }); }
 const lobby = new Lobby({
   bot: (name, mode) => start(new LocalSession(mode, 700, Math.random, true), name),
   create: async (name, mode) => {
