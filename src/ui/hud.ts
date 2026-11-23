@@ -206,6 +206,10 @@ export class Hud {
     this.q<HTMLElement>('#shipsMenu').onclick = () => { this.q<HTMLElement>('#menu').hidden = true; void openShipViewer(); };
     // The action points sit under the turn header, where the eye goes as a turn begins.
     this.q('#turnSub').after(this.q('#apSeals'));
+    // The latest event reads right under them: lower down, a raised card would cover it.
+    const toast = this.q<HTMLElement>('#toast');
+    this.q('#apSeals').after(toast);
+    toast.addEventListener('animationend', () => toast.classList.remove('show'));
     // Setting the glass down ends the turn: it is tapped onto the desk and goes dull until your turn comes back.
     this.q<HTMLElement>('#endTurn').onclick = () => {
       this.q<HTMLElement>('#endTurn img').animate([{ transform: 'none' }, { transform: 'translateY(5px) scale(.97)' }, { transform: 'none' }], { duration: 260, easing: 'ease-out' });
@@ -773,7 +777,7 @@ export class Hud {
   setVerdict(text: string) { this.q('#overVerify').textContent = text; }
 
   log(text: string, kind: '' | 'head' | 'bad' | 'good' = '') {
-    // There is no log panel for now: the latest event shows briefly above the controls.
+    // There is no log panel for now: the latest event shows briefly under the action points.
     if (kind === 'head') return;
     // Never over the turn ribbon: wait until it has passed.
     if (this.heralding) { this.held.push([text, kind]); return; }

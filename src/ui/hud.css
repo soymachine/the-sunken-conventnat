@@ -519,6 +519,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); out
 /* ---------- action points: a row of seals under the turn header ---------- */
 #hud .status .apSeals { flex-direction: row; justify-content: center; gap: 6px; padding: 7px 0 0; }
 #hud .status .apSeals i { width: 24px; height: 24px; }
+/* The latest event, under the action points; it takes room only while it shows. */
+#hud .status .toast { position: static; display: none; transform: none; margin: 8px auto 0; width: max-content; max-width: min(560px, 80vw); white-space: normal; text-shadow: none; color: var(--parch); }
+#hud .status .toast.show { display: block; animation: toastTop 4.5s ease-out forwards; }
+#hud .status .toast.good { color: var(--amber); } #hud .status .toast.bad { color: #e0795c; }
+@keyframes toastTop { 0% { opacity: 0; transform: translateY(-6px); } 8%, 75% { opacity: 1; transform: none; } 100% { opacity: 0; transform: none; } }
 
 /* ---------- the hand sits higher, so each card's name shows; a raised card keeps the spot it rose from ---------- */
 .belt { bottom: var(--belt-y); }
