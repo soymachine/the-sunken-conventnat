@@ -2,7 +2,7 @@
 // ride the swell and sink; everything else is rebuilt from the public state.
 import * as THREE from 'three';
 import { Pub, SidePub, maelstromIn } from '../game/engine';
-import { Kind, N, START_COLS, Ship, ShotOutcome, ZONE, headingOf, shipCells } from '../game/rules';
+import { Kind, N, START_COLS, Ship, ShotOutcome, ZONE, headingOf, inBoard, shipCells } from '../game/rules';
 import { Fx } from './fx';
 import { Kraken } from './kraken';
 import { Weather } from './weather';
@@ -100,7 +100,7 @@ const M = {
   chest: new THREE.MeshLambertMaterial({ color: 0x7a5a1e }), debris: new THREE.MeshLambertMaterial({ color: 0x2a2116 }), ball: new THREE.MeshLambertMaterial({ color: 0x15110b }),
   chestDim: new THREE.MeshLambertMaterial({ color: 0x5a4a2a, transparent: true, opacity: 0.6 }), goldDim: new THREE.MeshBasicMaterial({ color: 0x8a6f2c, transparent: true, opacity: 0.6 }),
   sealDim: new THREE.MeshBasicMaterial({ color: 0x6b2a1c, transparent: true, opacity: 0.6 }),
-  chain: new THREE.MeshLambertMaterial({ color: C.wax }), seal: new THREE.MeshBasicMaterial({ color: new THREE.Color(0.75, 0.13, 0.06) }), line: new THREE.LineBasicMaterial({ color: C.ink }),
+  mast: new THREE.MeshLambertMaterial({ color: 0x4a3220 }), chain: new THREE.MeshLambertMaterial({ color: C.wax }), seal: new THREE.MeshBasicMaterial({ color: new THREE.Color(0.75, 0.13, 0.06) }), line: new THREE.LineBasicMaterial({ color: C.ink }),
   lineAmber: new THREE.LineBasicMaterial({ color: C.amber }), lineWax: new THREE.LineBasicMaterial({ color: C.wax }),
 };
 
@@ -305,6 +305,12 @@ export class SeaScene {
   private dir = new THREE.Vector3(0, 1, 0.95).normalize();
   private camPos = new THREE.Vector3();
   private shakeAmt = 0;
+  /** A ship's magazine going up: the ring on the water, the smoke that hangs after, the wreckage in the air. */
+  private blasts: { at: THREE.Vector3; side: Side; t: number; k: number; ring: THREE.Mesh }[] = [];
+  private chunks: { m: THREE.Mesh; v: THREE.Vector3; spin: THREE.Vector3; t: number; landed: number; burn: boolean; mast: boolean }[] = [];
+  /** A beat where everything nearly stops (seconds of real time left), and a warm flash over the whole picture. */
+  private hitStop = 0;
+  private flashAmt = 0;
   private extent = { x: HALF, z: N };
   private last: View | null = null;
   private quality: 'high' | 'low';
@@ -376,7 +382,10 @@ export class SeaScene {
     void loadShipModels().then((n) => { if (n) { for (const o of this.ships.values()) this.shipsGroup.remove(o.root); this.ships.clear(); if (this.last) this.sync(this.last); } });
     let prev = performance.now();
     const loop = () => {
-      const now = performance.now(), dt = Math.min(0.05, (now - prev) / 1000);
+      const now = performance.now(), real = Math.min(0.05, (now - prev) / 1000);
+      // The hit-stop: for a moment after a great blast the world almost holds its breath.
+      const dt = this.hitStop > 0 ? real * 0.06 : real;
+      this.hitStop = Math.max(0, this.hitStop - real);
       prev = now;
       this.time += dt;
       this.frame(dt, this.time);
@@ -537,6 +546,7 @@ export class SeaScene {
   reset() {
     for (const o of this.ships.values()) this.shipsGroup.remove(o.root);
     this.ships.clear(); this.marks.clear(); this.misc.clear(); this.hl.clear();
+    this.blasts.length = 0; this.chunks.length = 0; this.flashAmt = 0; this.hitStop = 0;
     this.seas.own.clear(); this.seas.enemy.clear();
     this.kraken.setZone(null);
     this.rain(false);
@@ -753,6 +763,8 @@ export class SeaScene {
     this.hemi.intensity = 2.0 * (1 - 0.5 * night); this.sun.intensity = 1.7 * (1 - 0.65 * night);
     this.hemi.color.setRGB(1, 0.945 - 0.15 * night, 0.81 + 0.1 * night);
     this.post?.grade.copy(this.turnGrade).multiply(new THREE.Vector3(1 - 0.42 * night, 1 - 0.32 * night, 1 - 0.18 * night));
+    // A great blast lights the whole table warm for a moment.
+    if (this.flashAmt > 0) { const f = this.flashAmt ** 2; this.post?.grade.multiply(new THREE.Vector3(1 + 0.9 * f, 1 + 0.55 * f, 1 + 0.2 * f)); }
     for (const b of [...this.bottles]) {
       const k = Math.min(1, (t - b.t0) / b.dur);
       if (k < 1) {
@@ -777,6 +789,7 @@ export class SeaScene {
     }
     // Now and then a gull cries overhead (they keep away from storms).
     if ((this.nextGull -= dt) < 0) { this.nextGull = 14 + Math.random() * 26; if (this.weather.gullsHere && this.last?.pub.phase === 'battle') this.sound('gull'); }
+    this.blastFrame(dt, t);
     this.fx.update(dt);
     this.shakeAmt *= Math.exp(-dt * 7);
     this.camera.position.copy(this.camPos);
@@ -948,7 +961,7 @@ export class SeaScene {
     const wreck = (o: ShipObj) => {
       if (o.state !== 'afloat') return;
       if (v.quiet) { o.state = 'wreck'; o.sink = 1; o.model.sails.visible = false; o.root.visible = false; }
-      else { o.state = 'sinking'; this.sound('explosion'); this.sound('sink'); setTimeout(() => this.sound('mast'), 700); }
+      else { o.state = 'sinking'; this.sound('sink'); const at = o.root.position.clone(), side = o.side, len = o.len; setTimeout(() => this.magazine(at, side, len), 260); }
     };
     for (const s of v.ships) {
       const key = 'o' + s.id, o = this.ship(key, s.kind, s.len, 'own');
@@ -1193,6 +1206,70 @@ export class SeaScene {
     if (outcome === 'miss' || outcome === 'wreck') { this.fx.water(at); this.sound('plunge'); }
     else if (outcome === 'clang') { this.fx.clang(at.setY(0.5)); this.shake(0.12); this.sound('clang'); }
     else { this.fx.explosion(at.setY(0.45)); this.shake(outcome === 'sunk' ? 0.5 : 0.28); this.sound('hit'); }
+  }
+
+  /** The powder magazine of a lost ship goes up: the great explosion, scaled to her length. */
+  private magazine(at: THREE.Vector3, side: Side, len: number) {
+    const k = 0.75 + len * 0.13, base = at.clone().setY(0.45);
+    this.fx.blast(base, k);
+    this.sound('explosion');
+    this.shake(calm ? 0 : 0.55 + len * 0.08);
+    if (!calm) { this.hitStop = 0.11; this.flashAmt = 1; }
+    // A ring of pressure races out over the water, and the sea heaves around her.
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.82, 1, 64), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 1.25, 0.8), transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
+    ring.rotation.x = -Math.PI / 2; ring.position.set(at.x, 0.14, at.z); ring.scale.setScalar(0.3);
+    this.misc.add(ring);
+    this.blasts.push({ at: at.clone(), side, t: this.time, k, ring });
+    const cx = Math.floor(at.x - origin[side].x), cz = Math.floor(at.z - origin[side].z);
+    for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) { const d = Math.hypot(dx, dy); if (d <= 2.3 && inBoard(cx + dx, cz + dy)) this.seas[side].bump(cx + dx, cz + dy, 0.5 * (1 - d / 3)); }
+    // Wreckage thrown into the air: planks (some burning) and a broken mast.
+    const n = 6 + len * 2;
+    for (let i = 0; i <= n; i++) {
+      const mast = i === n, a = Math.random() * Math.PI * 2, out = (mast ? 1.2 : 1.6 + Math.random() * 2.4) * k;
+      const geo = mast ? new THREE.CylinderGeometry(0.03, 0.045, 0.9 + len * 0.18, 6) : G.plank;
+      const m = new THREE.Mesh(geo, mast ? M.mast : M.debris);
+      if (!mast) m.scale.set(0.8 + Math.random() * 1.8, 1 + Math.random(), 0.8 + Math.random() * 0.8);
+      m.position.copy(base).add(new THREE.Vector3((Math.random() - 0.5) * 0.4, Math.random() * 0.3, (Math.random() - 0.5) * 0.4));
+      m.rotation.set(Math.random() * 3, Math.random() * 3, Math.random() * 3);
+      this.misc.add(m);
+      this.chunks.push({ m, mast, burn: !mast && Math.random() < 0.55, t: this.time, landed: 0,
+        v: new THREE.Vector3(Math.cos(a) * out, (mast ? 6.5 : 3.5 + Math.random() * 4) * Math.sqrt(k), Math.sin(a) * out),
+        spin: new THREE.Vector3((Math.random() - 0.5) * 14, (Math.random() - 0.5) * 10, (Math.random() - 0.5) * 14) });
+    }
+  }
+  /** One frame of the blasts and their wreckage. */
+  private blastFrame(dt: number, t: number) {
+    for (const b of [...this.blasts]) {
+      const age = t - b.t, u = Math.min(1, age / 0.9);
+      b.ring.scale.setScalar(0.3 + (1 - (1 - u) ** 3) * 4.2 * b.k);
+      (b.ring.material as THREE.MeshBasicMaterial).opacity = 0.9 * (1 - u);
+      if (u >= 1 && b.ring.parent) { this.misc.remove(b.ring); b.ring.geometry.dispose(); }
+      // Smoke hangs over the place for a few seconds, thinning.
+      const s = 1 - age / 7;
+      if (s > 0) this.fx.plume(b.at.clone().setY(0.3), dt, s);
+      else this.blasts.splice(this.blasts.indexOf(b), 1);
+    }
+    for (const c of [...this.chunks]) {
+      if (!c.landed) {
+        c.v.y -= 9.8 * dt;
+        c.m.position.addScaledVector(c.v, dt);
+        c.m.rotation.x += c.spin.x * dt; c.m.rotation.y += c.spin.y * dt; c.m.rotation.z += c.spin.z * dt;
+        if (c.burn) this.fx.spark(c.m.position);
+        const sea = calm ? 0 : waveH(c.m.position.x, c.m.position.z, t);
+        if (c.v.y < 0 && c.m.position.y <= sea + 0.05) {
+          c.landed = t; this.fx.splashSmall(c.m.position.clone().setY(0.1));
+          if (c.mast) this.sound('mast');
+          c.m.rotation.set(0, c.m.rotation.y, Math.PI / 2 * (c.mast ? 1 : 0));
+        }
+      } else {
+        // Afloat a while on the swell, then gone under.
+        const age = t - c.landed, sea = calm ? 0 : waveH(c.m.position.x, c.m.position.z, t);
+        c.m.position.y = sea + 0.06 - Math.max(0, age - 5) * 0.08;
+        c.m.rotation.x = 0.15 * Math.sin(t * 1.9 + c.spin.x);
+        if (age > 7) { this.misc.remove(c.m); if (c.mast) c.m.geometry.dispose(); this.chunks.splice(this.chunks.indexOf(c), 1); }
+      }
+    }
+    this.flashAmt = Math.max(0, this.flashAmt - dt * 2.2);
   }
 
   /** The Kraken brings a tentacle down on a cell. Resolves on impact. */

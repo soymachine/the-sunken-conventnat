@@ -2,10 +2,9 @@
 // What is kept lives in this browser (IndexedDB) and the game on this browser plays it at once. "Descargar
 // paquete" makes a .zip with the new files and bank.json, to be published with the game (unzip into public/sfx).
 import './admin.css';
-import { Bank, Entry, Local, SOUNDS, SoundDef, blank, localAll, localDel, localSet, publishedBank } from '../audio/bank';
+import { Bank, Entry, Local, SOUNDS, SYNTH, SoundDef, blank, localAll, localDel, localSet, publishedBank } from '../audio/bank';
 import { zip } from './zip';
 
-const SYNTH = new Set(['cannon', 'splash', 'hit', 'clang', 'sink', 'coin', 'glass', 'click', 'bell', 'roar', 'thunder', 'creak', 'plunge', 'treasure']);
 const tell = (() => { try { const ch = new BroadcastChannel('tsc-sounds'); return () => ch.postMessage('changed'); } catch { return () => {}; } })();
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
 const sec = (s: number) => s.toFixed(2);

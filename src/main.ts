@@ -10,6 +10,7 @@ import { LocalSession, Session } from './net/session';
 import { Cell, Ghost, Highlight, SeaScene } from './render/scene';
 import { Sfx } from './ui/audio';
 import { startI18n } from './ui/i18n';
+import { boot } from './ui/boot';
 import { setCursorRotation } from './ui/cursors';
 import { Hud, Mode } from './ui/hud';
 import { Lobby } from './ui/lobby';
@@ -17,6 +18,7 @@ import { Lobby } from './ui/lobby';
 const AMBER = 0xd9a441, WAX = 0x8c2f1b, INK = 0x0d0b08, FOG = 0xcfc4a8;
 // Spanish or English, chosen in Settings (or from the browser's language at first).
 startI18n();
+void boot();
 const canvas = document.getElementById('sea') as HTMLCanvasElement;
 const scene = new SeaScene(canvas);
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -90,14 +92,16 @@ const hud = new Hud({
   rotate: rotateLifted,
   ready: () => { if (!canPlace() || lifted) return; if (!legalPlacement(c.ships)) hud.log('The merchantman must start in the Colony: columns A to C.', 'bad'); else void c.ready(); },
   leave,
+  rematch: () => { if (!lastBot) return; const b = lastBot; leave(); void start(new LocalSession(b.mode, 700, Math.random, true), b.name); },
 });
+let lastBot: { name: string; mode: Session['mode'] } | null = null;
 hud.setPrefs(sfx.muted, scene.getQuality(), sfx.vol);
 // ?debug exposes the scene and HUD to the console, to trigger weather and notices by hand.
 // Debug tuning that reaches into the 3D scene.
 addEventListener('tsc:tune', (e) => { const { v, n } = (e as CustomEvent<{ v: string; n: number }>).detail; if (v === '--wind') scene.setWindStrength(n); if (v === '--cursor-rot') setCursorRotation(n); });
 if (new URLSearchParams(location.search).has('debug')) { Object.assign(window, { scene, hud }); Object.defineProperty(window, 'game', { get: () => ({ c, session }) }); Object.assign(window, { refresh: () => refresh() }); }
 const lobby = new Lobby({
-  bot: (name, mode) => start(new LocalSession(mode, 700, Math.random, true), name),
+  bot: (name, mode) => { lastBot = { name, mode }; void start(new LocalSession(mode, 700, Math.random, true), name); },
   create: async (name, mode) => {
     lobby.busy(true);
     try {
@@ -168,6 +172,20 @@ async function start(s: Session, name: string) {
   Object.assign(window, { __client: c, __screen: (cell: Cell) => scene.screen(cell), __bot: (s as LocalSession).bot });
 }
 
+/** The figures of a finished battle, for the report and the captain's log. */
+const CARD_MSGS = new Set(['bind', 'squall', 'gale', 'sound', 'kraken', 'power', 'scan', 'peek', 'pact', 'current', 'fog', 'repair', 'winds']);
+function battleStats() {
+  const mine = (m: Msg) => m.by === c.me;
+  // My shots, as the other captain answered them (not the Kraken's strikes, nor the maelstrom).
+  const answers = c.log.filter((m) => m.t === 'result' && !mine(m) && !m.kraken).flatMap((m) => (m.t === 'result' ? m.results : []));
+  return {
+    rounds: c.pub.round, shots: answers.length, hits: answers.filter((r) => r.r === 'hit' || r.r === 'sunk' || r.r === 'flood').length,
+    sank: c.foeSide.sunk.length, lost: c.side.sunk.length, gold: c.side.doubloons,
+    cards: c.log.filter((m) => mine(m) && (CARD_MSGS.has(m.t) || (m.t === 'attack' && m.src !== 'shot'))).length,
+    krakens: c.log.filter((m) => m.t === 'kraken' && mine(m)).length,
+  };
+}
+
 /** When a battle ends, a signed-in captain's log gains it (online: once the other's log is checked, or after 20 s). */
 let recorded = '';
 function recordBattle(fair?: boolean) {
@@ -175,16 +193,13 @@ function recordBattle(fair?: boolean) {
   const key = `${session.code ?? 'machine'}:${session.seed}`;
   if (recorded === key) return;
   recorded = key;
-  const mine = (m: Msg) => m.by === c.me;
-  // My shots, as the other captain answered them (not the Kraken's strikes, nor the maelstrom).
-  const answers = c.log.filter((m) => m.t === 'result' && !mine(m) && !m.kraken).flatMap((m) => (m.t === 'result' ? m.results : []));
+  const st = battleStats();
   void recordMatch({
     vs: session.code ? 'online' : 'machine', mode: session.mode, role: c.role,
     opponent: c.foeSide.name || (session.code ? '' : 'The machine'),
     cmd: c.side.cmd ?? 'none', foeCmd: c.foeSide.cmd ?? 'none',
     result: c.pub.winner === c.me ? 'win' : 'loss', reason: c.pub.reason ?? 'fleet', rounds: c.pub.round,
-    shots: answers.length, hits: answers.filter((r) => r.r === 'hit' || r.r === 'sunk' || r.r === 'flood').length,
-    sank: c.foeSide.sunk.length, lost: c.side.sunk.length, krakens: c.log.filter((m) => m.t === 'kraken' && mine(m)).length,
+    shots: st.shots, hits: st.hits, sank: st.sank, lost: st.lost, krakens: st.krakens,
     ...(fair === undefined ? {} : { fair }),
   }).catch(() => { /* the log could not be written: the battle simply is not kept */ });
 }
@@ -438,7 +453,7 @@ function soundtrack() {
   if (p.phase === 'over') {
     sfx.setWind(0);
     const k = `${session.code ?? 'machine'}:${session.seed}`;
-    if (stung !== k) { stung = k; sfx.sting(p.winner === c.me ? 'stingWin' : 'stingLose'); }
+    if (stung !== k) { stung = k; sfx.sting(p.winner === c.me ? 'stingWin' : 'stingLose'); hud.setResults(battleStats(), !session.code); }
     return;
   }
   const mineLeft = c.ships.filter((s) => !s.sunk).length, foeLeft = c.ships.length - c.foeSide.sunk.length;

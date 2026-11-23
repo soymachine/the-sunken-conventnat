@@ -148,7 +148,7 @@ const EXACT: Record<string, string> = {
   'Double-Shotted — pick a square of enemy water. If it hits, the ball flies on one square further. Press R to turn which way.': 'Doble carga: elige una casilla de agua enemiga. Si impacta, la bala sigue una casilla más. Pulsa R para cambiar la dirección.',
   'into the wind': 'contra el viento', 'she cannot sail into the wind — turn her across it': 'no puede navegar contra el viento: vírala de través', 'she is holed and taking water': 'tiene una vía de agua',
   'the Kraken holds her': 'el Kraken la retiene', 'she is pinned by chain shot': 'está inmovilizada por palanqueta', 'she is too badly damaged': 'está demasiado dañada', 'there is no sea room': 'no hay espacio en el mar',
-  "Captain's Log": 'Cuaderno de bitácora', Log: 'Bitácora', "Captain's log": 'Bitácora de la batalla', 'Newest first. Press L to open or close.': 'Lo más reciente arriba. Pulsa L para abrir o cerrar.', 'Nothing has happened yet.': 'Aún no ha pasado nada.', 'Everything that has happened in this battle (L)': 'Todo lo ocurrido en esta batalla (L)', 'How to play ›': 'Cómo se juega ›', 'How to play': 'Cómo se juega',
+  "Captain's Log": 'Cuaderno de bitácora', 'Weighing anchor…': 'Levando anclas…', 'Battle report': 'Parte de batalla', Rematch: 'Revancha', Rounds: 'Rondas', 'Shots fired': 'Disparos', Hits: 'Impactos', Accuracy: 'Precisión', 'Ships sunk': 'Barcos hundidos', 'Ships lost': 'Barcos perdidos', 'Cards played': 'Cartas jugadas', 'Kraken summoned': 'Kraken invocado', Log: 'Bitácora', "Captain's log": 'Bitácora de la batalla', 'Newest first. Press L to open or close.': 'Lo más reciente arriba. Pulsa L para abrir o cerrar.', 'Nothing has happened yet.': 'Aún no ha pasado nada.', 'Everything that has happened in this battle (L)': 'Todo lo ocurrido en esta batalla (L)', 'How to play ›': 'Cómo se juega ›', 'How to play': 'Cómo se juega',
   'Flat calm': 'Calma chicha', 'flat calm': 'calma chicha', east: 'este', south: 'sur', west: 'oeste', north: 'norte', 'The wind': 'El viento', Wind: 'Viento',
   'A flat calm this round: the wind helps and hinders no ship.': 'Calma chicha esta ronda: el viento no ayuda ni frena a ningún barco.',
   // Maelstrom gauge and misc
@@ -257,7 +257,7 @@ const PATTERNS: [RegExp, (m: RegExpMatchArray) => string][] = [
   [/^From round (\d+)\.$/, (m) => `Desde la ronda ${m[1]}.`],
   [/^Version (.+)$/, (m) => `Versión ${m[1]}`],
   [/^Debug: (.+)\.$/, (m) => `Depuración: ${m[1].replace('doubloons', 'doblones').replace('seals', 'sellos').replace('action points', 'puntos de acción')}.`],
-  [/^The enemy fleet lies on the seabed after (\d+) rounds\.$/, (m) => `La flota enemiga yace en el fondo del mar tras ${m[1]} rondas.`],
+  [/^The enemy fleet lies on the seabed after (\d+) rounds?\.$/, (m) => `La flota enemiga yace en el fondo del mar tras ${m[1]} ronda${m[1] === '1' ? '' : 's'}.`],
   [/^Your last ship went down in round (\d+)\.$/, (m) => `Tu último barco se hundió en la ronda ${m[1]}.`],
   [/^The merchantman made the Home Port with (\d) of 3 crates aboard\.$/, (m) => `El mercante llegó a Puerto con ${m[1]} de 3 cajas a bordo.`],
   [/^The merchantman slipped past you with (\d) of 3 crates\.$/, (m) => `El mercante se te escapó con ${m[1]} de 3 cajas.`],

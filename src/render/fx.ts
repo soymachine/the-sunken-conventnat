@@ -113,6 +113,42 @@ export class Fx {
     for (let i = 0; i < 16; i++) this.soft.emit(p, v3(R(-2.6, 2.6), R(2, 5), R(-2.6, 2.6)), R(0.5, 1), R(0.07, 0.13), [0.12, 0.08, 0.04], 1, { g: -11 });
     this.smoke(p, 16, 0.2, 1.5, 0.8, 2.2);
   }
+  /**
+   * The powder magazine going up as a ship is lost: a white-hot flash, a fireball in two stages, a burst of black
+   * smoke, burning splinters thrown high and a ring of spray racing out over the water. `k` scales it to the ship.
+   */
+  blast(p: V, k: number) {
+    const HOT: [number, number, number] = [7, 5.6, 3.2], RED: [number, number, number] = [3, 0.85, 0.18];
+    for (let i = 0; i < 16; i++) this.glow.emit(p, v3(R(-0.6, 0.6), R(0, 1), R(-0.6, 0.6)), R(0.1, 0.2), R(1.2, 2.0) * k, HOT, 1, { grow: 0.8 });
+    for (let i = 0; i < 70; i++) {
+      const a = R(0, Math.PI * 2), sp = R(1.2, 4.2) * k;
+      this.glow.emit(p.clone().add(v3(R(-0.2, 0.2), R(0, 0.3), R(-0.2, 0.2))), v3(Math.cos(a) * sp, R(1, 4.5) * k, Math.sin(a) * sp), R(0.45, 0.9), R(0.6, 1.25) * k, FIRE, 1, { drag: 2.6, g: 1.2, grow: 1.1 });
+    }
+    for (let i = 0; i < 40; i++) this.glow.emit(p.clone().add(v3(R(-0.4, 0.4), R(0.2, 0.8), R(-0.4, 0.4))), v3(R(-0.8, 0.8), R(1.2, 2.6) * k, R(-0.8, 0.8)), R(0.9, 1.5), R(0.7, 1.3) * k, RED, 0.85, { drag: 1.4, grow: 0.9 });
+    for (let i = 0; i < 46; i++) {
+      const a = R(0, Math.PI * 2), sp = R(0.6, 2.4) * k;
+      this.soft.emit(p.clone().add(v3(R(-0.3, 0.3), R(0.2, 0.9), R(-0.3, 0.3))), v3(Math.cos(a) * sp + this.wind.x, R(0.8, 2.6) * k, Math.sin(a) * sp + this.wind.z), R(2.6, 4.8), R(1.0, 1.9) * k, SMOKE, 0.72, { drag: 1.1, grow: 2.4 });
+    }
+    for (let i = 0; i < 46; i++) this.glow.emit(p, v3(R(-4, 4) * k, R(3, 8) * k, R(-4, 4) * k), R(1, 2), R(0.07, 0.15), SPARK, 1, { g: -9, drag: 0.3 });
+    for (let i = 0; i < 60; i++) {
+      const a = R(0, Math.PI * 2), sp = R(2.6, 5) * k;
+      this.soft.emit(p.clone().setY(0.12), v3(Math.cos(a) * sp, R(0.3, 1.8), Math.sin(a) * sp), R(0.5, 1), R(0.18, 0.36), FOAM, 0.85, { g: -6, drag: 1.8 });
+    }
+  }
+  /** One frame of the smoke that hangs over the place a ship blew up; `s` fades from 1 to 0. */
+  plume(p: V, dt: number, s: number) {
+    if (Math.random() < dt * 16 * s) this.soft.emit(p.clone().add(v3(R(-0.3, 0.3), R(0, 0.4), R(-0.3, 0.3))), v3(this.wind.x * 1.5 + R(-0.15, 0.15), R(0.9, 1.6), this.wind.z * 1.5 + R(-0.15, 0.15)), R(2.5, 4), R(0.8, 1.4), SMOKE, 0.5 * s + 0.1, { drag: 0.4, grow: 2 });
+    if (Math.random() < dt * 10 * s) this.glow.emit(p.clone().add(v3(R(-0.4, 0.4), 0, R(-0.4, 0.4))), v3(R(-0.2, 0.2), R(0.6, 1.4), R(-0.2, 0.2)), R(0.3, 0.6), R(0.25, 0.5), FIRE, 0.8, { drag: 1 });
+  }
+  /** A burning splinter in flight leaves sparks and a thread of smoke. */
+  spark(p: V) {
+    this.glow.emit(p, v3(R(-0.2, 0.2), R(0, 0.3), R(-0.2, 0.2)), R(0.15, 0.3), R(0.12, 0.22), FIRE, 0.9);
+    if (Math.random() < 0.4) this.soft.emit(p, v3(0, R(0.1, 0.3), 0), R(0.5, 0.9), R(0.15, 0.25), SMOKE, 0.35, { grow: 1.5 });
+  }
+  /** A piece of wreckage dropping into the sea. */
+  splashSmall(p: V) {
+    for (let i = 0; i < 12; i++) this.soft.emit(p.clone().add(v3(R(-0.06, 0.06), 0, R(-0.06, 0.06))), v3(R(-0.5, 0.5), R(1.4, 3), R(-0.5, 0.5)), R(0.35, 0.6), R(0.08, 0.16), FOAM, 0.85, { g: -10, drag: 0.6 });
+  }
   /** A shot glancing off iron: a shower of sparks. */
   clang(p: V) {
     for (let i = 0; i < 26; i++) this.glow.emit(p, v3(R(-3.5, 3.5), R(1, 4.5), R(-3.5, 3.5)), R(0.2, 0.5), R(0.08, 0.16), SPARK, 1, { g: -12 });

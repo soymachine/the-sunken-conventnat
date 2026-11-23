@@ -171,7 +171,10 @@ const models = new Map<Kind, THREE.Object3D>();
 /** Look for hand-made models; resolves once every kind has been tried. */
 /** Treasure props made in Meshy (public/models/treasure.glb, seal.glb), shaded like the ships. */
 const props = new Map<'gold' | 'seal', THREE.Object3D>();
-export async function loadPropModels(): Promise<number> {
+/** Loads once; later calls share the same wait (the loading screen and the scene both ask). */
+let propsLoading: Promise<number> | null = null;
+export function loadPropModels(): Promise<number> { return propsLoading ??= loadProps(); }
+async function loadProps(): Promise<number> {
   const loader = new GLTFLoader();
   await Promise.all((['gold', 'seal'] as const).map(async (kind) => {
     try {
@@ -221,7 +224,9 @@ const DECK: Partial<Record<Kind, { color: number; lo: number; hi: number }>> = {
   schooner: { color: 0x94744a, lo: 0.03, hi: 0.17 }, cutter: { color: 0x94744a, lo: 0.09, hi: 0.17 }, merchant: { color: 0x86663e, lo: 0.04, hi: 0.18 },
 };
 
-export async function loadShipModels(): Promise<number> {
+let shipsLoading: Promise<number> | null = null;
+export function loadShipModels(): Promise<number> { return shipsLoading ??= loadShips(); }
+async function loadShips(): Promise<number> {
   const loader = new GLTFLoader();
   await Promise.all((Object.keys(SPECS) as Kind[]).map(async (kind) => {
     const url = `/models/${kind}.glb`;

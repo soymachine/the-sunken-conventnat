@@ -92,6 +92,8 @@ export interface HudHandlers {
   rotate(): void;
   ready(): void;
   leave(): void;
+  /** Against the machine: the same battle again, with a fresh lot. */
+  rematch?(): void;
 }
 
 export class Hud {
@@ -209,7 +211,7 @@ export class Hud {
         </div>
       </footer>
       <div class="role" hidden><div class="card"><svg class="medal" viewBox="0 0 100 100"></svg><p class="meta" id="roleTitle"></p><h2 id="roleName"></h2><p id="roleMission"></p><p class="pw"><b id="rolePower"></b> <span id="rolePowerText"></span></p><button class="plaque" id="roleOk">To your station</button></div></div>
-      <div class="over" hidden><div class="card"><h2 id="overTitle"></h2><p id="overText"></p><p id="overVerify" class="meta"></p><button class="plaque" id="leave">Back to port</button></div></div>`;
+      <div class="over" hidden><div class="card"><p class="eyebrow">Battle report</p><h2 id="overTitle"></h2><p id="overText"></p><dl class="stats" id="overStats"></dl><p id="overVerify" class="meta"></p><div class="overBtns"><button class="plaque" id="rematch" hidden>Rematch</button><button class="plaque" id="leave">Back to port</button></div></div></div>`;
     this.telegraph(this.q('.telegraph'));
     applyCursors(this.cursor);
     // How to play, from the beam or the settings.
@@ -234,6 +236,7 @@ export class Hud {
     this.root.querySelectorAll<HTMLElement>('.order').forEach((b) => (b.onclick = () => on.mode(b.dataset.order as Mode)));
     this.q<HTMLElement>('#ready').onclick = () => { this.spin('#ready'); on.ready(); };
     this.q<HTMLElement>('#leave').onclick = () => on.leave();
+    this.q<HTMLElement>('#rematch').onclick = () => on.rematch?.();
     this.q<HTMLElement>('#roleOk').onclick = () => { this.q<HTMLElement>('.role').hidden = true; };
     // Settings: sound and 3D quality, in a small parchment menu at the top left.
     const menu = this.q<HTMLElement>('#menu'), menuBtn = this.q<HTMLElement>('#menuBtn');
@@ -826,8 +829,9 @@ export class Hud {
     if (p.phase === 'over') {
       const won = p.winner === c.me;
       this.q('#overTitle').textContent = won ? 'Victory' : 'Defeat';
+      this.q<HTMLElement>('.over').classList.toggle('won', won);
       const text: Record<string, [string, string]> = {
-        fleet: [`The enemy fleet lies on the seabed after ${p.round} rounds.`, `Your last ship went down in round ${p.round}.`],
+        fleet: [`The enemy fleet lies on the seabed after ${p.round} round${p.round === 1 ? '' : 's'}.`, `Your last ship went down in round ${p.round}.`],
         home: [`The merchantman made the Home Port with ${p.cargo} of 3 crates aboard.`, `The merchantman slipped past you with ${p.cargo} of 3 crates.`],
         plunder: ['The last crate is yours and the merchantman is going down.', 'The merchantman is plundered and sunk.'],
         season: ['The season closed with the cargo still at sea.', 'The season closed before the cargo reached home.'],
@@ -836,6 +840,14 @@ export class Hud {
     }
   }
 
+  /** The figures of the battle on the report, and whether a rematch can be offered. */
+  setResults(r: { rounds: number; shots: number; hits: number; sank: number; lost: number; gold: number; cards: number; krakens: number }, rematch: boolean) {
+    const acc = r.shots ? Math.round((100 * r.hits) / r.shots) : 0;
+    const rows: [string, string | number][] = [['Rounds', r.rounds], ['Shots fired', r.shots], ['Hits', r.hits], ['Accuracy', `${acc} %`], ['Ships sunk', r.sank], ['Ships lost', r.lost], ['Doubloons', r.gold], ['Cards played', r.cards]];
+    if (r.krakens) rows.push(['Kraken summoned', r.krakens]);
+    this.q('#overStats').innerHTML = rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
+    this.q<HTMLElement>('#rematch').hidden = !rematch;
+  }
   setVerdict(text: string) { this.q('#overVerify').textContent = text; }
 
   log(text: string, kind: '' | 'head' | 'bad' | 'good' = '') {

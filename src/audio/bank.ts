@@ -45,6 +45,8 @@ export const SOUNDS: SoundDef[] = [
   { id: 'stingWin', group: 'Música', channel: 'music', label: 'Victoria', help: 'Al ganar (una vez).' },
   { id: 'stingLose', group: 'Música', channel: 'music', label: 'Derrota', help: 'Al perder (una vez).' },
 ];
+/** Names with a synthesised stand-in, heard while no recording is assigned (music never has one). */
+export const SYNTH = new Set(['cannon', 'splash', 'hit', 'clang', 'sink', 'coin', 'glass', 'click', 'bell', 'roar', 'thunder', 'creak', 'plunge', 'treasure', 'explosion', 'mast']);
 export const SOUND = Object.fromEntries(SOUNDS.map((s) => [s.id, s])) as Record<string, SoundDef>;
 
 /** How a recording is played: the file, the part of it kept (seconds), its gain and its fades. */

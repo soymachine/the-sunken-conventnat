@@ -936,3 +936,36 @@ canvas[data-cur="helm"] { cursor: var(--cur-helm, pointer); }
   .menu:not([hidden]), .logPanel:not([hidden]), .compose:not([hidden]), .over:not([hidden]) .card, #hud:not([hidden]), #lobby:not([hidden]) { animation: none !important; }
 }
 .menu a.howRow { display: block; box-sizing: border-box; text-align: center; text-decoration: none; }
+
+/* ---------- 0.35: the battle report ---------- */
+/* It waits a moment, so the last blast is seen before the report comes down over the table. */
+.over:not([hidden]) { animation: overDim 1s ease-out 1.8s backwards; }
+.over:not([hidden]) .card { animation: overIn .7s cubic-bezier(.2, .8, .3, 1.15) 2.1s backwards; transform-origin: 50% 0; }
+@keyframes overDim { from { background: rgba(13, 11, 8, 0); } }
+@keyframes overIn { from { opacity: 0; transform: translateY(-40px) rotate(-2deg) scale(.92); } }
+.over .card { max-width: 520px; padding: 28px 44px 30px; }
+.over .eyebrow { font: 700 11px var(--label); letter-spacing: .3em; text-transform: uppercase; color: #6b5233; font-style: normal; margin: 0 0 2px; }
+.over h2 { margin: 0 0 6px; }
+.over.won h2 { color: #7a5410; text-shadow: 0 1px 0 rgba(255, 240, 200, .8); }
+.over:not(.won) h2 { color: var(--wax); }
+.over .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px 8px; margin: 18px 0 16px; padding: 14px 0; border-top: 1px solid rgba(13, 11, 8, .2); border-bottom: 1px solid rgba(13, 11, 8, .2); }
+.over .stats div { display: flex; flex-direction: column-reverse; gap: 2px; }
+.over .stats dt { font: 700 9px var(--label); letter-spacing: .14em; text-transform: uppercase; color: #6b5233; }
+.over .stats dd { margin: 0; font: 700 22px var(--label); color: var(--ink); }
+.over .stats div:nth-child(n + 1) dd { animation: statIn .5s ease-out backwards; }
+.over .stats div:nth-child(1) dd { animation-delay: 2.5s; } .over .stats div:nth-child(2) dd { animation-delay: 2.6s; } .over .stats div:nth-child(3) dd { animation-delay: 2.7s; }
+.over .stats div:nth-child(4) dd { animation-delay: 2.8s; } .over .stats div:nth-child(5) dd { animation-delay: 2.9s; } .over .stats div:nth-child(6) dd { animation-delay: 3s; }
+.over .stats div:nth-child(7) dd { animation-delay: 3.1s; } .over .stats div:nth-child(8) dd { animation-delay: 3.2s; } .over .stats div:nth-child(9) dd { animation-delay: 3.3s; }
+@keyframes statIn { from { opacity: 0; transform: translateY(6px); } }
+.over .overBtns { display: flex; gap: 10px; justify-content: center; }
+.over .overBtns .plaque { margin: 0; }
+@media (prefers-reduced-motion: reduce) { .over:not([hidden]), .over:not([hidden]) .card, .over .stats dd { animation: none !important; } }
+
+/* ---------- the loading screen ---------- */
+#boot { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; background: radial-gradient(ellipse at 50% 40%, #2a2116, #0d0b08 75%); transition: opacity .6s ease-out; }
+#boot.gone { opacity: 0; pointer-events: none; }
+#boot .bootIn { text-align: center; }
+#boot h1 { margin: 0 0 22px; font: 400 clamp(30px, 4.4vw, 56px) var(--display); letter-spacing: .1em; color: var(--parch); text-shadow: 0 2px 12px rgba(0, 0, 0, .8); }
+#boot .bar { width: min(360px, 70vw); height: 6px; margin: 0 auto; border: 1px solid var(--brass); border-radius: 4px; background: rgba(0, 0, 0, .5); overflow: hidden; }
+#boot .bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #8a6a28, #f0d489); transition: width .3s ease-out; }
+#boot p { margin: 12px 0 0; font: italic 16px var(--body); color: var(--muted); }

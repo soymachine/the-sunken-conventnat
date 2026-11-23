@@ -1,15 +1,13 @@
 // The game's sound. Every sound has a name (src/audio/bank.ts); a recording assigned to that name in
 // public/sfx/bank.json — or, on this browser only, in the admin page — is played with its trim, gain and fades.
 // A few names fall back to a synthesised sound when nothing is assigned; the others, and all music, stay silent.
-import { Bank, Channel, Entry, Local, SOUND, localAll, publishedBank } from '../audio/bank';
+import { Bank, Channel, Entry, Local, SOUND, SYNTH, localAll, publishedBank } from '../audio/bank';
 
 export type SfxName = 'roar' | 'thunder' | 'cannon' | 'splash' | 'hit' | 'clang' | 'sink' | 'coin' | 'glass' | 'click' | 'bell' | 'creak' | 'gull' | 'treasure' | 'plunge'
   | 'whistle' | 'explosion' | 'mast' | 'slam' | 'cardHover' | 'cardPlay' | 'cardDeal' | 'denied' | 'seal' | 'hourglass' | 'paper';
 export type MusicName = 'musicHome' | 'musicBattle' | 'musicTense';
 export type Volumes = Record<'master' | Channel, number>;
 const VOL0: Volumes = { master: 0.8, music: 0.6, sfx: 0.9, ambience: 0.8, ui: 0.8 };
-/** Names that have a synthesised stand-in when no recording is assigned. */
-const SYNTH = new Set(['cannon', 'splash', 'hit', 'clang', 'sink', 'coin', 'glass', 'click', 'bell', 'roar', 'thunder', 'creak', 'plunge', 'treasure']);
 
 type Voice = { src: AudioBufferSourceNode; g: GainNode };
 
@@ -234,6 +232,13 @@ export class Sfx {
       case 'bell': for (const [f, a] of [[660, 0.3], [1320, 0.14], [1985, 0.08]]) this.tone(ui, t, f, f, 1.6, a); break;
       case 'roar': this.tone(sfx, t, 70, 38, 2.2, 0.55, 'sawtooth'); this.tone(sfx, t, 104, 55, 2.0, 0.3, 'square'); this.noise(sfx, t, 2.4, 0.4, 'lowpass', 500, 90); break;
       case 'thunder': this.noise(this.ch.ambience, t, 1.8, 0.5, 'lowpass', 900, 70); this.tone(this.ch.ambience, t, 60, 32, 1.2, 0.35); break;
+      // The magazine: a deep thump with a long rolling tail, and the crackle of timber thrown into the air.
+      case 'explosion':
+        this.tone(sfx, t, 58, 24, 2.6, 0.95); this.tone(sfx, t, 90, 35, 0.9, 0.6, 'triangle');
+        this.noise(sfx, t, 3.2, 0.9, 'lowpass', 2600, 70); this.noise(sfx, t + 0.02, 0.5, 0.5, 'highpass', 1800, 4200);
+        for (let i = 0; i < 7; i++) this.noise(sfx, t + 0.25 + Math.random() * 1.4, 0.05, 0.25, 'bandpass', 2400, 1400, 4);
+        break;
+      case 'mast': this.noise(sfx, t, 0.35, 0.4, 'bandpass', 2600, 500, 2); this.tone(sfx, t, 160, 60, 0.5, 0.3, 'triangle'); this.noise(sfx, t + 0.05, 0.7, 0.3, 'bandpass', 2600, 500, 0.8); break;
       case 'creak': this.tone(sfx, t, 180, 240, 0.35, 0.07, 'sawtooth'); this.noise(sfx, t, 0.5, 0.12, 'bandpass', 700, 1500, 2); break;
     }
   }
