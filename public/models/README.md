@@ -62,3 +62,7 @@ many small UV islands. The originals are in git history (before 0.33.1); to redo
 
 In the game, `src/render/ships.ts` paints the deck band, the inside of the bulwarks and the rail tops one plank
 colour, and draws pale canvas as clean cloth.
+
+### Thinner sails
+
+`tools/thin_sails.py` squeezes each sail of a flattened model fore-and-aft towards its yard (`--factor`, share of the old depth). The Ship of the Line was run at 0.45.
