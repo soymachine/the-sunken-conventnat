@@ -23,13 +23,19 @@ const HOT: Record<CursorName, [number, number]> = { brass: [3, 2], brassHot: [3,
 
 const url = (n: CursorName, fallback: string) => `url("data:image/svg+xml,${encodeURIComponent(CURSOR_SVG[n])}") ${HOT[n][0]} ${HOT[n][1]}, ${fallback}`;
 
+const hiDpi = typeof CSS !== 'undefined' && CSS.supports('cursor', 'image-set(url("x.png") 1x) 1 1, auto');
+
 /** Pointer styles: 'brass' (default), 'quill', or 'system' for the browser's own. */
 export type CursorStyle = 'brass' | 'quill' | 'system';
 export function applyCursors(style: CursorStyle) {
   const r = document.documentElement.style;
   if (style === 'system') { for (const k of ['--cur', '--cur-hot', '--cur-sight', '--cur-glass', '--cur-helm']) r.removeProperty(k); return; }
-  r.setProperty('--cur', url(style === 'quill' ? 'quill' : 'brass', 'auto'));
-  r.setProperty('--cur-hot', url(style === 'quill' ? 'quill' : 'brassHot', 'pointer'));
+  // The brass-and-ivory arrow (and its red twin over anything clickable) is a picture, sharp on high-density screens.
+  const pic = (f: string, fallback: string) => (hiDpi
+    ? `image-set(url("/ui/${f}.png") 1x, url("/ui/${f}@2x.png") 2x) 1 1, url("/ui/${f}.png") 1 1, ${fallback}`
+    : `url("/ui/${f}.png") 1 1, ${fallback}`);
+  r.setProperty('--cur', style === 'quill' ? url('quill', 'auto') : pic('cursor', 'auto'));
+  r.setProperty('--cur-hot', style === 'quill' ? url('quill', 'pointer') : pic('cursor_hot', 'pointer'));
   r.setProperty('--cur-sight', url('sight', 'crosshair'));
   r.setProperty('--cur-glass', url('glass', 'zoom-in'));
   r.setProperty('--cur-helm', url('helm', 'pointer'));
