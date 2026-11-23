@@ -861,3 +861,4 @@ canvas[data-cur="helm"] { cursor: var(--cur-helm, pointer); }
 #lobby .langPick button, #lobby .langPick button.on { padding: 18px 16% 0 0; text-shadow: 0 1px 0 rgba(255, 255, 255, .7), 0 1px 3px rgba(0, 0, 0, .45); }
 #lobby .langPick button, #lobby .langPick button.on { padding: 18px 9px 0 0; letter-spacing: .04em; }
 #lobby .langPick button + button { margin-left: -12px; }
+:root { --cursor-rot: 15deg; }

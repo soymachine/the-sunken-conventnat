@@ -28,7 +28,7 @@ const hiDpi = typeof CSS !== 'undefined' && CSS.supports('cursor', 'image-set(ur
 /** Pointer styles: 'brass' (default), 'quill', or 'system' for the browser's own. */
 export type CursorStyle = 'brass' | 'quill' | 'system';
 /** How far the arrow is turned about its tip, in degrees (tuned in debug; 0 is the picture as drawn). */
-export const CURSOR_ROT = 0;
+export const CURSOR_ROT = 15;
 let rotation = CURSOR_ROT, lastStyle: CursorStyle = 'brass', job = 0;
 
 /** Debug: turn the arrow about its tip (the click point), then put it back on screen. */
