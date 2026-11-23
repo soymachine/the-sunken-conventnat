@@ -140,6 +140,17 @@ export class Fx {
     if (Math.random() < dt * 16 * s) this.soft.emit(p.clone().add(v3(R(-0.3, 0.3), R(0, 0.4), R(-0.3, 0.3))), v3(this.wind.x * 1.5 + R(-0.15, 0.15), R(0.9, 1.6), this.wind.z * 1.5 + R(-0.15, 0.15)), R(2.5, 4), R(0.8, 1.4), SMOKE, 0.5 * s + 0.1, { drag: 0.4, grow: 2 });
     if (Math.random() < dt * 10 * s) this.glow.emit(p.clone().add(v3(R(-0.4, 0.4), 0, R(-0.4, 0.4))), v3(R(-0.2, 0.2), R(0.6, 1.4), R(-0.2, 0.2)), R(0.3, 0.6), R(0.25, 0.5), FIRE, 0.8, { drag: 1 });
   }
+  /** One frame of steam pouring from a sinking ironclad's boilers; `s` fades with her. */
+  steam(p: V, dt: number, s: number) {
+    if (Math.random() < dt * 30 * s) this.soft.emit(p.clone().add(v3(R(-0.3, 0.3), 0, R(-0.3, 0.3))), v3(R(-0.3, 0.3) + this.wind.x, R(1.6, 3), R(-0.3, 0.3) + this.wind.z), R(1, 1.8), R(0.3, 0.6), [0.92, 0.9, 0.86], 0.3, { drag: 0.8, grow: 2.4 });
+  }
+  /** One frame of the foam whirling where a ship has just gone under. */
+  whirl(p: V, dt: number, r: number) {
+    for (let i = 0; i < 3; i++) if (Math.random() < dt * 24) {
+      const a = R(0, Math.PI * 2), rr = R(0.4, 1) * r, sp = R(0.8, 1.6);
+      this.soft.emit(p.clone().add(v3(Math.cos(a) * rr, 0.02, Math.sin(a) * rr)), v3(-Math.sin(a) * sp - Math.cos(a) * 0.5, 0, Math.cos(a) * sp - Math.sin(a) * 0.5), R(0.6, 1.1), R(0.1, 0.2), FOAM, 0.8, { drag: 1.2 });
+    }
+  }
   /** A burning splinter in flight leaves sparks and a thread of smoke. */
   spark(p: V) {
     this.glow.emit(p, v3(R(-0.2, 0.2), R(0, 0.3), R(-0.2, 0.2)), R(0.15, 0.3), R(0.12, 0.22), FIRE, 0.9);

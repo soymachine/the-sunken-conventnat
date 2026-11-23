@@ -1,6 +1,7 @@
 // Oak-and-brass HUD drawn with DOM + SVG over the 3D canvas.
 import { CMDS, CMD_USES, Client, Cmd, TIDE, GALE_EVERY, SEASON, SPY, krakenSeals, maelstromIn, mayBuy, price, roleOf } from '../game/engine';
 import { CMD_INFO } from './commanders';
+import { colourBlind } from './palette';
 import { CursorStyle, applyCursors } from './cursors';
 import { Lang, getLang, setLang } from './i18n';
 import { openHowTo } from './howto';
@@ -83,6 +84,8 @@ export interface HudHandlers {
   sky?(what: 'sun' | 'aurora' | 'clear'): void;
   /** A sound for the HUD's own flourishes. */
   sound?(name: 'roar' | 'splash' | 'cardHover' | 'cardPlay' | 'cardDeal' | 'denied' | 'paper' | 'click'): void;
+  /** Colour-blind colours on the charts (vermilion and sky blue for red and amber). */
+  colourBlind?(on: boolean): void;
   /** A channel's volume, 0..1 (music, effects, ambience, interface). */
   volume?(k: 'music' | 'sfx' | 'ambience' | 'ui', v: number): void;
   letterRead(): void;
@@ -161,6 +164,8 @@ export class Hud {
         <p class="opt">Sound</p>
         <div class="seg" data-pref="sound" role="radiogroup" aria-label="Sound"><button data-v="on" role="radio">On</button><button data-v="off" role="radio">Off</button></div>
         <div class="vols">${[['music', 'Music'], ['sfx', 'Effects'], ['ambience', 'Ambience'], ['ui', 'Interface']].map(([k, n]) => `<label><span>${n}</span><input type="range" min="0" max="1" step="0.05" data-vol="${k}" aria-label="${n}"></label>`).join('')}</div>
+        <p class="opt">Colour-blind colours</p>
+        <div class="seg" data-pref="cvd" role="radiogroup" aria-label="Colour-blind colours"><button data-v="off" role="radio">Off</button><button data-v="on" role="radio">On</button></div>
         <p class="opt">3D quality</p>
         <div class="seg" data-pref="quality" role="radiogroup" aria-label="3D quality"><button data-v="auto" role="radio">Auto</button><button data-v="high" role="radio">High</button><button data-v="low" role="radio">Low</button></div>
         <div class="debug" hidden><p class="opt">Debug</p><div class="seg three"><button type="button" data-cheat="gold">+100 gold</button><button type="button" data-cheat="seals">+3 seals</button><button type="button" data-cheat="ap">+3 AP</button></div>
@@ -264,6 +269,7 @@ export class Hud {
       const pref = b.parentElement!.dataset.pref, v = b.dataset.v!;
       if (pref === 'sound' && (v === 'off') !== this.muted) this.muted = on.mute();
       if (pref === 'quality') { on.quality(v as 'auto' | 'high' | 'low'); this.qualityPref = v; }
+      if (pref === 'cvd') on.colourBlind?.(v === 'on');
       if (pref === 'sky') on.sky?.(v as 'sun' | 'aurora' | 'clear');
       if (pref === 'lang') { setLang(v as Lang); this.paintPrefs(); }
       if (pref === 'cursor') { this.cursor = v as CursorStyle; applyCursors(this.cursor); try { localStorage.setItem('tsc:cursor', v); } catch { /* ignore */ } }
@@ -564,7 +570,7 @@ export class Hud {
   private paintPrefs() {
     this.root.querySelectorAll<HTMLElement>('#menu .seg button').forEach((b) => {
       const pref = b.parentElement!.dataset.pref, v = b.dataset.v;
-      const on = pref === 'sound' ? (v === 'off') === this.muted : pref === 'quality' ? v === this.qualityPref : pref === 'cursor' ? v === this.cursor : pref === 'lang' ? v === getLang() : false;
+      const on = pref === 'sound' ? (v === 'off') === this.muted : pref === 'quality' ? v === this.qualityPref : pref === 'cursor' ? v === this.cursor : pref === 'lang' ? v === getLang() : pref === 'cvd' ? (v === 'on') === colourBlind : false;
       b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on));
     });
   }

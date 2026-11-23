@@ -2,6 +2,7 @@
 // ride the swell and sink; everything else is rebuilt from the public state.
 import * as THREE from 'three';
 import { Pub, SidePub, maelstromIn } from '../game/engine';
+import { PAL } from '../ui/palette';
 import { Kind, N, START_COLS, Ship, ShotOutcome, ZONE, headingOf, inBoard, shipCells } from '../game/rules';
 import { Fx } from './fx';
 import { Kraken } from './kraken';
@@ -25,9 +26,10 @@ export interface View { pub: Pub; me: 0 | 1; ships: Ship[]; selectedId?: number 
 export interface Ghost { kind: Kind; len: number; x: number; y: number; dir: 'h' | 'v'; rev: boolean; from: [number, number]; pivot: [number, number]; state: 'hot' | 'idle' | 'bad';
   /** Draw the translucent ship itself (only for the turn being pointed at), not just its arrow. */
   ship: boolean }
-export type Sound = 'cannon' | 'splash' | 'hit' | 'clang' | 'sink' | 'coin' | 'glass' | 'roar' | 'thunder' | 'gull' | 'treasure' | 'plunge' | 'whistle' | 'slam' | 'explosion' | 'mast';
+export type Sound = 'cannon' | 'splash' | 'hit' | 'clang' | 'sink' | 'coin' | 'glass' | 'roar' | 'thunder' | 'gull' | 'treasure' | 'plunge' | 'whistle' | 'slam' | 'explosion' | 'mast' | 'steam';
 
-const C = { ink: 0x0d0b08, amber: 0xd9a441, parch: 0xe8d5a3, brass: 0xb08d3c, wax: 0x8c2f1b };
+// Red and amber follow the colour-blind setting (src/ui/palette.ts).
+const C = { ink: 0x0d0b08, get amber() { return PAL.amber; }, parch: 0xe8d5a3, brass: 0xb08d3c, get wax() { return PAL.wax; } };
 const HALF = N / 2;
 /** World position of each chart's (0,0) corner. Stacked on tall screens, side by side on wide ones. */
 export type Quality = 'auto' | 'high' | 'low';
@@ -89,7 +91,7 @@ const puffTex = sprite((g) => {
 const G = {
   glow: new THREE.PlaneGeometry(1.3, 1.3), disc: new THREE.CircleGeometry(0.3, 20), ring: new THREE.RingGeometry(0.22, 0.3, 24), ring2: new THREE.RingGeometry(0.08, 0.13, 16),
   flame: new THREE.ConeGeometry(0.13, 0.5, 8), cell: new THREE.PlaneGeometry(0.94, 0.94),
-  plank: new THREE.BoxGeometry(0.34, 0.04, 0.08), ball: new THREE.SphereGeometry(0.16, 12, 8),
+  plank: new THREE.BoxGeometry(0.34, 0.04, 0.08), crate: new THREE.BoxGeometry(0.24, 0.2, 0.24), barrel: new THREE.CylinderGeometry(0.1, 0.1, 0.24, 10), spar: new THREE.CylinderGeometry(0.035, 0.045, 1.1, 6), ball: new THREE.SphereGeometry(0.16, 12, 8),
   chest: new THREE.BoxGeometry(0.5, 0.3, 0.36), lid: new THREE.BoxGeometry(0.54, 0.1, 0.4),
   torus: new THREE.TorusGeometry(0.4, 0.05, 6, 20), seal: new THREE.CylinderGeometry(0.3, 0.3, 0.09, 20), sealRim: new THREE.TorusGeometry(0.3, 0.035, 6, 24), eye: new THREE.RingGeometry(0.32, 0.42, 4),
   zone: new THREE.EdgesGeometry(new THREE.PlaneGeometry(2 * ZONE + 1, 2 * ZONE + 1)), beam: new THREE.PlaneGeometry(0.5, 2 * ZONE + 1),
@@ -100,8 +102,18 @@ const M = {
   chest: new THREE.MeshLambertMaterial({ color: 0x7a5a1e }), debris: new THREE.MeshLambertMaterial({ color: 0x2a2116 }), ball: new THREE.MeshLambertMaterial({ color: 0x15110b }),
   chestDim: new THREE.MeshLambertMaterial({ color: 0x5a4a2a, transparent: true, opacity: 0.6 }), goldDim: new THREE.MeshBasicMaterial({ color: 0x8a6f2c, transparent: true, opacity: 0.6 }),
   sealDim: new THREE.MeshBasicMaterial({ color: 0x6b2a1c, transparent: true, opacity: 0.6 }),
-  mast: new THREE.MeshLambertMaterial({ color: 0x4a3220 }), chain: new THREE.MeshLambertMaterial({ color: C.wax }), seal: new THREE.MeshBasicMaterial({ color: new THREE.Color(0.75, 0.13, 0.06) }), line: new THREE.LineBasicMaterial({ color: C.ink }),
+  mast: new THREE.MeshLambertMaterial({ color: 0x4a3220 }), crate: new THREE.MeshLambertMaterial({ color: 0x8a6a3a }), chain: new THREE.MeshLambertMaterial({ color: C.wax }), seal: new THREE.MeshBasicMaterial({ color: new THREE.Color(0.75, 0.13, 0.06) }), line: new THREE.LineBasicMaterial({ color: C.ink }),
   lineAmber: new THREE.LineBasicMaterial({ color: C.amber }), lineWax: new THREE.LineBasicMaterial({ color: C.wax }),
+};
+
+/** How each class goes down: seconds, list (roll), bow up (+) or stern up (−), and how deep before she is gone. */
+const SINKING: Record<Kind, { dur: number; roll: number; pitch: number; depth: number; steam?: boolean }> = {
+  line: { dur: 4.4, roll: 0.62, pitch: -0.32, depth: 1.4 },
+  frigate: { dur: 3.8, roll: 0.55, pitch: 0.28, depth: 1.3 },
+  ironclad: { dur: 2.6, roll: 0.14, pitch: 0.55, depth: 1.2, steam: true },
+  schooner: { dur: 3.2, roll: 1.45, pitch: 0.1, depth: 1.1 },
+  cutter: { dur: 2.8, roll: 1.55, pitch: -0.06, depth: 1 },
+  merchant: { dur: 4, roll: 0.5, pitch: -0.24, depth: 1.3 },
 };
 
 interface ShipObj {
@@ -307,6 +319,7 @@ export class SeaScene {
   private shakeAmt = 0;
   /** A ship's magazine going up: the ring on the water, the smoke that hangs after, the wreckage in the air. */
   private blasts: { at: THREE.Vector3; side: Side; t: number; k: number; ring: THREE.Mesh }[] = [];
+  private flotsam: { m: THREE.Mesh; t: number; ph: number; v: THREE.Vector3 }[] = [];
   private chunks: { m: THREE.Mesh; v: THREE.Vector3; spin: THREE.Vector3; t: number; landed: number; burn: boolean; mast: boolean }[] = [];
   /** A beat where everything nearly stops (seconds of real time left), and a warm flash over the whole picture. */
   private hitStop = 0;
@@ -546,7 +559,7 @@ export class SeaScene {
   reset() {
     for (const o of this.ships.values()) this.shipsGroup.remove(o.root);
     this.ships.clear(); this.marks.clear(); this.misc.clear(); this.hl.clear();
-    this.blasts.length = 0; this.chunks.length = 0; this.flashAmt = 0; this.hitStop = 0;
+    this.blasts.length = 0; this.chunks.length = 0; this.flotsam.length = 0; this.flashAmt = 0; this.hitStop = 0;
     this.seas.own.clear(); this.seas.enemy.clear();
     this.kraken.setZone(null);
     this.rain(false);
@@ -691,19 +704,26 @@ export class SeaScene {
         }
         if (o.model.funnel && !o.peek) this.fx.funnel(o.root.localToWorld(o.model.funnel.clone().setY(o.model.funnel.y + o.tilt.position.y)), dt);
       } else {
+        // Each class goes down in its own way: she lists, then her bow or stern lifts, then she slides under.
+        const pr = SINKING[o.kind], u = o.sink;
         if (o.state === 'sinking') {
-          o.sink = Math.min(1, o.sink + dt / 2.6);
+          const was = o.sink;
+          o.sink = Math.min(1, o.sink + dt / pr.dur);
           this.fx.bubbles(p.clone().setY(0.1), dt);
+          if (pr.steam) this.fx.steam(o.tilt.localToWorld(new THREE.Vector3(0, 0.3, 0)), dt, 1 - o.sink);
+          if (o.sink > 0.62) this.fx.whirl(p.clone().setY(0.1), dt, 0.5 + o.len * 0.12);
           for (const [x, y] of o.cells) sea.hold(x, y, 0.9);
           if (o.sink > 0.45) o.model.sails.visible = false;
+          if (was < 0.5 && o.sink >= 0.5) this.flotsamFrom(o);
           // Down she goes, through the paper, and the water closes over her: nothing is left to block the way.
           if (o.sink >= 1) { o.state = 'wreck'; o.root.visible = false; }
         }
-        const e = o.sink * o.sink * (3 - 2 * o.sink);
-        o.tilt.position.y = waveH(p.x, p.z, t) * (calm ? 0 : 1) - 1.25 * e;
-        o.tilt.rotation.x = 0.55 * e;
-        o.tilt.rotation.z = -0.16 * e;
-        for (const m of o.model.mats) { m.uniforms.uTint.value.setHex(0x17120b); m.uniforms.uTintAmt.value = 0.55 * e; }
+        const ss = (a: number, b: number) => { const x = Math.max(0, Math.min(1, (u - a) / (b - a))); return x * x * (3 - 2 * x); };
+        const roll = ss(0, 0.5), pitch = ss(0.25, 0.8), down = ss(0.15, 1) ** 1.4;
+        o.tilt.position.y = waveH(p.x, p.z, t) * (calm ? 0 : 1) * (1 - down) - pr.depth * down;
+        o.tilt.rotation.x = pr.roll * roll;
+        o.tilt.rotation.z = pr.pitch * pitch;
+        for (const m of o.model.mats) { m.uniforms.uTint.value.setHex(0x17120b); m.uniforms.uTintAmt.value = 0.55 * down; }
       }
       if (o.state !== 'wreck') for (const f of o.fires) this.embers.push(o.tilt.localToWorld(f.clone()));
     }
@@ -961,7 +981,7 @@ export class SeaScene {
     const wreck = (o: ShipObj) => {
       if (o.state !== 'afloat') return;
       if (v.quiet) { o.state = 'wreck'; o.sink = 1; o.model.sails.visible = false; o.root.visible = false; }
-      else { o.state = 'sinking'; this.sound('sink'); const at = o.root.position.clone(), side = o.side, len = o.len; setTimeout(() => this.magazine(at, side, len), 260); }
+      else { o.state = 'sinking'; this.sound('sink'); if (SINKING[o.kind].steam) this.sound('steam'); const at = o.root.position.clone(), side = o.side, len = o.len; setTimeout(() => this.magazine(at, side, len), 260); }
     };
     for (const s of v.ships) {
       const key = 'o' + s.id, o = this.ship(key, s.kind, s.len, 'own');
@@ -1237,6 +1257,20 @@ export class SeaScene {
         spin: new THREE.Vector3((Math.random() - 0.5) * 14, (Math.random() - 0.5) * 10, (Math.random() - 0.5) * 14) });
     }
   }
+  /** What a lost ship leaves on the water: barrels and a spar, or the merchantman's crates. Iron leaves nothing. */
+  private flotsamFrom(o: ShipObj) {
+    if (o.kind === 'ironclad') return;
+    const n = o.kind === 'merchant' ? 5 : 2 + Math.floor(o.len / 2);
+    for (let i = 0; i < n; i++) {
+      const crate = o.kind === 'merchant' && i < 4, spar = !crate && i === n - 1;
+      const m = new THREE.Mesh(crate ? G.crate : spar ? G.spar : G.barrel, crate ? M.crate : M.mast);
+      const along = (i / Math.max(1, n - 1) - 0.5) * o.len * 0.8, yaw = o.root.rotation.y;
+      m.position.set(o.root.position.x + Math.cos(yaw) * along, 0.1, o.root.position.z - Math.sin(yaw) * along);
+      m.rotation.set(spar ? Math.PI / 2 : crate ? 0 : Math.PI / 2, Math.random() * 6, 0);
+      this.misc.add(m);
+      this.flotsam.push({ m, t: this.time, ph: Math.random() * 6, v: new THREE.Vector3((Math.random() - 0.5) * 0.25, 0, (Math.random() - 0.5) * 0.25) });
+    }
+  }
   /** One frame of the blasts and their wreckage. */
   private blastFrame(dt: number, t: number) {
     for (const b of [...this.blasts]) {
@@ -1270,6 +1304,15 @@ export class SeaScene {
       }
     }
     this.flashAmt = Math.max(0, this.flashAmt - dt * 2.2);
+    // Flotsam drifts with the wind, bobs on the swell, and after a while is gone.
+    for (const f of [...this.flotsam]) {
+      const age = t - f.t;
+      f.m.position.x += (f.v.x + this.fx.wind.x * 0.12) * dt; f.m.position.z += (f.v.z + this.fx.wind.z * 0.12) * dt;
+      f.v.multiplyScalar(Math.exp(-dt * 0.4));
+      f.m.position.y = (calm ? 0 : waveH(f.m.position.x, f.m.position.z, t)) + 0.05 - Math.max(0, age - 22) * 0.06;
+      f.m.rotation.z = 0.2 * Math.sin(t * 1.6 + f.ph);
+      if (age > 25) { this.misc.remove(f.m); this.flotsam.splice(this.flotsam.indexOf(f), 1); }
+    }
   }
 
   /** The Kraken brings a tentacle down on a cell. Resolves on impact. */

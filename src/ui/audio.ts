@@ -4,7 +4,7 @@
 import { Bank, Channel, Entry, Local, SOUND, SYNTH, localAll, publishedBank } from '../audio/bank';
 
 export type SfxName = 'roar' | 'thunder' | 'cannon' | 'splash' | 'hit' | 'clang' | 'sink' | 'coin' | 'glass' | 'click' | 'bell' | 'creak' | 'gull' | 'treasure' | 'plunge'
-  | 'whistle' | 'explosion' | 'mast' | 'slam' | 'cardHover' | 'cardPlay' | 'cardDeal' | 'denied' | 'seal' | 'hourglass' | 'paper';
+  | 'whistle' | 'explosion' | 'mast' | 'steam' | 'slam' | 'cardHover' | 'cardPlay' | 'cardDeal' | 'denied' | 'seal' | 'hourglass' | 'paper';
 export type MusicName = 'musicHome' | 'musicBattle' | 'musicTense';
 export type Volumes = Record<'master' | Channel, number>;
 const VOL0: Volumes = { master: 0.8, music: 0.6, sfx: 0.9, ambience: 0.8, ui: 0.8 };
@@ -238,6 +238,7 @@ export class Sfx {
         this.noise(sfx, t, 3.2, 0.9, 'lowpass', 2600, 70); this.noise(sfx, t + 0.02, 0.5, 0.5, 'highpass', 1800, 4200);
         for (let i = 0; i < 7; i++) this.noise(sfx, t + 0.25 + Math.random() * 1.4, 0.05, 0.25, 'bandpass', 2400, 1400, 4);
         break;
+      case 'steam': this.noise(sfx, t, 2.4, 0.35, 'highpass', 3200, 1800, 0.7); this.noise(sfx, t + 0.1, 1.8, 0.2, 'bandpass', 900, 300, 1); break;
       case 'mast': this.noise(sfx, t, 0.35, 0.4, 'bandpass', 2600, 500, 2); this.tone(sfx, t, 160, 60, 0.5, 0.3, 'triangle'); this.noise(sfx, t + 0.05, 0.7, 0.3, 'bandpass', 2600, 500, 0.8); break;
       case 'creak': this.tone(sfx, t, 180, 240, 0.35, 0.07, 'sawtooth'); this.noise(sfx, t, 0.5, 0.12, 'bandpass', 700, 1500, 2); break;
     }

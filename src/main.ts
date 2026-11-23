@@ -11,11 +11,12 @@ import { Cell, Ghost, Highlight, SeaScene } from './render/scene';
 import { Sfx } from './ui/audio';
 import { startI18n } from './ui/i18n';
 import { boot } from './ui/boot';
+import { PAL, setColourBlind } from './ui/palette';
 import { setCursorRotation } from './ui/cursors';
 import { Hud, Mode } from './ui/hud';
 import { Lobby } from './ui/lobby';
 
-const AMBER = 0xd9a441, WAX = 0x8c2f1b, INK = 0x0d0b08, FOG = 0xcfc4a8;
+const INK = 0x0d0b08, FOG = 0xcfc4a8;
 // Spanish or English, chosen in Settings (or from the browser's language at first).
 startI18n();
 void boot();
@@ -84,6 +85,7 @@ const hud = new Hud({
   sky: (what) => scene.sky(what),
   sound: (s) => sfx.play(s),
   volume: (k, v) => sfx.setVolume(k, v),
+  colourBlind: (on) => { setColourBlind(on); refresh(); },
   note: (text) => { if (!c.note(text)) hud.log('One bottle a turn: yours is already cast.', 'bad'); },
   letterRead: () => scene.clearBottles(),
   buy: (item) => { if (c.buy(item)) setMode(item === 'winds' ? mode : item); },
@@ -484,46 +486,46 @@ function refresh() {
   // Soundings stay marked on the enemy chart for a round, drawn first so any aim (a Kraken's patch, a shot) shows over them: amber where a ship lies on the line, dark where none.
   for (const sd of c.foeSide.soundings ?? []) {
     if (c.pub.round - sd.round > 1) continue;
-    for (let k = 0; k < N; k++) hl.push({ side: 'enemy', x: sd.axis === 'row' ? k : sd.i, y: sd.axis === 'row' ? sd.i : k, color: sd.count > 0 ? AMBER : INK, opacity: 0.16 });
+    for (let k = 0; k < N; k++) hl.push({ side: 'enemy', x: sd.axis === 'row' ? k : sd.i, y: sd.axis === 'row' ? sd.i : k, color: sd.count > 0 ? PAL.amber : INK, opacity: 0.16 });
   }
   // A lifted ship casts a pale shadow on the squares where she would be set down.
-  if (lifted && selected) for (const [x, y] of shipCells(selected)) if (inBoard(x, y)) hl.push({ side: 'own', x, y, color: invalid ? WAX : 0xfff4d6, opacity: invalid ? 0.5 : 0.6 });
+  if (lifted && selected) for (const [x, y] of shipCells(selected)) if (inBoard(x, y)) hl.push({ side: 'own', x, y, color: invalid ? PAL.wax : 0xfff4d6, opacity: invalid ? 0.5 : 0.6 });
   if (myTurn() && hover) {
     const { side, x, y } = hover;
     if (side === 'enemy') {
       // Drowned water cannot be fired on: the square shows dark instead of red.
-      if (mode === 'fire' || mode === 'chain') hl.push({ ...hover, color: afloat(c.pub, x, y) ? WAX : INK, opacity: 0.55 });
-      if (mode === 'broadside' || mode === 'fireship') for (const [a, b] of attackCells(mode, x, y, aimDir)) hl.push({ side, x: a, y: b, color: afloat(c.pub, x, y) && afloat(c.pub, a, b) ? WAX : INK, opacity: 0.55 });
-      if (mode === 'spy' || mode === 'spyglass') hl.push(...zone(side, clampZone(x), clampZone(y), AMBER, 0.3)); // the patch slides to stay on the chart
-      if (mode === 'longglass') { const a0 = Math.min(x, N - 2), b0 = Math.min(y, N - 2); for (const [a, b] of [[a0, b0], [a0 + 1, b0], [a0, b0 + 1], [a0 + 1, b0 + 1]]) hl.push({ side, x: a, y: b, color: AMBER, opacity: 0.45 }); }
-      if (mode === 'double') { const [dx, dy] = STEP[dblDir]; hl.push({ ...hover, color: afloat(c.pub, x, y) ? WAX : INK, opacity: 0.6 }); if (afloat(c.pub, x + dx, y + dy)) hl.push({ side, x: x + dx, y: y + dy, color: WAX, opacity: 0.3 }); }
-      if (mode === 'sound') for (let k = 0; k < N; k++) hl.push({ side, x: aimDir === 'h' ? k : x, y: aimDir === 'h' ? y : k, color: AMBER, opacity: 0.28 });
-      if (mode === 'squall') { const d = currentDir(x, y), [fx, fy] = STEP[d]; for (let k = 0; k < N; k++) hl.push({ side, x: fx ? (fx > 0 ? N - 1 - c.pub.ring : c.pub.ring) : k, y: fy ? (fy > 0 ? N - 1 - c.pub.ring : c.pub.ring) : k, color: WAX, opacity: 0.4 }); }
-      if (mode === 'kraken') for (let b = y - 1; b <= y + 1; b++) for (let a = x - 1; a <= x + 1; a++) if (inBoard(a, b)) hl.push({ side, x: a, y: b, color: WAX, opacity: 0.5 });
+      if (mode === 'fire' || mode === 'chain') hl.push({ ...hover, color: afloat(c.pub, x, y) ? PAL.wax : INK, opacity: 0.55 });
+      if (mode === 'broadside' || mode === 'fireship') for (const [a, b] of attackCells(mode, x, y, aimDir)) hl.push({ side, x: a, y: b, color: afloat(c.pub, x, y) && afloat(c.pub, a, b) ? PAL.wax : INK, opacity: 0.55 });
+      if (mode === 'spy' || mode === 'spyglass') hl.push(...zone(side, clampZone(x), clampZone(y), PAL.amber, 0.3)); // the patch slides to stay on the chart
+      if (mode === 'longglass') { const a0 = Math.min(x, N - 2), b0 = Math.min(y, N - 2); for (const [a, b] of [[a0, b0], [a0 + 1, b0], [a0, b0 + 1], [a0 + 1, b0 + 1]]) hl.push({ side, x: a, y: b, color: PAL.amber, opacity: 0.45 }); }
+      if (mode === 'double') { const [dx, dy] = STEP[dblDir]; hl.push({ ...hover, color: afloat(c.pub, x, y) ? PAL.wax : INK, opacity: 0.6 }); if (afloat(c.pub, x + dx, y + dy)) hl.push({ side, x: x + dx, y: y + dy, color: PAL.wax, opacity: 0.3 }); }
+      if (mode === 'sound') for (let k = 0; k < N; k++) hl.push({ side, x: aimDir === 'h' ? k : x, y: aimDir === 'h' ? y : k, color: PAL.amber, opacity: 0.28 });
+      if (mode === 'squall') { const d = currentDir(x, y), [fx, fy] = STEP[d]; for (let k = 0; k < N; k++) hl.push({ side, x: fx ? (fx > 0 ? N - 1 - c.pub.ring : c.pub.ring) : k, y: fy ? (fy > 0 ? N - 1 - c.pub.ring : c.pub.ring) : k, color: PAL.wax, opacity: 0.4 }); }
+      if (mode === 'kraken') for (let b = y - 1; b <= y + 1; b++) for (let a = x - 1; a <= x + 1; a++) if (inBoard(a, b)) hl.push({ side, x: a, y: b, color: PAL.wax, opacity: 0.5 });
     } else {
       if (mode === 'fog') hl.push(...zone(side, x, y, FOG, 0.45));
-      if (mode === 'gale') { const [fx, fy] = STEP[currentDir(x, y)]; for (let k = 0; k < N; k++) hl.push({ side, x: fx ? (fx > 0 ? N - 1 : 0) : k, y: fy ? (fy > 0 ? N - 1 : 0) : k, color: AMBER, opacity: 0.35 }); }
-      if (mode === 'current') { const [fx, fy] = STEP[currentDir(x, y)]; for (const s of c.ships) if (!s.sunk) for (const [a, b] of shipCells(s)) if (inBoard(a + fx, b + fy)) hl.push({ side, x: a + fx, y: b + fy, color: AMBER, opacity: 0.4 }); }
-      if (mode === 'pact') { const at = shipAt(c.ships, x, y); if (at) for (const [a, b] of shipCells(at.ship)) hl.push({ side, x: a, y: b, color: c.canPact(at.ship.id) ? WAX : INK, opacity: 0.5 }); }
+      if (mode === 'gale') { const [fx, fy] = STEP[currentDir(x, y)]; for (let k = 0; k < N; k++) hl.push({ side, x: fx ? (fx > 0 ? N - 1 : 0) : k, y: fy ? (fy > 0 ? N - 1 : 0) : k, color: PAL.amber, opacity: 0.35 }); }
+      if (mode === 'current') { const [fx, fy] = STEP[currentDir(x, y)]; for (const s of c.ships) if (!s.sunk) for (const [a, b] of shipCells(s)) if (inBoard(a + fx, b + fy)) hl.push({ side, x: a + fx, y: b + fy, color: PAL.amber, opacity: 0.4 }); }
+      if (mode === 'pact') { const at = shipAt(c.ships, x, y); if (at) for (const [a, b] of shipCells(at.ship)) hl.push({ side, x: a, y: b, color: c.canPact(at.ship.id) ? PAL.wax : INK, opacity: 0.5 }); }
       if ((mode === 'sail' && !selected) || (mode === 'turn' && !selected) || mode === 'shipwright') {
         const at = shipAt(c.ships, x, y);
         if (at && !at.ship.sunk) {
           const ok = mode === 'sail' ? c.reach(at.ship.id) > 0 : mode === 'turn' ? c.canTurn(at.ship.id, 'left') || c.canTurn(at.ship.id, 'right') : at.ship.hits.some(Boolean);
-          for (const [a, b] of shipCells(at.ship)) hl.push({ side, x: a, y: b, color: ok ? AMBER : INK, opacity: 0.4 });
+          for (const [a, b] of shipCells(at.ship)) hl.push({ side, x: a, y: b, color: ok ? PAL.amber : INK, opacity: 0.4 });
         }
       }
     }
   }
-  if (myTurn() && mode === 'sail' && selected) for (const t of sailTargets(selected)) hl.push({ ...t.cell, color: AMBER, opacity: 0.7 });
+  if (myTurn() && mode === 'sail' && selected) for (const t of sailTargets(selected)) hl.push({ ...t.cell, color: PAL.amber, opacity: 0.7 });
   // Caught in irons: the squares ahead of her bow show red, the way the wind will not let her go.
   if (myTurn() && mode === 'sail' && selected && headwind(selected)) {
     const [bx, by] = bowCell(selected), [hx, hy] = [[1, 0], [0, 1], [-1, 0], [0, -1]][headingOf(selected)];
-    for (let k = 1; k <= 2; k++) if (inBoard(bx + hx * k, by + hy * k)) hl.push({ side: 'own', x: bx + hx * k, y: by + hy * k, color: WAX, opacity: k === 1 ? 0.55 : 0.3 });
+    for (let k = 1; k <= 2; k++) if (inBoard(bx + hx * k, by + hy * k)) hl.push({ side: 'own', x: bx + hx * k, y: by + hy * k, color: PAL.wax, opacity: k === 1 ? 0.55 : 0.3 });
   }
   if (myTurn() && mode === 'turn' && selected) for (const w of WAYS) {
     // The line she would lie on, with the square the bow would take marked more strongly.
     const ok = c.canTurn(selected.id, w), hot = hoverWay() === w, t = turned(selected, w), [bx, by] = bowCell(t);
-    for (const [x, y] of shipCells(t)) if (inBoard(x, y)) hl.push({ side: 'own', x, y, color: ok ? AMBER : WAX, opacity: x === bx && y === by ? (hot ? 0.75 : 0.42) : hot ? 0.3 : 0.12 });
+    for (const [x, y] of shipCells(t)) if (inBoard(x, y)) hl.push({ side: 'own', x, y, color: ok ? PAL.amber : PAL.wax, opacity: x === bx && y === by ? (hot ? 0.75 : 0.42) : hot ? 0.3 : 0.12 });
   }
   scene.setHighlights(hl);
 }

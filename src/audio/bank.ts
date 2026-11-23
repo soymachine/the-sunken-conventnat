@@ -15,6 +15,7 @@ export const SOUNDS: SoundDef[] = [
   { id: 'clang', group: 'Combate', channel: 'sfx', label: 'Rebote en el blindaje', help: 'El primer impacto en el acorazado.' },
   { id: 'explosion', group: 'Combate', channel: 'sfx', label: 'Gran explosión', help: 'Estalla la santabárbara al hundir un barco.' },
   { id: 'sink', group: 'Combate', channel: 'sfx', label: 'Barco que se hunde', help: 'Crujidos y agua mientras se va a pique.' },
+  { id: 'steam', group: 'Combate', channel: 'sfx', label: 'Vapor del acorazado', help: 'Las calderas al hundirse el acorazado.' },
   { id: 'mast', group: 'Combate', channel: 'sfx', label: 'Mástil que cae', help: 'Madera que se astilla al hundirse.' },
   { id: 'roar', group: 'Combate', channel: 'sfx', label: 'Rugido del Kraken', help: 'Al invocar al Kraken.' },
   { id: 'slam', group: 'Combate', channel: 'sfx', label: 'Golpe de tentáculo', help: 'Cada golpe del Kraken en el agua.' },
@@ -46,7 +47,7 @@ export const SOUNDS: SoundDef[] = [
   { id: 'stingLose', group: 'Música', channel: 'music', label: 'Derrota', help: 'Al perder (una vez).' },
 ];
 /** Names with a synthesised stand-in, heard while no recording is assigned (music never has one). */
-export const SYNTH = new Set(['cannon', 'splash', 'hit', 'clang', 'sink', 'coin', 'glass', 'click', 'bell', 'roar', 'thunder', 'creak', 'plunge', 'treasure', 'explosion', 'mast']);
+export const SYNTH = new Set(['cannon', 'splash', 'hit', 'clang', 'sink', 'coin', 'glass', 'click', 'bell', 'roar', 'thunder', 'creak', 'plunge', 'treasure', 'explosion', 'mast', 'steam']);
 export const SOUND = Object.fromEntries(SOUNDS.map((s) => [s.id, s])) as Record<string, SoundDef>;
 
 /** How a recording is played: the file, the part of it kept (seconds), its gain and its fades. */

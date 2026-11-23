@@ -969,3 +969,9 @@ canvas[data-cur="helm"] { cursor: var(--cur-helm, pointer); }
 #boot .bar { width: min(360px, 70vw); height: 6px; margin: 0 auto; border: 1px solid var(--brass); border-radius: 4px; background: rgba(0, 0, 0, .5); overflow: hidden; }
 #boot .bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #8a6a28, #f0d489); transition: width .3s ease-out; }
 #boot p { margin: 12px 0 0; font: italic 16px var(--body); color: var(--muted); }
+
+/* ---------- colour-blind colours: the HUD's red and amber marks follow the charts ---------- */
+html.cvd .pips i.hit, html.cvd #foeFleet .pips i.hit, html.cvd #foeFleet .pips.sunk i { background: #d55e00; }
+html.cvd .toast.bad, html.cvd #hud .status .toast.bad, html.cvd .logPanel li.bad span { color: #e8803a; }
+html.cvd .toast.good, html.cvd #hud .status .toast.good { color: #7cc6f0; }
+html.cvd .logPanel li.good span { color: #1f6fa0; }
