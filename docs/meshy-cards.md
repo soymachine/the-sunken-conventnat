@@ -610,3 +610,35 @@ readable at 32 pixels. Seen flat. Transparent background, PNG with alpha, no sha
   ```
 
 Until these arrive, the drawn pointers stay in use; the game switches to the pictures as soon as they exist.
+
+### 17b. A plain arrow pointer in naval dress (simpler than the options above)
+
+Keep the ordinary computer arrow, the one everyone recognises, and change only its materials. Meshy does better
+when it is told the exact shape, so the prompt spells it out.
+
+`cursor.png`
+```
+A classic computer mouse arrow pointer, exactly the standard shape: a solid arrowhead whose sharp tip is in the
+very top-left corner of the frame, the left edge running straight down, the right edge running diagonally down
+to the right, and a short straight tail at the lower part angled down and to the right. Made as a flat inlay of
+aged ivory scrimshaw, finely engraved with faint waves, set in a thin polished brass rim all around its outline,
+with a thin dark ink-black outer edge for contrast. Completely flat, seen exactly face-on, no perspective, no
+thickness, no shadow. Bold simple silhouette readable at 32 pixels. Transparent background, PNG with alpha. No
+text, no letters.
+```
+
+`cursor_hot.png` (over anything that can be clicked)
+```
+The same classic computer mouse arrow pointer, identical shape, size and position (sharp tip in the very
+top-left corner, straight left edge, diagonal right edge, short tail to the lower right), with the same thin
+polished brass rim and dark outer edge, but the ivory inlay is replaced by deep wax-red enamel with a soft warm
+glow at its edges. Completely flat, face-on, no shadow. Readable at 32 pixels. Transparent background, PNG with
+alpha. No text, no letters.
+```
+
+If the result still is not clean, ask Meshy for the shape alone and I add the materials:
+```
+A classic computer mouse arrow pointer, standard shape, tip in the top-left corner, filled flat solid black on a
+transparent background, crisp edges, no shading, no shadow, no text.
+```
+With that black shape I can build the brass rim, ivory and red inlays myself, pixel-exact at 32 px.
