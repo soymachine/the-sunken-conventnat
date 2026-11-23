@@ -85,8 +85,8 @@ export function mountAccountBar(host: HTMLElement, onName: (name: string) => voi
   const draw = () => {
     const u = currentAccount();
     bar.innerHTML = u
-      ? `<span class="who">⚓ ${esc(captainName(u))}</span><button type="button" data-act="log">${L({ en: 'Captain\'s Log', es: 'Bitácora' })}</button><button type="button" data-act="out">${L({ en: 'Sign out', es: 'Salir' })}</button>`
-      : `<button type="button" data-act="in">${L({ en: 'Sign in', es: 'Entrar' })}</button>`;
+      ? `<img class="ins" src="/ui/acct/insignia.webp" alt=""><span class="who">${esc(captainName(u))}</span><button type="button" class="plate" data-act="log">${L({ en: 'Captain\'s Log', es: 'Bitácora' })}</button><button type="button" class="plate" data-act="out">${L({ en: 'Sign out', es: 'Salir' })}</button>`
+      : `<img class="ins" src="/ui/acct/insignia.webp" alt=""><button type="button" class="plate" data-act="in">${L({ en: 'Sign in', es: 'Entrar' })}</button>`;
     bar.querySelector<HTMLElement>('[data-act=in]')?.addEventListener('click', () => openSignIn());
     bar.querySelector<HTMLElement>('[data-act=log]')?.addEventListener('click', () => openLog());
     bar.querySelector<HTMLElement>('[data-act=out]')?.addEventListener('click', () => void signOutAccount());

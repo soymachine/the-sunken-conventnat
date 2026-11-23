@@ -545,3 +545,100 @@ Photorealistic. No text, no letters, no symbols.
 - **Top right:** two pennants hanging side by side.
 - **Words:** engraved-looking dark text on the plates, drawn by the game. They stay sharp and switch between English
   and Spanish.
+
+## 17. The pointer: normal and over something clickable
+
+**How the pictures are used**
+- **Size:** a pointer is drawn tiny, at 32 × 32 px (48 at most), so it must read as a **bold, simple silhouette**.
+  Ask for 1024 × 1024 and I shrink it.
+- **The tip:** it must sit **exactly in the top-left corner** of the picture, pointing up and to the left at about
+  45°. That point is where the click lands.
+- **Format:** transparent background, no shadow (I add a small one), no text.
+- **Two pictures, the same object:** a resting pointer, and a "hot" one shown over buttons and cards. The hot one
+  must keep exactly the same outline and position, so the pointer does not jump.
+
+**Option A (recommended): a brass compass needle**
+
+`cursor.png`
+```
+A single pointer for a computer game, shaped like a slender antique brass compass needle: a sharp diamond-shaped
+point aiming at the top-left corner of the frame at 45 degrees, its tip touching the very corner, widening to a
+small round brass pivot cap with a tiny engraved fleur-de-lis, then tapering to a short blunt tail toward the
+lower right. Polished gilt brass with dark ink-black outline edges for contrast, one bright highlight along the
+upper edge. Bold, simple silhouette that stays readable when shrunk to 32 pixels. Seen exactly from above, flat,
+centred along the diagonal. Transparent background, PNG with alpha, no shadow. No text.
+```
+
+`cursor_hot.png`
+```
+The same slender antique brass compass needle pointer, identical outline and position (sharp point in the very
+top-left corner at 45 degrees, round pivot cap, short tail to the lower right), but its point is now enamelled
+deep wax red with a faint warm glow along the edge, and the brass is brighter, as if lit. Bold simple silhouette
+readable at 32 pixels. Seen from above, flat. Transparent background, PNG with alpha, no shadow. No text.
+```
+
+**Option B: a quill, and a hand for what can be clicked**
+
+`cursor.png`
+```
+A single pointer for a computer game shaped like a goose-feather quill pen seen from above, its sharpened metal
+nib exactly in the top-left corner of the frame pointing up-left at 45 degrees, the feather sweeping down to the
+lower right. Ivory feather with crisp dark ink outlines, a dark iron nib with a drop of black ink at its point.
+Bold simple silhouette readable at 32 pixels. Flat, transparent background, PNG with alpha, no shadow. No text.
+```
+
+`cursor_hot.png`
+```
+A pointing hand for a computer game, in a worn brown leather sea captain's glove with a turned-back cuff and a
+brass button, the index finger extended so its fingertip touches exactly the top-left corner of the frame,
+pointing up-left at 45 degrees, other fingers curled. Crisp dark outline for contrast, bold simple silhouette
+readable at 32 pixels. Seen flat. Transparent background, PNG with alpha, no shadow. No text.
+```
+
+**Optional: the pointers over the charts** (centred pictures, since their "point" is their centre)
+- `cursor_sight.png`, to fire:
+  ```
+  A brass gunsight ring seen face-on with four short crosshair ticks and a small red centre dot, bold dark outline, simple and readable at 32 pixels, centred. Transparent background, PNG with alpha, no shadow. No text.
+  ```
+- `cursor_glass.png`, to look:
+  ```
+  A small brass magnifying spyglass lens with a short handle toward the lower right, the lens catching a highlight, bold dark outline, readable at 32 pixels; the centre of the lens at the centre of the frame. Transparent background, PNG with alpha, no shadow. No text.
+  ```
+- `cursor_helm.png`, over your ships:
+  ```
+  A small ship's wheel with eight spokes and turned handles, dark wood with a brass hub, seen face-on, bold dark outline, readable at 32 pixels, centred. Transparent background, PNG with alpha, no shadow. No text.
+  ```
+
+Until these arrive, the drawn pointers stay in use; the game switches to the pictures as soon as they exist.
+
+### 17b. A plain arrow pointer in naval dress (simpler than the options above)
+
+Keep the ordinary computer arrow, the one everyone recognises, and change only its materials. Meshy does better
+when it is told the exact shape, so the prompt spells it out.
+
+`cursor.png`
+```
+A classic computer mouse arrow pointer, exactly the standard shape: a solid arrowhead whose sharp tip is in the
+very top-left corner of the frame, the left edge running straight down, the right edge running diagonally down
+to the right, and a short straight tail at the lower part angled down and to the right. Made as a flat inlay of
+aged ivory scrimshaw, finely engraved with faint waves, set in a thin polished brass rim all around its outline,
+with a thin dark ink-black outer edge for contrast. Completely flat, seen exactly face-on, no perspective, no
+thickness, no shadow. Bold simple silhouette readable at 32 pixels. Transparent background, PNG with alpha. No
+text, no letters.
+```
+
+`cursor_hot.png` (over anything that can be clicked)
+```
+The same classic computer mouse arrow pointer, identical shape, size and position (sharp tip in the very
+top-left corner, straight left edge, diagonal right edge, short tail to the lower right), with the same thin
+polished brass rim and dark outer edge, but the ivory inlay is replaced by deep wax-red enamel with a soft warm
+glow at its edges. Completely flat, face-on, no shadow. Readable at 32 pixels. Transparent background, PNG with
+alpha. No text, no letters.
+```
+
+If the result still is not clean, ask Meshy for the shape alone and I add the materials:
+```
+A classic computer mouse arrow pointer, standard shape, tip in the top-left corner, filled flat solid black on a
+transparent background, crisp edges, no shading, no shadow, no text.
+```
+With that black shape I can build the brass rim, ivory and red inlays myself, pixel-exact at 32 px.
