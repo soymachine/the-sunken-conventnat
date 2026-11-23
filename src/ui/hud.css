@@ -760,3 +760,16 @@ canvas[data-cur="helm"] { cursor: var(--cur-helm, pointer); }
 .guide .foot .plaque.dark { background: none; color: var(--ink); border: 1px solid rgba(13, 11, 8, .6); }
 .guide .foot .plaque:disabled { opacity: .35; }
 .guide .card { height: min(720px, calc(100vh - 32px)); }
+
+/* ---------- scrollbars: a pen line for the track, a stroke of ink for the thumb (every scrolling sheet) ---------- */
+/* Chrome drops the pen-and-ink styling below when scrollbar-color is set, so that is kept for Firefox alone. */
+#hud *, #lobby *, .guide *, .cmdModal * { scrollbar-width: auto; scrollbar-color: auto; }
+@supports (-moz-appearance: none) { #hud *, #lobby *, .guide *, .cmdModal * { scrollbar-width: thin; scrollbar-color: #2a1a0c transparent; } }
+#hud ::-webkit-scrollbar-button, #lobby ::-webkit-scrollbar-button, .guide ::-webkit-scrollbar-button, .cmdModal ::-webkit-scrollbar-button { display: none; height: 0; }
+#hud ::-webkit-scrollbar, #lobby ::-webkit-scrollbar, .guide ::-webkit-scrollbar, .cmdModal ::-webkit-scrollbar { width: 10px; height: 10px; }
+#hud ::-webkit-scrollbar-track, #lobby ::-webkit-scrollbar-track, .guide ::-webkit-scrollbar-track, .cmdModal ::-webkit-scrollbar-track {
+  margin: 4px 0; background: linear-gradient(90deg, transparent 4px, rgba(42, 26, 12, .25) 4px, rgba(42, 26, 12, .25) 6px, transparent 6px); }
+#hud ::-webkit-scrollbar-thumb, #lobby ::-webkit-scrollbar-thumb, .guide ::-webkit-scrollbar-thumb, .cmdModal ::-webkit-scrollbar-thumb {
+  background: #2a1a0c; border-radius: 6px; border: 2px solid transparent; background-clip: padding-box; min-height: 28px; }
+#hud ::-webkit-scrollbar-thumb:hover, .guide ::-webkit-scrollbar-thumb:hover, .cmdModal ::-webkit-scrollbar-thumb:hover { background-color: #8c2f1b; }
+#hud ::-webkit-scrollbar-corner, .guide ::-webkit-scrollbar-corner { background: transparent; }
