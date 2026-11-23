@@ -118,7 +118,16 @@ const lobby = new Lobby({
 const storeKey = () => (session?.code ? `tsc:room:${session.code}:${session.me}` : '');
 function save() { const k = storeKey(); if (k) try { localStorage.setItem(k, JSON.stringify(c.snapshot())); } catch { /* ignore */ } }
 
-function start(s: Session, name: string) {
+/**
+ * True when this page's art is no longer on the site: a tab left open across several deploys. Checked as a game
+ * starts, so the page can reload with fresh art then rather than show blank cards later.
+ */
+async function artGone() {
+  try { return (await fetch('/ui/card.webp', { method: 'HEAD', cache: 'no-store' })).status === 404; } catch { return false; }
+}
+
+async function start(s: Session, name: string) {
+  if (await artGone()) { location.reload(); return; }
   session = s;
   c = new Client(s.me, s.seed, (m) => s.send(m), Math.random, name, s.mode);
   let snap: Snapshot | null = null;
