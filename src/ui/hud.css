@@ -975,3 +975,17 @@ html.cvd .pips i.hit, html.cvd #foeFleet .pips i.hit, html.cvd #foeFleet .pips.s
 html.cvd .toast.bad, html.cvd #hud .status .toast.bad, html.cvd .logPanel li.bad span { color: #e8803a; }
 html.cvd .toast.good, html.cvd #hud .status .toast.good { color: #7cc6f0; }
 html.cvd .logPanel li.good span { color: #1f6fa0; }
+
+/* ---------- the guided first battle ---------- */
+.tutBox { position: fixed; z-index: 40; width: 320px; padding: 16px 20px 14px; pointer-events: auto; box-shadow: 0 10px 30px rgba(0, 0, 0, .65); }
+.tutBox.in { animation: paperUnfold .3s cubic-bezier(.2, .8, .3, 1.1); }
+.tutBox h2 { margin: 0 0 6px; }
+.tutBox p { margin: 0 0 10px; font-size: 16px; line-height: 1.35; color: var(--ink); }
+.tutBox .tutStep { font: 700 10px var(--label); letter-spacing: .2em; color: #7a6040; margin: 0 0 4px; }
+.tutBox .tutBtns { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.tutBox .tutSkip { background: none; border: 0; padding: 4px 0; font: italic 14px var(--body); color: #6b5233; text-decoration: underline; cursor: pointer; }
+.tutBox .tutSkip:hover { color: var(--wax); }
+.tutBox .tutNext { margin: 0; padding: 8px 18px; }
+.tutRing { position: fixed; z-index: 39; pointer-events: none; border: 2px solid #f0d489; border-radius: 10px; box-shadow: 0 0 0 3px rgba(13, 11, 8, .5), 0 0 22px 4px rgba(240, 212, 137, .55); animation: tutPulse 1.6s ease-in-out infinite; transition: left .3s, top .3s, width .3s, height .3s; }
+@keyframes tutPulse { 50% { box-shadow: 0 0 0 3px rgba(13, 11, 8, .5), 0 0 34px 10px rgba(240, 212, 137, .8); } }
+@media (prefers-reduced-motion: reduce) { .tutRing, .tutBox.in { animation: none; } }

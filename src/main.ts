@@ -12,6 +12,7 @@ import { Sfx } from './ui/audio';
 import { startI18n } from './ui/i18n';
 import { boot } from './ui/boot';
 import { PAL, setColourBlind } from './ui/palette';
+import { Tutorial } from './ui/tutorial';
 import { setCursorRotation } from './ui/cursors';
 import { Hud, Mode } from './ui/hud';
 import { Lobby } from './ui/lobby';
@@ -86,6 +87,7 @@ const hud = new Hud({
   sound: (s) => sfx.play(s),
   volume: (k, v) => sfx.setVolume(k, v),
   colourBlind: (on) => { setColourBlind(on); refresh(); },
+  tutorial: () => { Tutorial.reset(); if (session instanceof LocalSession) { tutorial.start(c); refresh(); } else hud.log('The tutorial will guide your next battle against the machine.'); },
   note: (text) => { if (!c.note(text)) hud.log('One bottle a turn: yours is already cast.', 'bad'); },
   letterRead: () => scene.clearBottles(),
   buy: (item) => { if (c.buy(item)) setMode(item === 'winds' ? mode : item); },
@@ -102,6 +104,14 @@ hud.setPrefs(sfx.muted, scene.getQuality(), sfx.vol);
 // Debug tuning that reaches into the 3D scene.
 addEventListener('tsc:tune', (e) => { const { v, n } = (e as CustomEvent<{ v: string; n: number }>).detail; if (v === '--wind') scene.setWindStrength(n); if (v === '--cursor-rot') setCursorRotation(n); });
 if (new URLSearchParams(location.search).has('debug')) { Object.assign(window, { scene, hud }); Object.defineProperty(window, 'game', { get: () => ({ c, session }) }); Object.assign(window, { refresh: () => refresh() }); }
+// The guided first battle: the note points at a chart by its corners as they stand on screen.
+const tutorial = new Tutorial((side) => {
+  const pts = [[0, 0], [N - 1, 0], [0, N - 1], [N - 1, N - 1]].map(([x, y]) => scene.screen({ side, x, y }));
+  const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y), x = Math.min(...xs) - 20, y = Math.min(...ys) - 20;
+  return { x, y, w: Math.max(...xs) + 20 - x, h: Math.max(...ys) + 20 - y };
+}, () => hud.heralding || !!document.querySelector('.cmdModal') || !session);
+// The note also follows what changes between redraws (the turn ribbon passing, a card rising).
+setInterval(() => { if (session && tutorial.active) tutorial.update(c); }, 400);
 const lobby = new Lobby({
   bot: (name, mode) => { lastBot = { name, mode }; void start(new LocalSession(mode, 700, Math.random, true), name); },
   create: async (name, mode) => {
@@ -171,6 +181,8 @@ async function start(s: Session, name: string) {
   } else local?.begin();
   refresh();
   s.listen((m) => c.receive(m), (on) => { foeOnline = on; refresh(); });
+  // The first battle against the machine is guided, once.
+  if (s instanceof LocalSession && !Tutorial.seen()) tutorial.start(c); else if (tutorial.active) tutorial.stop(false);
   Object.assign(window, { __client: c, __screen: (cell: Cell) => scene.screen(cell), __bot: (s as LocalSession).bot });
 }
 
@@ -208,6 +220,7 @@ function recordBattle(fair?: boolean) {
 
 function leave() {
   stopCountdown();
+  if (tutorial.active) tutorial.stop(false);
   try { localStorage.removeItem(storeKey()); } catch { /* ignore */ }
   session?.close();
   session = null;
@@ -473,6 +486,7 @@ function refresh() {
   soundtrack();
   if (!session) return;
   refreshHud();
+  tutorial.update(c);
   const invalid = !!lifted && (!fits(c.ships, selected!, selected!.id) || !legalPlacement(c.ships));
   const convoy = c.role === 'classic' ? undefined : { side: c.role === 'admiral' ? 'own' as const : 'enemy' as const, zone: c.role === 'admiral' && c.pub.phase === 'placement' };
   scene.sync({ pub: c.pub, me: c.me, ships: c.ships, selectedId: selected?.id ?? null, invalid, lifted: !!lifted, quiet, convoy, hide: flying, ghosts: turnGhosts() });

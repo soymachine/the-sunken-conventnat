@@ -84,6 +84,8 @@ export interface HudHandlers {
   sky?(what: 'sun' | 'aurora' | 'clear'): void;
   /** A sound for the HUD's own flourishes. */
   sound?(name: 'roar' | 'splash' | 'cardHover' | 'cardPlay' | 'cardDeal' | 'denied' | 'paper' | 'click'): void;
+  /** Guide this battle (against the machine) or the next one. */
+  tutorial?(): void;
   /** Colour-blind colours on the charts (vermilion and sky blue for red and amber). */
   colourBlind?(on: boolean): void;
   /** A channel's volume, 0..1 (music, effects, ambience, interface). */
@@ -159,6 +161,7 @@ export class Hud {
         <button type="button" class="plaque dark howRow" id="logMenu">Captain's Log</button>
         <button type="button" class="plaque dark howRow" id="shipsMenu">3D Ships</button>
         <button type="button" class="plaque dark howRow" id="fullMenu">Full screen</button>
+        <button type="button" class="plaque dark howRow" id="tutMenu">Show the tutorial</button>
         <p class="opt">Language</p>
         <div class="seg" data-pref="lang" role="radiogroup" aria-label="Language" translate="no"><button data-v="en" role="radio">English</button><button data-v="es" role="radio">Español</button></div>
         <p class="opt">Sound</p>
@@ -260,6 +263,7 @@ export class Hud {
       if (i.dataset.vol) on.volume?.(i.dataset.vol as 'music', +i.value);
     });
     // Full screen, and the button says which way it goes.
+    this.q<HTMLElement>('#tutMenu').onclick = () => { menu.hidden = true; on.tutorial?.(); };
     const full = this.q<HTMLElement>('#fullMenu');
     full.onclick = () => { if (document.fullscreenElement) void document.exitFullscreen(); else void document.documentElement.requestFullscreen?.(); };
     addEventListener('fullscreenchange', () => { full.textContent = document.fullscreenElement ? 'Leave full screen' : 'Full screen'; });
@@ -583,7 +587,8 @@ export class Hud {
     if (!this.heralding) this.nextHerald();
   }
   private heralds: { title: string; sub: string; mine: boolean }[] = [];
-  private heralding = false;
+  /** True while the turn ribbon is crossing the screen. */
+  heralding = false;
   private held: [string, '' | 'head' | 'bad' | 'good'][] = [];
   private nextHerald() {
     const n = this.heralds.shift();
