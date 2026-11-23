@@ -2,6 +2,7 @@
 import { Mode } from '../game/engine';
 import { Lang, getLang, setLang } from './i18n';
 import { openHowTo } from './howto';
+import { mountAccountBar } from './captain';
 
 export interface LobbyHandlers {
   bot(name: string, mode: Mode): void;
@@ -63,6 +64,9 @@ export class Lobby {
     this.q<HTMLElement>('#howLink').onclick = () => openHowTo();
     const name = this.q<HTMLInputElement>('#capName');
     try { name.value = localStorage.getItem('tsc:name') || ''; } catch { /* storage unavailable */ }
+    // A signed-in captain's name fills the field (the corner bar also opens the Captain's Log).
+    let filled = '';
+    mountAccountBar(this.root, (n) => { if (!name.value.trim() || name.value === filled || name.value === localStorage.getItem('tsc:name')) { name.value = n; filled = n; } });
     const who = () => { const n = name.value.trim() || 'Captain'; try { localStorage.setItem('tsc:name', n); } catch { /* ignore */ } return n; };
     let mode: Mode = 'classic';
     this.root.querySelectorAll<HTMLButtonElement>('.mode').forEach((b) => (b.onclick = () => {

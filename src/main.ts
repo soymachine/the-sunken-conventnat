@@ -1,6 +1,7 @@
 // Controller: lobby → session → one Client driving the scene and the HUD.
 import './ui/hud.css';
 import { CMDS, Client, Msg, Snapshot, afloat, krakenSeals, roleOf } from './game/engine';
+import { recordMatch } from './net/account';
 import { ITEMS, Item } from './game/powerups';
 import { Dir, Ship, Way, ZONE, ahead, attackCells, bowCell, cellName, clampZone, fits, headingOf, inBoard, legalPlacement, pivotCell, randomFleet, shipAt, shipCells, turned, MAELSTROM_ROUND, N, becalmed } from './game/rules';
 import { verify } from './game/verify';
@@ -156,6 +157,27 @@ function start(s: Session, name: string) {
   Object.assign(window, { __client: c, __screen: (cell: Cell) => scene.screen(cell), __bot: (s as LocalSession).bot });
 }
 
+/** When a battle ends, a signed-in captain's log gains it (online: once the other's log is checked, or after 20 s). */
+let recorded = '';
+function recordBattle(fair?: boolean) {
+  if (!session || c.pub.phase !== 'over') return;
+  const key = `${session.code ?? 'machine'}:${session.seed}`;
+  if (recorded === key) return;
+  recorded = key;
+  const mine = (m: Msg) => m.by === c.me;
+  // My shots, as the other captain answered them (not the Kraken's strikes, nor the maelstrom).
+  const answers = c.log.filter((m) => m.t === 'result' && !mine(m) && !m.kraken).flatMap((m) => (m.t === 'result' ? m.results : []));
+  void recordMatch({
+    vs: session.code ? 'online' : 'machine', mode: session.mode, role: c.role,
+    opponent: c.foeSide.name || (session.code ? '' : 'The machine'),
+    cmd: c.side.cmd ?? 'none', foeCmd: c.foeSide.cmd ?? 'none',
+    result: c.pub.winner === c.me ? 'win' : 'loss', reason: c.pub.reason ?? 'fleet', rounds: c.pub.round,
+    shots: answers.length, hits: answers.filter((r) => r.r === 'hit' || r.r === 'sunk' || r.r === 'flood').length,
+    sank: c.foeSide.sunk.length, lost: c.side.sunk.length, krakens: c.log.filter((m) => m.t === 'kraken' && mine(m)).length,
+    ...(fair === undefined ? {} : { fair }),
+  }).catch(() => { /* the log could not be written: the battle simply is not kept */ });
+}
+
 function leave() {
   stopCountdown();
   try { localStorage.removeItem(storeKey()); } catch { /* ignore */ }
@@ -293,6 +315,7 @@ function describe(m: Msg, mine: boolean) {
         const s = session;
         void verify(c.log, c.foe, roleOf(c.pub, c.foe), s.seed, s.mode).then((bad) => {
           hud.setVerdict(bad ? `The enemy's log does not add up: ${bad}.` : "The enemy's log checks out: every shot was answered truthfully.");
+          recordBattle(!bad);
           // Once both captains have revealed and this one has checked, the room can be cleared away.
           if (c.log.some((x) => x.t === 'reveal' && x.by === c.me)) s.finished?.();
         });
@@ -395,6 +418,10 @@ function refreshHud() {
 
 let lastTurnKey = '';
 function refresh() {
+  // The battle is over: against the machine it goes in the log at once; online, once the logs are checked.
+  if (c?.pub.phase === 'over' && session && recorded !== `${session.code ?? 'machine'}:${session.seed}`) {
+    if (!session.code) recordBattle(); else setTimeout(() => recordBattle(), 20000);
+  }
   pointerFor();
   if (!session) return;
   refreshHud();

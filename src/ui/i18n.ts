@@ -148,7 +148,7 @@ const EXACT: Record<string, string> = {
   'Double-Shotted — pick a square of enemy water. If it hits, the ball flies on one square further. Press R to turn which way.': 'Doble carga: elige una casilla de agua enemiga. Si impacta, la bala sigue una casilla más. Pulsa R para cambiar la dirección.',
   'into the wind': 'contra el viento', 'she cannot sail into the wind — turn her across it': 'no puede navegar contra el viento: vírala de través', 'she is holed and taking water': 'tiene una vía de agua',
   'the Kraken holds her': 'el Kraken la retiene', 'she is pinned by chain shot': 'está inmovilizada por palanqueta', 'she is too badly damaged': 'está demasiado dañada', 'there is no sea room': 'no hay espacio en el mar',
-  'How to play ›': 'Cómo se juega ›', 'How to play': 'Cómo se juega',
+  "Captain's Log": 'Cuaderno de bitácora', 'How to play ›': 'Cómo se juega ›', 'How to play': 'Cómo se juega',
   'Flat calm': 'Calma chicha', 'flat calm': 'calma chicha', east: 'este', south: 'sur', west: 'oeste', north: 'norte', 'The wind': 'El viento', Wind: 'Viento',
   'A flat calm this round: the wind helps and hinders no ship.': 'Calma chicha esta ronda: el viento no ayuda ni frena a ningún barco.',
   // Maelstrom gauge and misc
@@ -356,4 +356,5 @@ export function setLang(l: Lang) {
   try { localStorage.setItem(KEY, l); } catch { /* ignore */ }
   document.documentElement.lang = l;
   walk(document.body);
+  dispatchEvent(new Event('tsc:lang'));
 }

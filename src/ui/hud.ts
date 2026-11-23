@@ -4,6 +4,8 @@ import { CMD_INFO } from './commanders';
 import { CursorStyle, applyCursors } from './cursors';
 import { Lang, getLang, setLang } from './i18n';
 import { openHowTo } from './howto';
+import { openLog } from './captain';
+import { accountsAvailable } from '../net/account';
 import { installTuner } from './tuner';
 import { ITEMS, ITEM_HELP, ITEM_IDS, Item, MAX_ITEMS } from '../game/powerups';
 import { FLEETS, KRAKEN_SEALS, N, Role, shipCells } from '../game/rules';
@@ -138,6 +140,7 @@ export class Hud {
       <div class="menu card" id="menu" hidden>
         <h2>Settings</h2>
         <button type="button" class="plaque dark howRow" id="howMenu">How to play</button>
+        <button type="button" class="plaque dark howRow" id="logMenu">Captain's Log</button>
         <p class="opt">Language</p>
         <div class="seg" data-pref="lang" role="radiogroup" aria-label="Language" translate="no"><button data-v="en" role="radio">English</button><button data-v="es" role="radio">Español</button></div>
         <p class="opt">Sound</p>
@@ -196,6 +199,8 @@ export class Hud {
     // How to play, from the beam or the settings.
     this.q<HTMLElement>('#howBtn').onclick = () => openHowTo();
     this.q<HTMLElement>('#howMenu').onclick = () => { this.q<HTMLElement>('#menu').hidden = true; openHowTo(); };
+    this.q<HTMLElement>('#logMenu').onclick = () => { this.q<HTMLElement>('#menu').hidden = true; void openLog(); };
+    this.q<HTMLElement>('#logMenu').hidden = !accountsAvailable;
     // The action points sit under the turn header, where the eye goes as a turn begins.
     this.q('#turnSub').after(this.q('#apSeals'));
     // Setting the glass down ends the turn: it is tapped onto the desk and goes dull until your turn comes back.

@@ -161,6 +161,28 @@ expensive at scale:
     month**.
   - Verifying every battle on the server: 1.5 M short Cloud Function calls, **a few dollars**.
 
+### Done (0.31.0): accounts and the Captain's Log
+
+- **Accounts are optional.**
+  - E-mail and password are on.
+  - Google is coded but needs switching on in the Firebase console (Authentication → Sign-in method → Google); until
+    then its button says it is not available yet.
+  - Sign-in lasts across visits. It lives in its own Firebase app, apart from the per-tab anonymous identity that
+    online rooms use.
+- **Every finished battle is written to the captain's log** when they are signed in:
+  - against the machine at once;
+  - online once the other's log has been checked (or after 20 s).
+- **The Captain's Log** (home corner bar, or Settings in battle) has two tabs:
+  - **Battles:** date, opponent, both commanders, result and how it ended, rounds, accuracy, ships sunk and lost.
+  - **Statistics:** totals, win rate, accuracy, average rounds, streaks, the last 20 results, and win rate by
+    commander and by opponent.
+- **Rules:** only the captain reads or adds to their log; entries can never be changed; and values, sizes and dates
+  are checked. Tested in the emulator: reading or writing another captain's log, rewriting a battle, back-dating
+  one, impossible numbers and extra fields are all refused.
+- **Still self-reported:** the browser writes the record, so a modified client could claim battles it did not
+  play. Before rankings or rewards depend on it, move the writing to a Cloud Function that checks the battle
+  with `verify.ts` (Blaze plan, section 2 above).
+
 ## 3. Summary of running costs
 
 | Monthly active players | Infrastructure (after the two fixes) | With accounts, history and stats | Payment fees |

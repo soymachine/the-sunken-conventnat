@@ -9,17 +9,21 @@ import { Session } from './session';
 const env = import.meta.env;
 export const firebaseConfigured = !!env.VITE_FIREBASE_DATABASE_URL || !!env.VITE_FIREBASE_EMULATOR;
 
+/** The project's settings (the same for the game's rooms and for players' accounts). */
+export const firebaseOptions = () => ({
+  apiKey: env.VITE_FIREBASE_API_KEY || 'demo-key',
+  authDomain: env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: env.VITE_FIREBASE_PROJECT_ID || 'demo-sunken-covenant',
+  appId: env.VITE_FIREBASE_APP_ID,
+  databaseURL: env.VITE_FIREBASE_DATABASE_URL || 'http://127.0.0.1:9000/?ns=demo-sunken-covenant',
+});
+export const useEmulator = !!env.VITE_FIREBASE_EMULATOR;
+
 let app: FirebaseApp | undefined, db: Database, uid = '';
 async function connect(): Promise<void> {
   if (app) return;
   const emu = !!env.VITE_FIREBASE_EMULATOR;
-  app = initializeApp({
-    apiKey: env.VITE_FIREBASE_API_KEY || 'demo-key',
-    authDomain: env.VITE_FIREBASE_AUTH_DOMAIN,
-    projectId: env.VITE_FIREBASE_PROJECT_ID || 'demo-sunken-covenant',
-    appId: env.VITE_FIREBASE_APP_ID,
-    databaseURL: env.VITE_FIREBASE_DATABASE_URL || 'http://127.0.0.1:9000/?ns=demo-sunken-covenant',
-  });
+  app = initializeApp(firebaseOptions());
   const auth = getAuth(app);
   db = getDatabase(app);
   if (emu) {
