@@ -17,7 +17,7 @@ export const CMD_INFO: Record<Cmd, CmdInfo> = {
   },
   spymaster: {
     name: 'The Spymaster', motto: 'Count the masts before you count the guns.', glyph: '◉',
-    power: 'Soundings (free, every five rounds): learn whether any enemy ship lies on a row or column.',
+    power: 'Soundings (free, every six rounds from round 4): learn whether any enemy ship lies on a row or column.',
     drawback: 'Starts with no doubloons, and pays 10 more for every spyglass and Long Glass.',
   },
   gunmaster: {
@@ -29,6 +29,6 @@ export const CMD_INFO: Record<Cmd, CmdInfo> = {
   deepspeaker: {
     name: 'The Deepspeaker', motto: 'The deep remembers every name we give it.', glyph: '⚓',
     power: 'The Kraken answers to two seals instead of three, and holds its patch a turn longer.',
-    drawback: 'The Kraken strikes once, not twice; no Blood Pact.',
+    drawback: 'May never swear a Blood Pact.',
   },
 };

@@ -19,7 +19,11 @@ export type AttackSrc = 'shot' | 'broadside' | 'chain' | 'fireship' | 'double';
 export type Cmd = 'tidewarden' | 'stormcaller' | 'spymaster' | 'gunmaster' | 'deepspeaker';
 export const CMDS: Cmd[] = ['tidewarden', 'stormcaller', 'spymaster', 'gunmaster', 'deepspeaker'];
 /** How many times each commander's main power may be used in a battle (cooldowns are in the reducer). */
-export const SQUALL_AP = 1, GALE_EVERY = 2, SOUND_EVERY = 5, SOUND_AP = 0;
+export const SQUALL_AP = 1, GALE_EVERY = 2, SOUND_AP = 0;
+/** The Spymaster's soundings: every how many rounds, and from which round (objects, so balance runs can try others). */
+export const SPY = { every: 6, from: 4 };
+/** The Deepspeaker's Kraken: seals it asks, strikes it makes, and turns it holds its patch after them. */
+export const DEEP = { seals: 2, strikes: 2, linger: 2 };
 /** From which round the Tidewarden may bind the tide (an object, so balance runs can try other values). */
 export const TIDE = { from: 14, ap: 0 };
 export const CMD_USES: Record<Cmd, number> = { tidewarden: 2, stormcaller: 3, spymaster: 99, gunmaster: 3, deepspeaker: 99 };
@@ -150,7 +154,7 @@ export function maelstromIn(p: Pub): number | null {
 }
 export const inStorm = (p: Pub, y: number) => !!p.storm && y >= p.storm.row && y < p.storm.row + (p.storm.rows ?? 3);
 /** Seals the Kraken asks of this captain: two for the Deepspeaker, three for anyone else. */
-export const krakenSeals = (s: SidePub) => (s.cmd === 'deepspeaker' ? 2 : KRAKEN_SEALS);
+export const krakenSeals = (s: SidePub) => (s.cmd === 'deepspeaker' ? DEEP.seals : KRAKEN_SEALS);
 /** What the quartermaster charges this captain: the Spymaster pays more for glasses. */
 export const price = (s: SidePub, it: Item) => ITEMS[it].price + (s.cmd === 'spymaster' && (it === 'spyglass' || it === 'longglass') ? 10 : 0);
 /** Items a commander forswears: no glasses for the Gunmaster, no currents for the Tidewarden. */
@@ -363,7 +367,7 @@ export function reduce(p: Pub, m: Msg): boolean {
       mine.galeAt = p.round; p.wind = m.wind;
       return true;
     case 'sound':
-      if (mine.cmd !== 'spymaster' || p.round - (mine.soundAt ?? -99) < SOUND_EVERY || !(m.i >= 0 && m.i < N) || !spend(SOUND_AP)) return false;
+      if (mine.cmd !== 'spymaster' || p.round - (mine.soundAt ?? -99) < SPY.every || p.round < SPY.from || !(m.i >= 0 && m.i < N) || !spend(SOUND_AP)) return false;
       mine.soundAt = p.round; p.pending = true;
       return true;
     case 'move': {
@@ -401,7 +405,7 @@ export function reduce(p: Pub, m: Msg): boolean {
       if (!afloat(p, m.x, m.y) || mine.seals < krakenSeals(mine) || p.kraken || !spend(3)) return false;
       mine.seals -= krakenSeals(mine);
       // The Deepspeaker's Kraken strikes once, but holds its patch a turn longer.
-      p.kraken = mine.cmd === 'deepspeaker' ? { side: foe, x: m.x, y: m.y, left: 1, linger: 2 } : { side: foe, x: m.x, y: m.y, left: 2 };
+      p.kraken = mine.cmd === 'deepspeaker' ? { side: foe, x: m.x, y: m.y, left: DEEP.strikes, linger: DEEP.linger } : { side: foe, x: m.x, y: m.y, left: 2 };
       strike(p);
       return true;
     case 'power':
@@ -778,7 +782,7 @@ export class Client {
   squall(dir: number): boolean { if (!this.canSquall() || !(dir >= 0 && dir <= 3)) return false; this.send({ t: 'squall', dir }); return true; }
   canGale() { return this.side.cmd === 'stormcaller' && this.pub.round - (this.side.galeAt ?? -99) >= GALE_EVERY && this.can(1); }
   gale(wind: number): boolean { if (!this.canGale() || !(wind >= 0 && wind <= 3)) return false; this.send({ t: 'gale', wind }); return true; }
-  canSound() { return this.side.cmd === 'spymaster' && this.pub.round - (this.side.soundAt ?? -99) >= SOUND_EVERY && this.can(SOUND_AP); }
+  canSound() { return this.side.cmd === 'spymaster' && this.pub.round - (this.side.soundAt ?? -99) >= SPY.every && this.pub.round >= SPY.from && this.can(SOUND_AP); }
   sound(axis: 'row' | 'col', i: number): boolean { if (!this.canSound() || !(i >= 0 && i < N)) return false; this.send({ t: 'sound', axis, i }); return true; }
   canDouble() { return this.side.cmd === 'gunmaster' && this.uses() < CMD_USES.gunmaster && this.can(2); }
   /** Double-shotted: fire at (x, y); if it hits, a second ball strikes one square further by (dx, dy). */

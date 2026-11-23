@@ -1,5 +1,5 @@
 // Oak-and-brass HUD drawn with DOM + SVG over the 3D canvas.
-import { CMDS, CMD_USES, Client, Cmd, TIDE, GALE_EVERY, SEASON, SOUND_EVERY, krakenSeals, maelstromIn, mayBuy, price, roleOf } from '../game/engine';
+import { CMDS, CMD_USES, Client, Cmd, TIDE, GALE_EVERY, SEASON, SPY, krakenSeals, maelstromIn, mayBuy, price, roleOf } from '../game/engine';
 import { CMD_INFO } from './commanders';
 import { CursorStyle, applyCursors } from './cursors';
 import { Lang, getLang, setLang } from './i18n';
@@ -688,7 +688,7 @@ export class Hud {
         tool('squall', 'Squall', 1, c.canSquall(), `Click the side of the enemy chart the wind should drive their fleet towards: every ship moves a square, and a ship that cannot is dashed and takes a hit. Their next glass on your waters sees only spray. ${usesLeft('stormcaller')} of ${CMD_USES.stormcaller} left.`, usesLeft('stormcaller') <= 0 ? 'All three squalls are spent.' : '');
         tool('gale', 'Call the Wind', 1, c.canGale(), 'Click the side of your chart the wind should blow towards this round.', p.round - (me.galeAt ?? -99) < GALE_EVERY ? again(me.galeAt, GALE_EVERY) : '');
       }
-      if (me.cmd === 'spymaster') tool('sound', 'Soundings', 0, c.canSound(), 'Click a square of enemy water: you learn whether any ship lies on its row (press R for its column).', p.round - (me.soundAt ?? -99) < SOUND_EVERY ? again(me.soundAt, SOUND_EVERY) : '');
+      if (me.cmd === 'spymaster') tool('sound', 'Soundings', 0, c.canSound(), 'Click a square of enemy water: you learn whether any ship lies on its row (press R for its column).', p.round < SPY.from ? `From round ${SPY.from}.` : p.round - (me.soundAt ?? -99) < SPY.every ? again(me.soundAt, SPY.every) : '');
       if (me.cmd === 'gunmaster') tool('double', 'Double-Shotted', 2, c.canDouble(), `Fire at a square; if it hits, the ball flies on and strikes the next square too (press R to turn which way). ${usesLeft('gunmaster')} of ${CMD_USES.gunmaster} left.`, usesLeft('gunmaster') <= 0 ? 'All three charges are spent.' : '');
       if (!p.pacts?.[c.me] && me.cmd !== 'deepspeaker' && c.ships.some((s) => !s.sunk && s.hits.some(Boolean) && s.kind !== 'merchant')) tool('pact', 'Blood Pact', 1, c.canPact(), TOOL_HELP.pact.text, c.ships.filter((s) => !s.sunk).length <= 1 ? 'Your last ship cannot be given up.' : '');
       if (role !== 'classic' && !p.power[c.me]) tool('power', CAPTAINS[role].power, 1, c.canPower(), `Your captain's power. ${CAPTAINS[role].powerText}`);

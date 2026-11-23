@@ -75,7 +75,7 @@ choosing what to make.
 
 - **Power: Soundings.** For no AP, the Spymaster learns whether **any** enemy ship has a section in a chosen
   **row or column**. The answer is only "some" or "none", not how many.
-  - Once every five rounds.
+  - Once every six rounds, from round 4 (see the last pass below).
 - **Passive:** the Spymaster sees the round number each enemy treasure was set down, which helps guess where
   enemy ships sailed.
 - **Drawback:**
@@ -105,9 +105,8 @@ choosing what to make.
 - **Power: The Kraken answers sooner.** The Kraken needs only **two** covenant seals, not three.
 - **Passive:** when the Deepspeaker's Kraken strikes, it **drags the hit ship's neighbour**: the struck section's
   ship cannot sail on the enemy's next turn either. The Kraken's hold lasts one more turn.
-- **Drawback:**
-  - the Deepspeaker's Kraken strikes **once**, not twice;
-  - the Deepspeaker **cannot swear a Blood Pact** (the deep is already owed).
+- **Drawback:** the Deepspeaker **cannot swear a Blood Pact** (the deep is already owed). (Striking only once was
+  dropped in the last pass: it made him the weakest.)
 - **Why it is fair:** earlier and more often, but each summoning does less. The seals still have to be won by sailing
   onto them or by losing ships.
 
@@ -252,6 +251,47 @@ commander. Variants, his win rate against each other side:
   seeds, so a pairing moves by about ±3 points).
 - **Pairings at the edge:** Spymaster v Gunmaster 56 %, Deepspeaker the lowest at 46 %.
 - **Simulation options:** `TIDE_FROM`, `TIDE_USES` and `TIDE_AP` try other values without editing the rules.
+
+### The Deepspeaker and Spymaster pass (1,000 games per pairing each)
+
+**The Deepspeaker** (his win rate against each other side):
+
+| Variant | none | Tidewarden | Stormcaller | Spymaster | Gunmaster | average |
+|---|---|---|---|---|---|---|
+| 2 seals, strikes once, holds 2 turns (before) | 46 % | 49 % | 46 % | 42 % | 46 % | 45.8 % |
+| 2 seals, strikes once, holds 3 turns | 48 % | 47 % | 46 % | 42 % | 47 % | 46.1 % |
+| 2 seals, strikes twice, no extra hold | 48 % | 49 % | 53 % | 46 % | 51 % | 49.5 % |
+| **2 seals, strikes twice, holds 2 turns** | **52 %** | **48 %** | **52 %** | **46 %** | **52 %** | **49.9 %** |
+
+- **The fix:** striking only once was the real cost. His Kraken now strikes twice like anyone's.
+- **What stays:** it still needs only two seals and holds its patch a turn longer.
+- **His drawback is now only:** no Blood Pact.
+
+**The Spymaster** (with the new Deepspeaker):
+
+| Variant | none | Tidewarden | Stormcaller | Gunmaster | Deepspeaker | average |
+|---|---|---|---|---|---|---|
+| every 5 rounds, from round 1 (before) | 52 % | 50 % | 52 % | 51 % | 52 % | 51.5 % |
+| every 5 rounds, from round 6 | 52 % | 52 % | 52 % | 52 % | 53 % | 52.3 % |
+| **every 6 rounds, from round 4** | **51 %** | **51 %** | **53 %** | **50 %** | **49 %** | **50.8 %** |
+| every 7 rounds | 51 % | 51 % | 53 % | 54 % | 51 % | 52.1 % |
+
+- **Already in range:** once the Deepspeaker was fixed, the Spymaster was within 45–55 %.
+- **Kept anyway:** every six rounds from round 4, because it gives the most even spread.
+
+**Full table after the pass:**
+
+|             | none | Tidewarden | Stormcaller | Spymaster | Gunmaster | Deepspeaker | average |
+|-------------|------|------------|-------------|-----------|-----------|-------------|---------|
+| none        | —    | 49 %       | 49 %        | 49 %      | 49 %      | 50 %        | 49.3 %  |
+| Tidewarden  | 51 % | —          | 53 %        | 47 %      | 53 %      | 50 %        | 50.7 %  |
+| Stormcaller | 51 % | 47 %       | —           | 47 %      | 47 %      | 52 %        | 48.9 %  |
+| Spymaster   | 51 % | 53 %       | 53 %        | —         | 52 %      | 53 %        | 52.2 %  |
+| Gunmaster   | 51 % | 47 %       | 53 %        | 48 %      | —         | 51 %        | 50.2 %  |
+| Deepspeaker | 50 % | 50 %       | 48 %        | 47 %      | 49 %        | —         | 48.7 %  |
+
+- **Every pairing now falls between 47 % and 53 %, and no battle stalled.**
+- **Simulation options:** `SPY_EVERY`, `SPY_FROM`, `DEEP_SEALS`, `DEEP_STRIKES` and `DEEP_LINGER` try other values.
 
 ## Suggested building order
 
