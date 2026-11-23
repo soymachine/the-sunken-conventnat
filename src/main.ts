@@ -445,6 +445,11 @@ function refresh() {
   if (turnKey && turnKey !== lastTurnKey) hud.setHint(c.myTurn ? HINTS[mode] || '' : 'The enemy is at the helm. Watch your waters…');
   lastTurnKey = turnKey;
   const hl: Highlight[] = [];
+  // Soundings stay marked on the enemy chart for a round, drawn first so any aim (a Kraken's patch, a shot) shows over them: amber where a ship lies on the line, dark where none.
+  for (const sd of c.foeSide.soundings ?? []) {
+    if (c.pub.round - sd.round > 1) continue;
+    for (let k = 0; k < N; k++) hl.push({ side: 'enemy', x: sd.axis === 'row' ? k : sd.i, y: sd.axis === 'row' ? sd.i : k, color: sd.count > 0 ? AMBER : INK, opacity: 0.16 });
+  }
   // A lifted ship casts a pale shadow on the squares where she would be set down.
   if (lifted && selected) for (const [x, y] of shipCells(selected)) if (inBoard(x, y)) hl.push({ side: 'own', x, y, color: invalid ? WAX : 0xfff4d6, opacity: invalid ? 0.5 : 0.6 });
   if (myTurn() && hover) {
@@ -483,11 +488,6 @@ function refresh() {
     // The line she would lie on, with the square the bow would take marked more strongly.
     const ok = c.canTurn(selected.id, w), hot = hoverWay() === w, t = turned(selected, w), [bx, by] = bowCell(t);
     for (const [x, y] of shipCells(t)) if (inBoard(x, y)) hl.push({ side: 'own', x, y, color: ok ? AMBER : WAX, opacity: x === bx && y === by ? (hot ? 0.75 : 0.42) : hot ? 0.3 : 0.12 });
-  }
-  // Soundings stay marked on the enemy chart for a round: amber where a ship lies on the line, dark where none.
-  for (const sd of c.foeSide.soundings ?? []) {
-    if (c.pub.round - sd.round > 1) continue;
-    for (let k = 0; k < N; k++) hl.push({ side: 'enemy', x: sd.axis === 'row' ? k : sd.i, y: sd.axis === 'row' ? sd.i : k, color: sd.count > 0 ? AMBER : INK, opacity: 0.16 });
   }
   scene.setHighlights(hl);
 }
