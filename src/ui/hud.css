@@ -773,3 +773,4 @@ canvas[data-cur="helm"] { cursor: var(--cur-helm, pointer); }
   background: #2a1a0c; border-radius: 6px; border: 2px solid transparent; background-clip: padding-box; min-height: 28px; }
 #hud ::-webkit-scrollbar-thumb:hover, .guide ::-webkit-scrollbar-thumb:hover, .cmdModal ::-webkit-scrollbar-thumb:hover { background-color: #8c2f1b; }
 #hud ::-webkit-scrollbar-corner, .guide ::-webkit-scrollbar-corner { background: transparent; }
+.guide nav button.on { box-shadow: none; }
