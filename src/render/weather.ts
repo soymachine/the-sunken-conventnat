@@ -2,7 +2,7 @@
 // Everything that moves in numbers (rain, mist) is animated on the GPU from a time uniform.
 import * as THREE from 'three';
 import { turnToward } from './sea';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { gltfLoader } from './ships';
 import { N } from '../game/rules';
 
 /* ---------- rain ---------- */
@@ -266,7 +266,7 @@ class Gulls {
   private present = false;
   private area = new THREE.Vector3(); private w = 16; private d = 8;
   constructor() {
-    new GLTFLoader().loadAsync(`/models/gull.glb`).then((gltf) => {
+    gltfLoader().loadAsync(`/models/gull.glb`).then((gltf) => {
       gltf.scene.traverse((o) => {
         const m = o as THREE.Mesh;
         if (!m.isMesh) return;

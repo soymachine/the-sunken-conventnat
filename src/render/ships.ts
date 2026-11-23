@@ -2,6 +2,7 @@
 // Drop a file at public/models/<kind>.glb and it replaces the procedural hull.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { Kind } from '../game/rules';
 
 const LIGHT = new THREE.Vector3(-0.45, 0.8, 0.4).normalize();
@@ -167,6 +168,9 @@ function foreAft(c: [number, number][], bulge: number): THREE.BufferGeometry {
   return g;
 }
 
+/** A loader that reads the meshopt-compressed models the build makes (tools/compress-models.mjs), and plain ones. */
+export function gltfLoader() { return new GLTFLoader().setMeshoptDecoder(MeshoptDecoder); }
+
 const models = new Map<Kind, THREE.Object3D>();
 /** Look for hand-made models; resolves once every kind has been tried. */
 /** Treasure props made in Meshy (public/models/treasure.glb, seal.glb), shaded like the ships. */
@@ -175,7 +179,7 @@ const props = new Map<'gold' | 'seal', THREE.Object3D>();
 let propsLoading: Promise<number> | null = null;
 export function loadPropModels(): Promise<number> { return propsLoading ??= loadProps(); }
 async function loadProps(): Promise<number> {
-  const loader = new GLTFLoader();
+  const loader = gltfLoader();
   await Promise.all((['gold', 'seal'] as const).map(async (kind) => {
     try {
       const g = (await loader.loadAsync(`/models/${kind === 'gold' ? 'treasure' : 'seal'}.glb`)).scene;
@@ -227,7 +231,7 @@ const DECK: Partial<Record<Kind, { color: number; lo: number; hi: number }>> = {
 let shipsLoading: Promise<number> | null = null;
 export function loadShipModels(): Promise<number> { return shipsLoading ??= loadShips(); }
 async function loadShips(): Promise<number> {
-  const loader = new GLTFLoader();
+  const loader = gltfLoader();
   await Promise.all((Object.keys(SPECS) as Kind[]).map(async (kind) => {
     const url = `/models/${kind}.glb`;
     try {

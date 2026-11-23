@@ -37,6 +37,14 @@ async function connect(): Promise<void> {
   uid = (await signInAnonymously(auth)).user.uid;
 }
 
+/** Write one error report under errors/<day> (write-only; the rules check its shape and size). */
+export async function reportError(r: { kind: string; msg: string; stack?: string; v: string; ua: string; lang: string }) {
+  if (!firebaseConfigured) return;
+  await connect();
+  const day = new Date().toISOString().slice(0, 10);
+  await push(ref(db, `errors/${day}`), { ...r, t: serverTimestamp() });
+}
+
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const newCode = () => Array.from({ length: 4 }, () => ALPHABET[Math.floor(Math.random() * ALPHABET.length)]).join('');
 

@@ -124,6 +124,38 @@
           }
         }
       }
+    },
+    "errors": {
+      "$day": {
+        "$id": {
+          ".write": "auth != null && !data.exists()",
+          ".validate": "$day.matches(/^20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/) && newData.hasChildren(['kind', 'msg', 'v', 't'])",
+          "kind": {
+            ".validate": "newData.isString() && newData.val().length <= 20"
+          },
+          "msg": {
+            ".validate": "newData.isString() && newData.val().length <= 300"
+          },
+          "stack": {
+            ".validate": "newData.isString() && newData.val().length <= 1500"
+          },
+          "v": {
+            ".validate": "newData.isString() && newData.val().length <= 20"
+          },
+          "ua": {
+            ".validate": "newData.isString() && newData.val().length <= 200"
+          },
+          "lang": {
+            ".validate": "newData.isString() && newData.val().length <= 5"
+          },
+          "t": {
+            ".validate": "newData.isNumber() && newData.val() <= now && newData.val() > now - 60000"
+          },
+          "$other": {
+            ".validate": "false"
+          }
+        }
+      }
     }
   }
 }

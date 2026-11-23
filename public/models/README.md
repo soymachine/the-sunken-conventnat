@@ -66,3 +66,7 @@ colour, and draws pale canvas as clean cloth.
 ### Thinner sails
 
 `tools/thin_sails.py` squeezes each sail of a flattened model fore-and-aft towards its yard (`--factor`, share of the old depth). The Ship of the Line was run at 0.45.
+
+### Compressed at build time
+
+`npm run build` runs `tools/compress-models.mjs`, which compresses every model in `dist/models` with meshopt (about a third of the size; `gull.glb` is left alone because its wings are bent vertex by vertex). The files here stay uncompressed so the tools above can keep editing them.
