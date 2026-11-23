@@ -42,6 +42,8 @@ uniform sampler2D uMap;
 uniform vec4 uClip;
 uniform vec3 uDeck;       // the band of heights decks lie in (low, high, in the model's own units) and on/off
 uniform vec3 uDeckColor;
+uniform vec4 uBand;       // a painted strake on the hull's side: low, high, top of the wale above it, on/off
+uniform vec3 uBandColor, uWaleColor;
 varying vec3 vN;
 varying vec2 vUv;
 varying vec3 vW;
@@ -67,6 +69,10 @@ void main() {
     float seam = 1.0 - 0.06 * smoothstep(0.86, 1.0, abs(sin(vRoot.z * 230.0)));
     base = uDeckColor * seam;
   }
+  // A fixed strake along the side, cut straight by height (gun ports, near black, are kept), with a dark wale above.
+  vec3 rs = normalize(vRootN);
+  if (uBand.w > 0.5 && rs.z * sign(vRoot.z) > 0.3 && vRoot.y > uBand.x && vRoot.y < uBand.z && max(base.r, max(base.g, base.b)) > 0.012)
+    base = vRoot.y < uBand.y ? uBandColor : uWaleColor;
   // The inside of the bulwarks, just above the deck and facing in towards the centre line: a shade of the deck,
   // so no dark broken patches ring the deck.
   vec3 rn = normalize(vRootN);
@@ -91,7 +97,7 @@ void main() {
 export function inkMaterial(color: number, flutter = 0, map: THREE.Texture | null = null): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     vertexShader: VERT, fragmentShader: FRAG, side: THREE.DoubleSide,
-    uniforms: { uToRoot: { value: new THREE.Matrix4() }, uDeck: { value: new THREE.Vector3(0, 0, 0) }, uDeckColor: { value: new THREE.Color(0x8a6a42) }, uColor: { value: new THREE.Color(color) }, uTint: { value: new THREE.Color(0xd9a441) }, uTintAmt: { value: 0 }, uAlpha: { value: 1 }, uLight: { value: LIGHT }, uTime: time, uFlutter: { value: flutter }, uMap: { value: map }, uUseMap: { value: map ? 1 : 0 }, uClip: { value: new THREE.Vector4(0, 0, -1, -1) } },
+    uniforms: { uBand: { value: new THREE.Vector4(0, 0, 0, 0) }, uBandColor: { value: new THREE.Color(0xb07a38) }, uWaleColor: { value: new THREE.Color(0x2e2116) }, uToRoot: { value: new THREE.Matrix4() }, uDeck: { value: new THREE.Vector3(0, 0, 0) }, uDeckColor: { value: new THREE.Color(0x8a6a42) }, uColor: { value: new THREE.Color(color) }, uTint: { value: new THREE.Color(0xd9a441) }, uTintAmt: { value: 0 }, uAlpha: { value: 1 }, uLight: { value: LIGHT }, uTime: time, uFlutter: { value: flutter }, uMap: { value: map }, uUseMap: { value: map ? 1 : 0 }, uClip: { value: new THREE.Vector4(0, 0, -1, -1) } },
   });
 }
 
@@ -206,6 +212,10 @@ export const setDeckMode = (on: boolean) => { deckMode = on; };
  * surfaces of each .glb): main deck up to quarterdeck and forecastle, below the rails' tops. The ironclad's iron
  * casemate roof stands above its band and keeps its own colour.
  */
+/** A painted strake on the side (hull lengths above the waterline), with a dark wale above it, per class. */
+const BAND: Partial<Record<Kind, { lo: number; hi: number; wale: number; color: number; waleColor: number }>> = {
+  frigate: { lo: 0.004, hi: 0.05, wale: 0.09, color: 0xb07a38, waleColor: 0x2e2116 },
+};
 const DECK: Partial<Record<Kind, { color: number; lo: number; hi: number }>> = {
   line: { color: 0x8a6a42, lo: 0.04, hi: 0.14 }, frigate: { color: 0x8a6a42, lo: 0.0, hi: 0.1 }, ironclad: { color: 0x58534c, lo: 0.0, hi: 0.06 },
   schooner: { color: 0x94744a, lo: 0.03, hi: 0.17 }, cutter: { color: 0x94744a, lo: 0.09, hi: 0.17 }, merchant: { color: 0x86663e, lo: 0.04, hi: 0.18 },
@@ -283,6 +293,11 @@ export function buildShip(kind: Kind, len: number): ShipModel {
       if (deckMode && deckH !== undefined && dk && !/sail|flag|crate|cannon|barrel|gun/i.test(m.name)) {
         (im.uniforms.uDeck.value as THREE.Vector3).set(dk.lo, dk.hi, 1);
         (im.uniforms.uDeckColor.value as THREE.Color).setHex(dk.color);
+        const bd = BAND[kind];
+        if (bd) {
+          (im.uniforms.uBand.value as THREE.Vector4).set(bd.lo, bd.hi, bd.wale, 1);
+          (im.uniforms.uBandColor.value as THREE.Color).setHex(bd.color); (im.uniforms.uWaleColor.value as THREE.Color).setHex(bd.waleColor);
+        }
       }
       m.material = im;
       m.castShadow = true;

@@ -1,7 +1,7 @@
 {
   "name": "the-sunken-covenant",
   "private": true,
-  "version": "0.33.1",
+  "version": "0.33.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,7 +10,7 @@
     "test": "vitest run",
     "emulators": "npx firebase-tools emulators:start --only auth,database --project demo-sunken-covenant",
     "dev:emu": "VITE_FIREBASE_EMULATOR=1 vite",
-    "deploy": "npm run build && npx firebase-tools deploy --only database,hosting"
+    "deploy": "npm run build && node tools/keep-previous-assets.mjs && npx -y firebase-tools@latest deploy --only hosting"
   },
   "dependencies": {
     "firebase": "^13.4.0",
