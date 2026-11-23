@@ -5,9 +5,9 @@
 import { FirebaseApp, initializeApp } from 'firebase/app';
 import {
   Auth, GoogleAuthProvider, User, browserLocalPersistence, browserPopupRedirectResolver, connectAuthEmulator, createUserWithEmailAndPassword,
-  indexedDBLocalPersistence, initializeAuth, onAuthStateChanged, sendPasswordResetEmail, signInWithEmailAndPassword, signInWithPopup, signOut, updateProfile,
+  deleteUser, indexedDBLocalPersistence, initializeAuth, onAuthStateChanged, sendPasswordResetEmail, signInWithEmailAndPassword, signInWithPopup, signOut, updateProfile,
 } from 'firebase/auth';
-import { Database, connectDatabaseEmulator, get, getDatabase, limitToLast, orderByChild, push, query, ref, serverTimestamp, set } from 'firebase/database';
+import { Database, connectDatabaseEmulator, get, getDatabase, limitToLast, orderByChild, push, query, ref, remove, serverTimestamp, set } from 'firebase/database';
 import { firebaseConfigured, firebaseOptions, useEmulator } from './firebase';
 
 /** One battle as the captain saw it. */
@@ -115,6 +115,20 @@ export async function resetPassword(email: string) {
   try { await sendPasswordResetEmail(auth, email.trim()); } catch (e) { throw why(e); }
 }
 export async function signOutAccount() { start(); await signOut(auth); }
+/**
+ * Erase the signed-in captain: the profile and every battle under players/<uid>, then the account itself.
+ * Firebase only deletes an account signed into recently; otherwise this asks the captain to sign in again.
+ */
+export async function deleteAccount() {
+  if (!user) return;
+  const u = user;
+  await remove(ref(db, `players/${u.uid}`));
+  try { await deleteUser(u); }
+  catch (e) {
+    if ((e as { code?: string }).code === 'auth/requires-recent-login') { await signOut(auth); throw new Error('recent-login'); }
+    throw e;
+  }
+}
 export async function renameCaptain(name: string) {
   if (!user) return;
   const n = name.trim().slice(0, 20);

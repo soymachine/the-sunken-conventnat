@@ -1,6 +1,6 @@
 // The captain's account on screen: a corner bar on the home, the sign-in sheet, and the Captain's Log (battles and
 // statistics). Written in both languages here, like the guide.
-import { MatchRecord, accountsAvailable, captainName, currentAccount, loadMatches, onAccount, resetPassword, signIn, signInGoogle, signOutAccount, signUp } from '../net/account';
+import { MatchRecord, accountsAvailable, captainName, currentAccount, deleteAccount, loadMatches, onAccount, resetPassword, signIn, signInGoogle, signOutAccount, signUp } from '../net/account';
 import { getLang } from './i18n';
 import { CMD_INFO } from './commanders';
 
@@ -114,7 +114,17 @@ export async function openLog() {
         : rows === null ? `<p class="empty">${L({ en: 'Opening the log…', es: 'Abriendo la bitácora…' })}</p>`
         : !rows.length ? `<p class="empty">${L({ en: 'No battles yet. Every battle you finish while signed in is written here.', es: 'Aún no hay batallas. Cada batalla que termines con la sesión iniciada se anota aquí.' })}</p>`
         : tab === 'history' ? history(rows) : stats(rows)}</div>
+      <p class="danger"><button type="button" data-act="erase">${L({ en: 'Delete my account', es: 'Borrar mi cuenta' })}</button> · <a href="/privacy.html" target="_blank" rel="noopener">${L({ en: 'Privacy', es: 'Privacidad' })}</a></p>
     </div>`;
+    box.querySelector<HTMLElement>('[data-act=erase]')!.onclick = async () => {
+      if (!confirm(L({ en: 'Delete your account, your profile and every battle in your log? This cannot be undone.', es: '¿Borrar tu cuenta, tu perfil y todas las batallas de tu bitácora? No se puede deshacer.' }))) return;
+      try { await deleteAccount(); box.remove(); alert(L({ en: 'Your account and your log have been deleted.', es: 'Tu cuenta y tu bitácora se han borrado.' })); }
+      catch (e) {
+        alert((e as Error).message === 'recent-login'
+          ? L({ en: 'Your log has been deleted. To delete the account itself, sign in again and repeat this.', es: 'Tu bitácora se ha borrado. Para borrar la cuenta en sí, vuelve a entrar y repite esto.' })
+          : L({ en: 'The account could not be deleted. Check your connection and try again.', es: 'No se pudo borrar la cuenta. Revisa tu conexión e inténtalo de nuevo.' }));
+      }
+    };
     box.querySelectorAll<HTMLElement>('[data-tab]').forEach((b) => (b.onclick = () => { tab = b.dataset.tab as typeof tab; draw(); }));
   };
   draw();

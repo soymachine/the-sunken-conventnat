@@ -1,0 +1,24 @@
+:root { --ink: #1a1208; --paper: #efe3c4; --wax: #8c2f1b; --muted: #6b5233; --line: rgba(26, 18, 8, .18); color-scheme: light; }
+* { box-sizing: border-box; }
+html { background: #2a2116; }
+body { margin: 0; padding: 32px 16px 64px; font: 18px/1.55 "IM Fell English", Georgia, "Times New Roman", serif; color: var(--ink); }
+.sheet { max-width: 780px; margin: 0 auto; background: var(--paper); padding: 36px 44px 44px; border-radius: 4px; box-shadow: 0 10px 40px rgba(0, 0, 0, .55); }
+header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; border-bottom: 1px solid var(--line); padding-bottom: 12px; margin-bottom: 18px; }
+header .game { font: 700 13px Cinzel, Georgia, serif; letter-spacing: .22em; text-transform: uppercase; color: var(--muted); text-decoration: none; }
+nav { display: flex; flex-wrap: wrap; gap: 6px 16px; font: 600 12px Cinzel, Georgia, serif; letter-spacing: .08em; }
+nav a { color: var(--wax); text-decoration: none; } nav a[aria-current] { color: var(--ink); text-decoration: underline; }
+.langs { display: flex; gap: 4px; }
+.langs button { font: 700 11px Cinzel, Georgia, serif; letter-spacing: .1em; padding: 3px 8px; border: 1px solid var(--line); background: none; border-radius: 3px; cursor: pointer; color: var(--muted); }
+.langs button.on { background: var(--ink); color: var(--paper); }
+h1 { font: 400 34px "IM Fell English SC", Georgia, serif; margin: 6px 0 2px; letter-spacing: .03em; }
+.date { margin: 0 0 22px; font-style: italic; color: var(--muted); font-size: 15px; }
+h2 { font: 700 15px Cinzel, Georgia, serif; letter-spacing: .12em; text-transform: uppercase; margin: 28px 0 8px; color: var(--wax); }
+p, li { margin: 0 0 10px; }
+ul { padding-left: 22px; margin: 0 0 12px; }
+table { width: 100%; border-collapse: collapse; margin: 6px 0 16px; font-size: 16px; }
+th, td { text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); padding: 7px 8px 7px 0; }
+th { font: 700 11px Cinzel, Georgia, serif; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+a { color: var(--wax); }
+code { font-size: 14px; background: rgba(26, 18, 8, .07); padding: 1px 4px; border-radius: 3px; }
+[hidden] { display: none !important; }
+@media (max-width: 600px) { .sheet { padding: 24px 20px 32px; } body { font-size: 17px; } }

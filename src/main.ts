@@ -1,4 +1,5 @@
 // Controller: lobby → session → one Client driving the scene and the HUD.
+import './ui/fonts';
 import './ui/hud.css';
 import { CMDS, Client, Msg, Snapshot, afloat, krakenSeals, roleOf } from './game/engine';
 import { recordMatch } from './net/account';

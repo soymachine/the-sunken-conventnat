@@ -1,6 +1,7 @@
 // The sound desk: drop a recording onto a sound's name, trim it, set its level and fades, listen, and keep it.
 // What is kept lives in this browser (IndexedDB) and the game on this browser plays it at once. "Descargar
 // paquete" makes a .zip with the new files and bank.json, to be published with the game (unzip into public/sfx).
+import '../ui/fonts';
 import './admin.css';
 import { Bank, Entry, Local, SOUNDS, SYNTH, SoundDef, blank, localAll, localDel, localSet, publishedBank } from '../audio/bank';
 import { zip } from './zip';

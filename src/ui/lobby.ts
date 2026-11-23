@@ -55,7 +55,7 @@ export class Lobby {
           <p class="link" id="inviteLink"></p>
         </div>
         <p class="status" role="status"></p>
-        <p class="version">Version ${__APP_VERSION__}</p>
+        <p class="version">Version ${__APP_VERSION__} · <a href="/privacy.html" target="_blank" rel="noopener">Privacy</a> · <a href="/terms.html" target="_blank" rel="noopener">Terms</a> · <a href="/credits.html" target="_blank" rel="noopener">Credits</a></p>
         <img class="seal" src="/ui/home_seal.webp" alt="" draggable="false">
       </div>
       </div>

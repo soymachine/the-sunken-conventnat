@@ -175,6 +175,7 @@ export class Hud {
           <p class="opt">Sky</p><div class="seg three" data-pref="sky"><button type="button" data-v="sun">Sun rays</button><button type="button" data-v="aurora">Aurora</button><button type="button" data-v="clear">Clear</button></div>
           <p class="opt">Pointer</p><div class="seg three" data-pref="cursor"><button type="button" data-v="brass">Brass</button><button type="button" data-v="quill">Quill</button><button type="button" data-v="system">System</button></div>
           <p class="opt">Sounds</p><a class="plaque dark howRow" href="/admin.html" target="_blank" rel="noopener">Sound desk</a></div>
+        <p class="legalLinks"><a href="/privacy.html" target="_blank" rel="noopener">Privacy</a> · <a href="/terms.html" target="_blank" rel="noopener">Terms</a> · <a href="/credits.html" target="_blank" rel="noopener">Credits</a></p>
         <p class="meta">Auto steps down by itself if the game runs slowly. Low drops shadows, glow and the print grade.</p>
       </div>
       <div class="logPanel card" id="logPanel" hidden><h2>Captain's log</h2><ol></ol><p class="meta">Newest first. Press L to open or close.</p></div>
