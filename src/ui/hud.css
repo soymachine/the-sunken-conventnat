@@ -851,3 +851,13 @@ canvas[data-cur="helm"] { cursor: var(--cur-helm, pointer); }
 #lobby .langPick button.on { color: var(--wax); filter: drop-shadow(0 3px 5px rgba(0, 0, 0, .6)) brightness(1.05); }
 #lobby .langPick button:not(.on) { opacity: .82; }
 #lobby .langPick button:hover:not(.on) { opacity: 1; transform: rotate(-3deg); }
+/* 0.31.2: plates in nine slices (screws and border keep their shape), smaller and spaced; pennants closer, lettering centred on the cloth. */
+#lobby .accountBar { gap: 12px; padding: 12px 16px 12px 8px; }
+#lobby .accountBar button.plate { height: 28px; padding: 0 6px; border-width: 8px 13px; border-image: url('/ui/acct/plate.webp') 46 74 fill / 8px 13px stretch; font-size: 10px; letter-spacing: .13em; line-height: 1; }
+#lobby .accountBar button.plate:hover, #lobby .accountBar button.plate:focus-visible { border-image: url('/ui/acct/plate_hot.webp') 46 74 fill / 8px 13px stretch; }
+#lobby .accountBar .ins { width: 36px; height: 36px; margin: -2px 0 -2px -30px; }
+#lobby .accountBar .who { font-size: 16px; }
+#lobby .langPick { gap: 2px; right: 16px; }
+#lobby .langPick button, #lobby .langPick button.on { padding: 18px 16% 0 0; text-shadow: 0 1px 0 rgba(255, 255, 255, .7), 0 1px 3px rgba(0, 0, 0, .45); }
+#lobby .langPick button, #lobby .langPick button.on { padding: 18px 9px 0 0; letter-spacing: .04em; }
+#lobby .langPick button + button { margin-left: -12px; }
