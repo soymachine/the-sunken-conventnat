@@ -32,8 +32,8 @@ export function applyCursors(style: CursorStyle) {
   if (style === 'system') { for (const k of ['--cur', '--cur-hot', '--cur-sight', '--cur-glass', '--cur-helm']) r.removeProperty(k); return; }
   // The brass-and-ivory arrow (and its red twin over anything clickable) is a picture, sharp on high-density screens.
   const pic = (f: string, fallback: string) => (hiDpi
-    ? `image-set(url("/ui/${f}.png") 1x, url("/ui/${f}@2x.png") 2x) 1 1, url("/ui/${f}.png") 1 1, ${fallback}`
-    : `url("/ui/${f}.png") 1 1, ${fallback}`);
+    ? `image-set(url("/ui/${f}.png") 1x, url("/ui/${f}@2x.png") 2x) 2 2, url("/ui/${f}.png") 2 2, ${fallback}`
+    : `url("/ui/${f}.png") 2 2, ${fallback}`);
   r.setProperty('--cur', style === 'quill' ? url('quill', 'auto') : pic('cursor', 'auto'));
   r.setProperty('--cur-hot', style === 'quill' ? url('quill', 'pointer') : pic('cursor_hot', 'pointer'));
   r.setProperty('--cur-sight', url('sight', 'crosshair'));
