@@ -1,5 +1,5 @@
 // Oak-and-brass HUD drawn with DOM + SVG over the 3D canvas.
-import { CMDS, CMD_USES, Client, Cmd, GALE_EVERY, SEASON, SOUND_EVERY, krakenSeals, maelstromIn, mayBuy, price, roleOf } from '../game/engine';
+import { CMDS, CMD_USES, Client, Cmd, TIDE, GALE_EVERY, SEASON, SOUND_EVERY, krakenSeals, maelstromIn, mayBuy, price, roleOf } from '../game/engine';
 import { CMD_INFO } from './commanders';
 import { CursorStyle, applyCursors } from './cursors';
 import { Lang, getLang, setLang } from './i18n';
@@ -681,8 +681,8 @@ export class Hud {
       if (me.cmd === 'tidewarden') {
         const left = maelstromIn(p), why = left === null ? 'The maelstrom is spent.' : usesLeft('tidewarden') <= 0 ? 'You have bound the tide twice already.' : p.round < 14 ? 'The tide can be bound from round 14.' : '';
         const n = `${usesLeft('tidewarden')} of ${CMD_USES.tidewarden} left.`;
-        tool('bindLater', 'Hold the Tide', 2, c.canBind(), `The maelstrom's next ring comes two rounds later. ${n}`, why);
-        tool('bindSooner', 'Hasten the Tide', 2, c.canBind(), `The maelstrom's next ring comes a round sooner. ${n}`, why);
+        tool('bindLater', 'Hold the Tide', TIDE.ap, c.canBind(), `The maelstrom's next ring comes two rounds later. ${n}`, why);
+        tool('bindSooner', 'Hasten the Tide', TIDE.ap, c.canBind(), `The maelstrom's next ring comes a round sooner. ${n}`, why);
       }
       if (me.cmd === 'stormcaller') {
         tool('squall', 'Squall', 1, c.canSquall(), `Click the side of the enemy chart the wind should drive their fleet towards: every ship moves a square, and a ship that cannot is dashed and takes a hit. Their next glass on your waters sees only spray. ${usesLeft('stormcaller')} of ${CMD_USES.stormcaller} left.`, usesLeft('stormcaller') <= 0 ? 'All three squalls are spent.' : '');

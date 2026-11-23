@@ -35,7 +35,7 @@ choosing what to make.
 
 > "The sea keeps my time, not yours."
 
-- **Power: Bind the Tide.** For 2 AP, the next ring of the maelstrom comes **two rounds later**, or **one round
+- **Power: Bind the Tide.** For no AP (it was 2 AP; see the Tidewarden pass below), the next ring of the maelstrom comes **two rounds later**, or **one round
   sooner**.
   - The captain chooses which.
   - Twice per battle.
@@ -217,6 +217,41 @@ Gunmaster 3.0, Deepspeaker 1.5 (Krakens).
   plays one battle per commander.
 - **Still to do:** portraits and card pictures (Meshy prompts in `docs/meshy-cards.md`, section 12), and the
   Tidewarden balance pass.
+
+### The Tidewarden pass (1,000 games per pairing each)
+
+At 2 AP the Tidewarden averaged 47 %, lowest against the Spymaster (45 %) and a shade behind a captain with no
+commander. Variants, his win rate against each other side:
+
+| Variant | none | Stormcaller | Spymaster | Gunmaster | Deepspeaker | average | binds a battle |
+|---|---|---|---|---|---|---|---|
+| 2 AP, twice, from round 14 (before) | 47 % | 46 % | 45 % | 48 % | 50 % | 47.2 % | 1.7 |
+| 2 AP, twice, from round 12 | 46 % | 47 % | 46 % | 48 % | 50 % | 47.4 % | 1.7 |
+| 2 AP, three times, from round 14 | 48 % | 43 % | 44 % | 47 % | 47 % | 45.7 % | 2.4 |
+| 2 AP, three times, from round 10 | 48 % | 44 % | 44 % | 46 % | 47 % | 45.9 % | 2.5 |
+| 1 AP, twice, from round 14 | 45 % | 45 % | 47 % | 47 % | 49 % | 46.6 % | 1.7 |
+| **free, twice, from round 14** | **51 %** | **50 %** | **51 %** | **52 %** | **53 %** | **51.2 %** | 1.7 |
+
+- **More binds, or binding earlier, makes him weaker:** each bind spent most of a turn's action points that would
+  otherwise have fired.
+- **What fixes it is the price:** a free bind keeps the turn's three shots. Kept: **free, twice, from round 14**.
+
+**Full table after the pass:**
+
+|             | none | Tidewarden | Stormcaller | Spymaster | Gunmaster | Deepspeaker | average |
+|-------------|------|------------|-------------|-----------|-----------|-------------|---------|
+| none        | —    | 49 %       | 49 %        | 49 %      | 49 %      | 52 %        | 49.5 %  |
+| Tidewarden  | 51 % | —          | 53 %        | 46 %      | 53 %      | 55 %        | 51.4 %  |
+| Stormcaller | 51 % | 47 %       | —           | 49 %      | 47 %      | 54 %        | 49.6 %  |
+| Spymaster   | 51 % | 54 %       | 51 %        | —         | 56 %      | 54 %        | 53.2 %  |
+| Gunmaster   | 51 % | 47 %       | 53 %        | 44 %      | —         | 53 %        | 49.8 %  |
+| Deepspeaker | 48 % | 45 %       | 46 %        | 46 %      | 47 %        | —         | 46.4 %  |
+
+- **Averages:** every commander now sits between 46 % and 53 %.
+- **Spymaster vs Tidewarden:** this run puts it at 54 %. In the focused run it was 49 % (the two runs play different
+  seeds, so a pairing moves by about ±3 points).
+- **Pairings at the edge:** Spymaster v Gunmaster 56 %, Deepspeaker the lowest at 46 %.
+- **Simulation options:** `TIDE_FROM`, `TIDE_USES` and `TIDE_AP` try other values without editing the rules.
 
 ## Suggested building order
 

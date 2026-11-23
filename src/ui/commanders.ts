@@ -6,7 +6,7 @@ export interface CmdInfo { name: string; motto: string; power: string; passive?:
 export const CMD_INFO: Record<Cmd, CmdInfo> = {
   tidewarden: {
     name: 'The Tidewarden', motto: 'The sea keeps my time, not yours.', glyph: '≋',
-    power: 'Bind the Tide (2 AP, twice, from round 14): the maelstrom\'s next ring comes two rounds later, or one sooner.',
+    power: 'Bind the Tide (free, twice, from round 14): the maelstrom\'s next ring comes two rounds later, or one sooner.',
     drawback: 'May not buy a Sea Current.',
   },
   stormcaller: {

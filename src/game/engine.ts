@@ -20,6 +20,8 @@ export type Cmd = 'tidewarden' | 'stormcaller' | 'spymaster' | 'gunmaster' | 'de
 export const CMDS: Cmd[] = ['tidewarden', 'stormcaller', 'spymaster', 'gunmaster', 'deepspeaker'];
 /** How many times each commander's main power may be used in a battle (cooldowns are in the reducer). */
 export const SQUALL_AP = 1, GALE_EVERY = 2, SOUND_EVERY = 5, SOUND_AP = 0;
+/** From which round the Tidewarden may bind the tide (an object, so balance runs can try other values). */
+export const TIDE = { from: 14, ap: 0 };
 export const CMD_USES: Record<Cmd, number> = { tidewarden: 2, stormcaller: 3, spymaster: 99, gunmaster: 3, deepspeaker: 99 };
 export type Placement = Pick<Ship, 'id' | 'x' | 'y' | 'dir' | 'rev'>;
 /** Private record of a captain's hidden moves, revealed after the battle for verification. */
@@ -342,7 +344,7 @@ export function reduce(p: Pub, m: Msg): boolean {
     case 'bind': {
       // The Tidewarden moves the maelstrom's next ring: two rounds later, or one sooner. Twice, from round 14.
       const left = maelstromIn(p);
-      if (mine.cmd !== 'tidewarden' || (mine.cmdUses ?? 0) >= CMD_USES.tidewarden || p.round < 14 || left === null || !spend(2)) return false;
+      if (mine.cmd !== 'tidewarden' || (mine.cmdUses ?? 0) >= CMD_USES.tidewarden || p.round < TIDE.from || left === null || !spend(TIDE.ap)) return false;
       const next = p.round + left;
       p.nextRing = m.delay ? next + 2 : Math.max(p.round + 1, next - 1);
       mine.cmdUses = (mine.cmdUses ?? 0) + 1;
@@ -770,7 +772,7 @@ export class Client {
 
   /* ---------- commanders ---------- */
   private uses() { return this.side.cmdUses ?? 0; }
-  canBind() { return this.side.cmd === 'tidewarden' && this.uses() < CMD_USES.tidewarden && this.pub.round >= 14 && maelstromIn(this.pub) !== null && this.can(2); }
+  canBind() { return this.side.cmd === 'tidewarden' && this.uses() < CMD_USES.tidewarden && this.pub.round >= TIDE.from && maelstromIn(this.pub) !== null && this.can(TIDE.ap); }
   bind(delay: boolean): boolean { if (!this.canBind()) return false; this.send({ t: 'bind', delay }); return true; }
   canSquall() { return this.side.cmd === 'stormcaller' && this.uses() < CMD_USES.stormcaller && this.can(SQUALL_AP); }
   squall(dir: number): boolean { if (!this.canSquall() || !(dir >= 0 && dir <= 3)) return false; this.send({ t: 'squall', dir }); return true; }

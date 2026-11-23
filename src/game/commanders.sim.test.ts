@@ -2,7 +2,7 @@
 // Skipped in the normal test run; run with:  SIM=1 GAMES=200 npx vitest run src/game/commanders.sim.test.ts
 import { describe, expect, it } from 'vitest';
 import { driveBot, botAct } from './bot';
-import { CMDS, Client, Cmd } from './engine';
+import { CMDS, CMD_USES, Client, Cmd, TIDE } from './engine';
 import { Bus } from '../net/session';
 import { verify } from './verify';
 
@@ -31,6 +31,10 @@ async function game(seed: number, c0: Pick, c1: Pick) {
 
 describe.skipIf(!process.env.SIM)('commander balance', () => {
   it('every pairing, both seats', async () => {
+    // Variants to try without editing the rules.
+    if (process.env.TIDE_FROM) TIDE.from = Number(process.env.TIDE_FROM);
+    if (process.env.TIDE_USES) CMD_USES.tidewarden = Number(process.env.TIDE_USES);
+    if (process.env.TIDE_AP) TIDE.ap = Number(process.env.TIDE_AP);
     const G = Number(process.env.GAMES || 100), picks: Pick[] = [null, ...CMDS];
     const rows: string[] = [], table: Record<string, { w: number; g: number; rounds: number; uses: number; stalls: number }> = {};
     const add = (k: string, won: boolean, rounds: number, uses: number, stall: boolean) => {

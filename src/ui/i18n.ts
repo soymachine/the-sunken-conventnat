@@ -102,7 +102,7 @@ const EXACT: Record<string, string> = {
   'The sea keeps my time, not yours.': 'El mar lleva mi tiempo, no el tuyo.', 'Every sail on this sea answers to me.': 'Cada vela de este mar me obedece.',
   'Count the masts before you count the guns.': 'Cuenta los mástiles antes de contar los cañones.', 'One broadside is worth ten prayers.': 'Una andanada vale más que diez plegarias.',
   'The deep remembers every name we give it.': 'El abismo recuerda cada nombre que le damos.',
-  "Bind the Tide (2 AP, twice, from round 14): the maelstrom's next ring comes two rounds later, or one sooner.": 'Atar la marea (2 PA, dos veces, desde la ronda 14): el próximo anillo del Maelstrom llega dos rondas más tarde, o una antes.',
+  "Bind the Tide (free, twice, from round 14): the maelstrom's next ring comes two rounds later, or one sooner.": 'Atar la marea (gratis, dos veces, desde la ronda 14): el próximo anillo del Maelstrom llega dos rondas más tarde, o una antes.',
   'May not buy a Sea Current.': 'No puede comprar Corriente marina.',
   "Squall (1 AP, three times): the enemy fleet is driven a square; ships that cannot run are dashed and take a hit, and your own waters are veiled from their next glass. Call the Wind (1 AP, every other round): choose this round's wind.": 'Turbonada (1 PA, tres veces): la flota enemiga es empujada una casilla; los barcos que no pueden moverse chocan y reciben un impacto, y tus aguas quedan veladas a su próximo catalejo. Llamar al viento (1 PA, una ronda sí y otra no): elige el viento de la ronda.',
   'Your ships are never caught in irons.': 'Tus barcos nunca quedan bloqueados por el viento en contra.', 'May not buy Trade Winds.': 'No puede comprar Vientos alisios.',
