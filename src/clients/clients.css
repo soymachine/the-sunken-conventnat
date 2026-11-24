@@ -84,3 +84,5 @@ code { font-size: 13px; background: rgba(26, 18, 8, .07); padding: 1px 4px; bord
 @media (max-width: 900px) { .cols { grid-template-columns: 1fr; } .tiles { grid-template-columns: repeat(3, 1fr); } .leads .clip { max-width: 120px; } }
 .tw { overflow-x: auto; border-radius: 4px; }
 .leads .clip { max-width: 200px; }
+.login .or { text-align: center; margin: 10px 0; color: var(--muted); font-style: italic; }
+.login .google { width: 100%; padding: 10px; }

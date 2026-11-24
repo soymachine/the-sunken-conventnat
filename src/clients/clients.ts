@@ -3,7 +3,7 @@
 import '../ui/fonts';
 import './clients.css';
 import { initializeApp } from 'firebase/app';
-import { browserLocalPersistence, connectAuthEmulator, initializeAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, User } from 'firebase/auth';
+import { GoogleAuthProvider, browserLocalPersistence, browserPopupRedirectResolver, connectAuthEmulator, initializeAuth, onAuthStateChanged, signInWithEmailAndPassword, signInWithPopup, signOut, User } from 'firebase/auth';
 import { connectDatabaseEmulator, getDatabase, onValue, push, ref, remove, serverTimestamp, set, update } from 'firebase/database';
 import { firebaseConfigured, firebaseOptions, useEmulator } from '../net/firebase';
 
@@ -30,7 +30,7 @@ const app = document.getElementById('app')!;
 if (!firebaseConfigured) { app.innerHTML = '<p class="loading">Firebase no está configurado en esta compilación.</p>'; throw new Error('no firebase'); }
 
 const fb = initializeApp(firebaseOptions(), 'crm');
-const auth = initializeAuth(fb, { persistence: browserLocalPersistence });
+const auth = initializeAuth(fb, { persistence: browserLocalPersistence, popupRedirectResolver: browserPopupRedirectResolver });
 const db = getDatabase(fb);
 if (useEmulator) { connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true }); connectDatabaseEmulator(db, '127.0.0.1', 9000); }
 
@@ -44,11 +44,17 @@ onAuthStateChanged(auth, (u) => { unsub.forEach((f) => f()); unsub = []; if (u) 
 function login(err = '') {
   app.innerHTML = `<form class="login card" autocomplete="on">
     <h1>Portales</h1><p class="sub">The Sunken Covenant · acceso restringido</p>
-    <label>Correo<input name="email" type="email" autocomplete="username" required></label>
-    <label>Contraseña<input name="password" type="password" autocomplete="current-password" required></label>
+    <label>Correo<input name="email" type="email" autocomplete="username"></label>
+    <label>Contraseña<input name="password" type="password" autocomplete="current-password"></label>
     ${err ? `<p class="err">${esc(err)}</p>` : ''}
     <button class="primary" type="submit">Entrar</button>
+    <p class="or">o</p>
+    <button class="google" type="button" id="google">Entrar con Google</button>
   </form>`;
+  app.querySelector<HTMLElement>('#google')!.onclick = async () => {
+    try { await signInWithPopup(auth, new GoogleAuthProvider()); }
+    catch (e) { if ((e as { code?: string }).code !== 'auth/popup-closed-by-user') login('No se pudo entrar con Google.'); }
+  };
   const f = app.querySelector('form')!;
   f.onsubmit = async (e) => {
     e.preventDefault();
