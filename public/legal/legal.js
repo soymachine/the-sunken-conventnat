@@ -1,9 +1,9 @@
 // The one place to fill in who is responsible for the game. Every legal page reads it.
 const LEGAL = {
-  owner: '[NOMBRE Y APELLIDOS]',
-  country: '[PAÍS]',
+  owner: 'Daniel Moya Teruel',
+  country: { en: 'Spain', es: 'España' },
   contact: 'soymachine@gmail.com',
-  updated: { en: '23 November 2026', es: '23 de noviembre de 2026' },
+  updated: { en: '24 November 2026', es: '24 de noviembre de 2026' },
 };
 
 (() => {
@@ -20,7 +20,7 @@ const LEGAL = {
   document.querySelectorAll('[data-f]').forEach((e) => {
     const f = e.dataset.f;
     if (f === 'contact') { e.textContent = LEGAL.contact; if (e.tagName === 'A') e.href = `mailto:${LEGAL.contact}`; }
-    else if (f === 'updated') e.textContent = LEGAL.updated[e.closest('[lang-only]')?.getAttribute('lang-only') || 'en'];
+    else if (typeof LEGAL[f] === 'object') e.textContent = LEGAL[f][e.closest('[lang-only]')?.getAttribute('lang-only') || 'en'];
     else e.textContent = LEGAL[f];
   });
   document.querySelectorAll('.langs button').forEach((b) => (b.onclick = () => { show(b.dataset.l); try { localStorage.setItem('tsc:lang', b.dataset.l); } catch { /* ignore */ } }));
