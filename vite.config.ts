@@ -9,7 +9,7 @@ export default defineConfig({
   // Two pages: the game, and the sound desk (admin.html).
   build: {
     rollupOptions: {
-      input: { main: 'index.html', admin: 'admin.html' },
+      input: { main: 'index.html', admin: 'admin.html', clients: 'clients.html' },
       // three.js and Firebase in chunks of their own: they change rarely, so returning players keep them cached
       // while the game's own code is updated, and the browser fetches the three in parallel.
       output: { manualChunks: (id) => (id.includes('node_modules/three/') ? 'three' : id.includes('node_modules/@firebase/') || id.includes('node_modules/firebase/') ? 'firebase' : undefined) },
