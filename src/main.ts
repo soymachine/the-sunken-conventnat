@@ -73,6 +73,7 @@ const hud = new Hud({
   mode: (m) => { sfx.play('click'); setMode(m); },
   mute: () => sfx.toggle(),
   quality: (q) => scene.setQuality(q),
+  style: (st) => scene.setStyle(st),
   // Debug only: changes this browser's view of the game, for trying cards; never use it in a real match.
   cheat: (what) => {
     // Both copies of the game must agree, so this only works against the machine (whose copy lives here too).
@@ -144,7 +145,7 @@ function switchTo(old: Session, ns: Session) {
   if (ns.code) location.hash = ns.code;
   void start(ns, captainName);
 }
-hud.setPrefs(sfx.muted, scene.getQuality(), sfx.vol);
+hud.setPrefs(sfx.muted, scene.getQuality(), sfx.vol, scene.getStyle());
 // ?debug exposes the scene and HUD to the console, to trigger weather and notices by hand.
 // Debug tuning that reaches into the 3D scene.
 addEventListener('tsc:tune', (e) => { const { v, n } = (e as CustomEvent<{ v: string; n: number }>).detail; if (v === '--wind') scene.setWindStrength(n); if (v === '--cursor-rot') setCursorRotation(n); });

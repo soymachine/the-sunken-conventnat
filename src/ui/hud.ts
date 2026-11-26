@@ -77,6 +77,8 @@ export interface HudHandlers {
   mode(m: Mode): void;
   mute(): boolean;
   quality(q: 'auto' | 'high' | 'low'): void;
+  /** The look of the 3D table: engraved print or pixel art. */
+  style?(s: 'print' | 'pixel'): void;
   note(text: string): void;
   /** Debug only (?debug=true): grant doubloons, seals or action points to try the cards. */
   cheat?(what: 'gold' | 'seals' | 'ap'): void;
@@ -169,6 +171,8 @@ export class Hud {
         <div class="vols">${[['music', 'Music'], ['sfx', 'Effects'], ['ambience', 'Ambience'], ['ui', 'Interface']].map(([k, n]) => `<label><span>${n}</span><input type="range" min="0" max="1" step="0.05" data-vol="${k}" aria-label="${n}"></label>`).join('')}</div>
         <p class="opt">Colour-blind colours</p>
         <div class="seg" data-pref="cvd" role="radiogroup" aria-label="Colour-blind colours"><button data-v="off" role="radio">Off</button><button data-v="on" role="radio">On</button></div>
+        <p class="opt">3D look</p>
+        <div class="seg" data-pref="style" role="radiogroup" aria-label="3D look"><button data-v="print" role="radio">Engraved</button><button data-v="pixel" role="radio">Pixel art</button></div>
         <p class="opt">3D quality</p>
         <div class="seg" data-pref="quality" role="radiogroup" aria-label="3D quality"><button data-v="auto" role="radio">Auto</button><button data-v="high" role="radio">High</button><button data-v="low" role="radio">Low</button></div>
         <div class="debug" hidden><p class="opt">Debug</p><div class="seg three"><button type="button" data-cheat="gold">+100 gold</button><button type="button" data-cheat="seals">+3 seals</button><button type="button" data-cheat="ap">+3 AP</button></div>
@@ -279,6 +283,7 @@ export class Hud {
       if (pref === 'sound' && (v === 'off') !== this.muted) this.muted = on.mute();
       if (pref === 'quality') { on.quality(v as 'auto' | 'high' | 'low'); this.qualityPref = v; }
       if (pref === 'cvd') on.colourBlind?.(v === 'on');
+      if (pref === 'style') { on.style?.(v as 'print' | 'pixel'); this.stylePref = v; }
       if (pref === 'sky') on.sky?.(v as 'sun' | 'aurora' | 'clear');
       if (pref === 'lang') { setLang(v as Lang); this.paintPrefs(); }
       if (pref === 'cursor') { this.cursor = v as CursorStyle; applyCursors(this.cursor); try { localStorage.setItem('tsc:cursor', v); } catch { /* ignore */ } }
@@ -572,14 +577,16 @@ export class Hud {
   }
 
   /** Show the saved settings in the menu. */
-  setPrefs(muted: boolean, quality: string, vol?: Record<string, number>) {
-    this.muted = muted; this.qualityPref = quality; this.paintPrefs();
+  /** The 3D look chosen (print or pixel), for the Settings menu. */
+  stylePref = 'print';
+  setPrefs(muted: boolean, quality: string, vol?: Record<string, number>, style = 'print') {
+    this.muted = muted; this.qualityPref = quality; this.stylePref = style; this.paintPrefs();
     if (vol) this.root.querySelectorAll<HTMLInputElement>('[data-vol]').forEach((i) => { i.value = String(vol[i.dataset.vol!] ?? 1); });
   }
   private paintPrefs() {
     this.root.querySelectorAll<HTMLElement>('#menu .seg button').forEach((b) => {
       const pref = b.parentElement!.dataset.pref, v = b.dataset.v;
-      const on = pref === 'sound' ? (v === 'off') === this.muted : pref === 'quality' ? v === this.qualityPref : pref === 'cursor' ? v === this.cursor : pref === 'lang' ? v === getLang() : pref === 'cvd' ? (v === 'on') === colourBlind : false;
+      const on = pref === 'sound' ? (v === 'off') === this.muted : pref === 'quality' ? v === this.qualityPref : pref === 'cursor' ? v === this.cursor : pref === 'lang' ? v === getLang() : pref === 'cvd' ? (v === 'on') === colourBlind : pref === 'style' ? v === this.stylePref : false;
       b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on));
     });
   }

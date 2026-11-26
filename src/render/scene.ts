@@ -8,6 +8,7 @@ import { Fx } from './fx';
 import { Kraken } from './kraken';
 import { Weather } from './weather';
 import { Post } from './post';
+import { Pixel } from './pixel';
 import { Sea, waveH } from './sea';
 import { ShipModel, buildShip, loadPropModels, loadShipModels, propModel, setShipTime } from './ships';
 
@@ -366,6 +367,7 @@ export class SeaScene {
     }
     this.scene.add(this.marks, this.shipsGroup, this.misc, this.hl, this.fx.group, this.kraken.group, this.weather.group);
     if (this.quality === 'high') this.post = new Post(this.renderer, this.scene, this.camera);
+    try { if (localStorage.getItem('tsc:style') === 'pixel') this.pixel = new Pixel(this.renderer, this.scene, this.camera); } catch { /* storage unavailable */ }
     addEventListener('resize', () => this.resize());
     canvas.addEventListener('wheel', (e) => { e.preventDefault(); this.wheel(e); }, { passive: false });
     // Hold the middle button and drag to slide the charts under the camera.
@@ -487,6 +489,17 @@ export class SeaScene {
     else { this.raise(); this.frames = 0; this.slow = 0; }
   }
   getQuality(): Quality { return this.qualityPref; }
+
+  /** The look of the 3D table: the engraved print (default) or pixel art. Remembered between visits. */
+  setStyle(style: 'print' | 'pixel') {
+    try { localStorage.setItem('tsc:style', style); } catch { /* storage unavailable */ }
+    if ((style === 'pixel') === !!this.pixel) return;
+    if (style === 'pixel') this.pixel = new Pixel(this.renderer, this.scene, this.camera);
+    else { this.pixel?.dispose(); this.pixel = null; }
+    this.resize();
+  }
+  getStyle(): 'print' | 'pixel' { return this.pixel ? 'pixel' : 'print'; }
+  private pixel: Pixel | null = null;
   /** Choose how water is drawn around hulls (0 to 4); see Sea.wake. */
   setWake(n: number) { Sea.wake = n; }
 
@@ -581,7 +594,9 @@ export class SeaScene {
     const w = this.canvas.clientWidth || innerWidth, h = this.canvas.clientHeight || innerHeight;
     this.renderer.setSize(w, h, false);
     this.post?.setSize(w, h, this.renderer.getPixelRatio());
-    this.fx.setScale(h * this.renderer.getPixelRatio() * 1.4);
+    this.pixel?.setSize(w, h);
+    // Particles are sized in pixels of the picture they are drawn into: the small one in pixel art.
+    this.fx.setScale(this.pixel ? this.pixel.rows * 1.4 : h * this.renderer.getPixelRatio() * 1.4);
     this.camera.aspect = w / h;
     const wide = w > 1000;
     const safe = { left: wide ? 268 : 6, right: wide ? 232 : 6, top: 74, bottom: wide ? 196 : 150 };
@@ -787,9 +802,10 @@ export class SeaScene {
     const night = this.weather.night;
     this.hemi.intensity = 2.0 * (1 - 0.5 * night); this.sun.intensity = 1.7 * (1 - 0.65 * night);
     this.hemi.color.setRGB(1, 0.945 - 0.15 * night, 0.81 + 0.1 * night);
-    this.post?.grade.copy(this.turnGrade).multiply(new THREE.Vector3(1 - 0.42 * night, 1 - 0.32 * night, 1 - 0.18 * night));
+    const grade = this.pixel?.grade ?? this.post?.grade;
+    grade?.copy(this.turnGrade).multiply(new THREE.Vector3(1 - 0.42 * night, 1 - 0.32 * night, 1 - 0.18 * night));
     // A great blast lights the whole table warm for a moment.
-    if (this.flashAmt > 0) { const f = this.flashAmt ** 2; this.post?.grade.multiply(new THREE.Vector3(1 + 0.9 * f, 1 + 0.55 * f, 1 + 0.2 * f)); }
+    if (this.flashAmt > 0) { const f = this.flashAmt ** 2; grade?.multiply(new THREE.Vector3(1 + 0.9 * f, 1 + 0.55 * f, 1 + 0.2 * f)); }
     for (const b of [...this.bottles]) {
       const k = Math.min(1, (t - b.t0) / b.dur);
       if (k < 1) {
@@ -819,7 +835,7 @@ export class SeaScene {
     this.shakeAmt *= Math.exp(-dt * 7);
     this.camera.position.copy(this.camPos);
     if (this.shakeAmt > 0.002) this.camera.position.add(new THREE.Vector3((Math.random() - 0.5) * this.shakeAmt, (Math.random() - 0.5) * this.shakeAmt, 0));
-    if (this.post) this.post.render(t); else this.renderer.render(this.scene, this.camera);
+    if (this.pixel) this.pixel.render(); else if (this.post) this.post.render(t); else this.renderer.render(this.scene, this.camera);
   }
 
   /** Measure a ship's hull below her deck (no sails, no bowsprit above it) in her own frame. */
