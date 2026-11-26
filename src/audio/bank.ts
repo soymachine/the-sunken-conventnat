@@ -19,6 +19,8 @@ export const SOUNDS: SoundDef[] = [
   { id: 'mast', group: 'Combate', channel: 'sfx', label: 'Mástil que cae', help: 'Madera que se astilla al hundirse.' },
   { id: 'roar', group: 'Combate', channel: 'sfx', label: 'Rugido del Kraken', help: 'Al invocar al Kraken.' },
   { id: 'slam', group: 'Combate', channel: 'sfx', label: 'Golpe de tentáculo', help: 'Cada golpe del Kraken en el agua.' },
+  { id: 'bottleThrow', group: 'Combate', channel: 'sfx', label: 'Lanzar la botella', help: 'Al echar un mensaje en una botella.' },
+  { id: 'bottleSplash', group: 'Combate', channel: 'sfx', label: 'La botella cae al agua', help: 'Cuando la botella llega al mar.' },
   { id: 'creak', group: 'Combate', channel: 'sfx', label: 'Barco que maniobra', help: 'Navegar o virar.' },
   { id: 'glass', group: 'Combate', channel: 'sfx', label: 'Catalejo / sondeo', help: 'El resultado de una exploración.' },
   // Weather and ambience
@@ -48,7 +50,7 @@ export const SOUNDS: SoundDef[] = [
   { id: 'stingLose', group: 'Música', channel: 'music', label: 'Derrota', help: 'Al perder (una vez).' },
 ];
 /** Names with a synthesised stand-in, heard while no recording is assigned (music never has one). */
-export const SYNTH = new Set(['cannon', 'splash', 'hit', 'clang', 'sink', 'coin', 'glass', 'click', 'bell', 'roar', 'thunder', 'creak', 'plunge', 'treasure', 'explosion', 'mast', 'steam', 'tick']);
+export const SYNTH = new Set(['cannon', 'splash', 'hit', 'clang', 'sink', 'coin', 'glass', 'click', 'bell', 'roar', 'thunder', 'creak', 'plunge', 'treasure', 'explosion', 'mast', 'steam', 'tick', 'bottleThrow', 'bottleSplash']);
 export const SOUND = Object.fromEntries(SOUNDS.map((s) => [s.id, s])) as Record<string, SoundDef>;
 
 /** How a recording is played: the file, the part of it kept (seconds), its gain and its fades. */

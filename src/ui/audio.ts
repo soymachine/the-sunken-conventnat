@@ -4,7 +4,7 @@
 import { Bank, Channel, Entry, Local, SOUND, SYNTH, localAll, publishedBank } from '../audio/bank';
 
 export type SfxName = 'roar' | 'thunder' | 'cannon' | 'splash' | 'hit' | 'clang' | 'sink' | 'coin' | 'glass' | 'click' | 'bell' | 'creak' | 'gull' | 'treasure' | 'plunge'
-  | 'whistle' | 'explosion' | 'mast' | 'steam' | 'tick' | 'slam' | 'cardHover' | 'cardPlay' | 'cardDeal' | 'denied' | 'seal' | 'hourglass' | 'paper';
+  | 'whistle' | 'explosion' | 'mast' | 'steam' | 'tick' | 'bottleThrow' | 'bottleSplash' | 'slam' | 'cardHover' | 'cardPlay' | 'cardDeal' | 'denied' | 'seal' | 'hourglass' | 'paper';
 export type MusicName = 'musicHome' | 'musicBattle' | 'musicTense';
 export type Volumes = Record<'master' | Channel, number>;
 const VOL0: Volumes = { master: 0.8, music: 0.6, sfx: 0.9, ambience: 0.8, ui: 0.8 };
@@ -211,6 +211,8 @@ export class Sfx {
     }
     const rate = { cannon: jitter(0.06), gull: jitter(0.1), plunge: jitter(0.08), hit: jitter(0.05), cardHover: jitter(0.05), click: jitter(0.03), slam: jitter(0.06) } as Record<string, number>;
     if (name === 'splash' && this.has('plunge')) name = 'plunge';
+    // Until the bottle has its own splash, a lighter take of the ball's plunge stands in.
+    if (name === 'bottleSplash' && !this.has('bottleSplash') && this.has('plunge')) { this.voice('plunge', { gain: 0.5, rate: 1.25 }); return; }
     if (this.has(name)) {
       this.voice(name, { rate: rate[name] });
       // A hit booms under its crackle when the boom itself is not recorded.
@@ -238,6 +240,8 @@ export class Sfx {
         this.noise(sfx, t, 3.2, 0.9, 'lowpass', 2600, 70); this.noise(sfx, t + 0.02, 0.5, 0.5, 'highpass', 1800, 4200);
         for (let i = 0; i < 7; i++) this.noise(sfx, t + 0.25 + Math.random() * 1.4, 0.05, 0.25, 'bandpass', 2400, 1400, 4);
         break;
+      case 'bottleThrow': this.noise(sfx, t, 0.35, 0.22, 'bandpass', 600, 2400, 1.5); this.noise(sfx, t + 0.12, 0.3, 0.12, 'bandpass', 900, 3000, 2); break;
+      case 'bottleSplash': this.noise(sfx, t, 0.45, 0.3, 'bandpass', 2200, 600, 0.9); this.tone(sfx, t, 520, 180, 0.12, 0.12); break;
       case 'tick': this.tone(ui, t, 1900, 1700, 0.04, 0.12, 'square'); this.noise(ui, t, 0.02, 0.15, 'bandpass', 3000, 2500, 4); break;
       case 'steam': this.noise(sfx, t, 2.4, 0.35, 'highpass', 3200, 1800, 0.7); this.noise(sfx, t + 0.1, 1.8, 0.2, 'bandpass', 900, 300, 1); break;
       case 'mast': this.noise(sfx, t, 0.35, 0.4, 'bandpass', 2600, 500, 2); this.tone(sfx, t, 160, 60, 0.5, 0.3, 'triangle'); this.noise(sfx, t + 0.05, 0.7, 0.3, 'bandpass', 2600, 500, 0.8); break;

@@ -26,7 +26,7 @@ export interface View { pub: Pub; me: 0 | 1; ships: Ship[]; selectedId?: number 
 export interface Ghost { kind: Kind; len: number; x: number; y: number; dir: 'h' | 'v'; rev: boolean; from: [number, number]; pivot: [number, number]; state: 'hot' | 'idle' | 'bad';
   /** Draw the translucent ship itself (only for the turn being pointed at), not just its arrow. */
   ship: boolean }
-export type Sound = 'cannon' | 'splash' | 'hit' | 'clang' | 'sink' | 'coin' | 'glass' | 'roar' | 'thunder' | 'gull' | 'treasure' | 'plunge' | 'whistle' | 'slam' | 'explosion' | 'mast' | 'steam';
+export type Sound = 'cannon' | 'splash' | 'hit' | 'clang' | 'sink' | 'coin' | 'glass' | 'roar' | 'thunder' | 'gull' | 'treasure' | 'plunge' | 'whistle' | 'slam' | 'explosion' | 'mast' | 'steam' | 'bottleThrow' | 'bottleSplash';
 
 // Red and amber follow the colour-blind setting (src/ui/palette.ts).
 const C = { ink: 0x0d0b08, get amber() { return PAL.amber; }, parch: 0xe8d5a3, brass: 0xb08d3c, get wax() { return PAL.wax; } };
@@ -540,7 +540,7 @@ export class SeaScene {
     const dist = a.distanceTo(land);
     const g = bottleModel();
     this.misc.add(g);
-    this.sound('splash');
+    this.sound('bottleThrow');
     return new Promise((res) => this.bottles.push({
       g, from: a, to: land, t0: this.time, dur: 1.2 + dist * 0.045, peak: 2.2 + dist * 0.22,
       yaw: Math.atan2(-(land.z - a.z), land.x - a.x), spin: 2 + Math.floor(Math.random() * 2), stay, done: res,
@@ -799,7 +799,7 @@ export class SeaScene {
         b.g.position.copy(p);
         b.g.rotation.set(0, b.yaw, -b.spin * k * Math.PI * 2);
       } else {
-        if (!b.landed) { b.landed = t; this.fx.water(b.to.clone().setY(0.1)); this.sound('plunge'); if (b.done) { const d = b.done; b.done = undefined; d(); } }
+        if (!b.landed) { b.landed = t; this.fx.water(b.to.clone().setY(0.1)); this.sound('bottleSplash'); if (b.done) { const d = b.done; b.done = undefined; d(); } }
         // Afloat where it fell: it rides the swell, lying on its side.
         const s = t - b.landed;
         b.g.position.set(b.to.x, (calm ? 0 : waveH(b.to.x, b.to.z, t)) + 0.1 + 0.04 * Math.sin(t * 2.4) - (b.stay ? 0 : s * 0.25), b.to.z);
