@@ -35,6 +35,18 @@
             ".write": "auth != null && (($seat === '0' && root.child('rooms').child($code).child('meta/host').val() === auth.uid) || ($seat === '1' && root.child('rooms').child($code).child('meta/guest').val() === auth.uid))",
             ".validate": "newData.val() === true"
           }
+        },
+        "rematch": {
+          ".read": "auth != null",
+          "$seat": {
+            ".write": "auth != null && (($seat === '0' && root.child('rooms').child($code).child('meta/host').val() === auth.uid) || ($seat === '1' && root.child('rooms').child($code).child('meta/guest').val() === auth.uid))",
+            ".validate": "newData.val() === true"
+          }
+        },
+        "next": {
+          ".read": "auth != null",
+          ".write": "auth != null && (root.child('rooms').child($code).child('meta/host').val() === auth.uid || root.child('rooms').child($code).child('meta/guest').val() === auth.uid) && !data.exists() && root.child('rooms').child($code).child('rematch/0').val() === true && root.child('rooms').child($code).child('rematch/1').val() === true",
+          ".validate": "newData.isString() && newData.val().length === 4 && root.child('rooms').child(newData.val()).child('meta/host').val() === auth.uid && !root.child('rooms').child(newData.val()).child('meta/guest').exists()"
         }
       }
     },

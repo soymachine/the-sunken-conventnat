@@ -12,8 +12,14 @@ export interface Session {
   send(m: Msg): void;
   /** Start delivering messages (including any history) to `cb`. */
   listen(cb: (m: Msg) => void, onPresence?: (online: boolean) => void): void;
-  /** The battle is over and this captain has checked the other's log: the room may go. */
+  /** This captain is done with the room (left the battle report): once both are, the room may go. */
   finished?(): void;
+  /** Online only: ask for, follow and open a rematch in a new room. */
+  askRematch?(): Promise<void>;
+  watchRematch?(cb: (r: { mine: boolean; theirs: boolean; next: string | null }) => void): () => void;
+  openRematch?(): Promise<Session>;
+  /** Online only: resolves once the second captain has sat down. */
+  guest?(): Promise<void>;
   close(): void;
 }
 

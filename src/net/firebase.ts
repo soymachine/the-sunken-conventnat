@@ -84,9 +84,35 @@ class FirebaseSession implements Session {
     });
   }
 
+  /* ---------- the rematch ---------- */
+  /** Ask for a rematch: this captain's flag in the finished room. */
+  askRematch() { return set(this.at(`rematch/${this.me}`), true); }
   /**
-   * Each captain marks the room done once the battle is over and the other's log has been checked; the second to
-   * do so deletes the room, so finished battles do not pile up in the database.
+   * Follow the rematch: who has asked, and the new room once it is open. Returns a function that stops watching.
+   */
+  watchRematch(cb: (r: { mine: boolean; theirs: boolean; next: string | null }) => void) {
+    let flags: Record<string, boolean> = {}, next: string | null = null;
+    const tell = () => cb({ mine: !!flags[this.me], theirs: !!flags[1 - this.me], next });
+    const a = onValue(this.at('rematch'), (s) => { flags = s.val() || {}; tell(); });
+    const b = onValue(this.at('next'), (s) => { next = s.exists() ? String(s.val()) : null; tell(); });
+    const stop = () => { a(); b(); };
+    this.unsub.push(stop);
+    return stop;
+  }
+  /**
+   * Both captains want a rematch: the one who moved second opens the new room (and so moves first in it), then
+   * points the old room at it for the other captain to follow.
+   */
+  async openRematch(): Promise<FirebaseSession> {
+    const room = await createRoom(this.mode);
+    await set(this.at('next'), room.code);
+    return room;
+  }
+
+  /**
+   * Each captain marks the room done as they leave the battle report (back to port, or on to a rematch); the second
+   * to do so deletes the room, so finished battles do not pile up in the database. Rooms left open are swept after
+   * a day.
    */
   finished() {
     void set(this.at(`done/${this.me}`), true).then(async () => {

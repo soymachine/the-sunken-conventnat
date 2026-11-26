@@ -1034,3 +1034,11 @@ html.cvd .logPanel li.good span { color: #1f6fa0; }
 #hud #menuBtn { right: calc(50% + 252px + 44px); }
 #hud #howBtn { right: calc(50% + 252px); }
 #hud #logBtn { left: calc(50% + 252px); }
+
+/* The online rematch: the other captain's request glows. */
+.over .rematchNote:empty { display: none; }
+.over .rematchNote { margin: -4px 0 10px; font-style: italic; }
+.over .rematchNote.hot { color: var(--wax); font-weight: 600; }
+.over #rematch.invited { animation: rematchGlow 1.4s ease-in-out infinite; }
+.over #rematch:disabled { opacity: .7; cursor: default; }
+@keyframes rematchGlow { 50% { box-shadow: 0 0 0 3px rgba(140, 47, 27, .35), 0 0 18px rgba(255, 190, 110, .7); } }

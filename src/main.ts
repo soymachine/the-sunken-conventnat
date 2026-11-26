@@ -99,9 +99,51 @@ const hud = new Hud({
   rotate: rotateLifted,
   ready: () => { if (!canPlace() || lifted) return; if (!legalPlacement(c.ships)) hud.log('The merchantman must start in the Colony: columns A to C.', 'bad'); else void c.ready(); },
   leave,
-  rematch: () => { if (!lastBot) return; const b = lastBot; leave(); void start(new LocalSession(b.mode, 700, Math.random, true), b.name); },
+  rematch: () => {
+    if (session?.code) { void session.askRematch?.(); return; }
+    if (!lastBot) return; const b = lastBot; leave(); void start(new LocalSession(b.mode, 700, Math.random, true), b.name);
+  },
 });
 let lastBot: { name: string; mode: Session['mode'] } | null = null;
+let captainName = '';
+
+/* ---------- the rematch, online ---------- */
+// Both captains ask from the battle report; the one who moved second opens a new room (moving first there) and
+// points the old room at it; the other follows. Each then leaves the old room, which goes once both have.
+let rematchStop: (() => void) | null = null, rematchBusy = false, rematch = { mine: false, theirs: false };
+const foeName = () => c.foeSide.name || 'The other captain';
+/** The rematch button as things stand: offered, asked, invited, or gone with the other captain. */
+function paintRematch() {
+  if (!rematchStop || rematchBusy) return;
+  hud.setRematch(!foeOnline ? 'gone' : rematch.mine && rematch.theirs ? 'starting' : rematch.mine ? 'asked' : rematch.theirs ? 'invited' : 'offer', foeName());
+}
+function watchRematch(s: Session) {
+  if (rematchStop || !s.watchRematch) return;
+  rematchStop = s.watchRematch(async ({ mine, theirs, next }) => {
+    if (session !== s || rematchBusy) return;
+    rematch = { mine, theirs };
+    if (next && s.me === 0) return void follow(s, next);
+    if (mine && theirs && s.me === 1) {
+      rematchBusy = true; hud.setRematch('starting', foeName());
+      try { const ns = await s.openRematch!(); switchTo(s, ns); }
+      catch { rematchBusy = false; hud.setRematch('error', foeName()); }
+      return;
+    }
+    paintRematch();
+  });
+}
+async function follow(s: Session, code: string) {
+  rematchBusy = true; hud.setRematch('starting', c.foeSide.name || '');
+  try { switchTo(s, await joinRoom(code)); }
+  catch { rematchBusy = false; hud.setRematch('error', c.foeSide.name || ''); }
+}
+function switchTo(old: Session, ns: Session) {
+  rematchStop?.(); rematchStop = null; rematchBusy = false;
+  try { localStorage.removeItem(storeKey()); } catch { /* ignore */ }
+  old.finished?.(); old.close();
+  if (ns.code) location.hash = ns.code;
+  void start(ns, captainName);
+}
 hud.setPrefs(sfx.muted, scene.getQuality(), sfx.vol);
 // ?debug exposes the scene and HUD to the console, to trigger weather and notices by hand.
 // Debug tuning that reaches into the 3D scene.
@@ -148,7 +190,7 @@ async function artGone() {
 
 async function start(s: Session, name: string) {
   if (await artGone()) { location.reload(); return; }
-  session = s;
+  session = s; captainName = name; rematchStop?.(); rematchStop = null; rematch = { mine: false, theirs: false };
   c = new Client(s.me, s.seed, (m) => s.send(m), Math.random, name, s.mode);
   let snap: Snapshot | null = null;
   try { snap = JSON.parse(localStorage.getItem(storeKey()) || 'null'); } catch { /* ignore */ }
@@ -186,7 +228,7 @@ async function start(s: Session, name: string) {
     });
   } else local?.begin();
   refresh();
-  s.listen((m) => c.receive(m), (on) => { if (!on && foeOnline) foeGoneAt = performance.now(); foeOnline = on; refresh(); });
+  s.listen((m) => c.receive(m), (on) => { if (!on && foeOnline) foeGoneAt = performance.now(); foeOnline = on; refresh(); paintRematch(); });
   // The first battle against the machine is guided, once.
   if (s instanceof LocalSession && !Tutorial.seen()) tutorial.start(c); else if (tutorial.active) tutorial.stop(false);
   Object.assign(window, { __client: c, __screen: (cell: Cell) => scene.screen(cell), __bot: (s as LocalSession).bot });
@@ -228,6 +270,9 @@ function leave() {
   stopCountdown();
   if (tutorial.active) tutorial.stop(false);
   try { localStorage.removeItem(storeKey()); } catch { /* ignore */ }
+  rematchStop?.(); rematchStop = null;
+  // Online, this captain is done with the room; once both are, it is deleted.
+  session?.finished?.();
   session?.close();
   session = null;
   history.replaceState(null, '', location.pathname + location.search);
@@ -364,12 +409,8 @@ function describe(m: Msg, mine: boolean) {
         void verify(c.log, c.foe, roleOf(c.pub, c.foe), s.seed, s.mode).then((bad) => {
           hud.setVerdict(bad ? `The enemy's log does not add up: ${bad}.` : "The enemy's log checks out: every shot was answered truthfully.");
           recordBattle(!bad);
-          // Once both captains have revealed and this one has checked, the room can be cleared away.
-          if (c.log.some((x) => x.t === 'reveal' && x.by === c.me)) s.finished?.();
         });
       }
-      // My own reveal may arrive after theirs: then the check above has already run.
-      if (mine && session?.code && c.log.some((x) => x.t === 'reveal' && x.by === c.foe)) session.finished?.();
       break;
   }
 }
@@ -474,7 +515,7 @@ function soundtrack() {
   if (p.phase === 'over') {
     sfx.setWind(0);
     const k = `${session.code ?? 'machine'}:${session.seed}`;
-    if (stung !== k) { stung = k; sfx.sting(p.winner === c.me ? 'stingWin' : 'stingLose'); hud.setResults(battleStats(), !session.code); }
+    if (stung !== k) { stung = k; sfx.sting(p.winner === c.me ? 'stingWin' : 'stingLose'); hud.setResults(battleStats(), true); if (session.code) watchRematch(session); }
     return;
   }
   const mineLeft = c.ships.filter((s) => !s.sunk).length, foeLeft = c.ships.length - c.foeSide.sunk.length;

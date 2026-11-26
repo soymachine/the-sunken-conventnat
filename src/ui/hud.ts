@@ -220,7 +220,7 @@ export class Hud {
         </div>
       </footer>
       <div class="role" hidden><div class="card"><svg class="medal" viewBox="0 0 100 100"></svg><p class="meta" id="roleTitle"></p><h2 id="roleName"></h2><p id="roleMission"></p><p class="pw"><b id="rolePower"></b> <span id="rolePowerText"></span></p><button class="plaque" id="roleOk">To your station</button></div></div>
-      <div class="over" hidden><div class="card"><p class="eyebrow">Battle report</p><h2 id="overTitle"></h2><p id="overText"></p><dl class="stats" id="overStats"></dl><p id="overVerify" class="meta"></p><div class="overBtns"><button class="plaque" id="rematch" hidden>Rematch</button><button class="plaque" id="leave">Back to port</button></div></div></div>`;
+      <div class="over" hidden><div class="card"><p class="eyebrow">Battle report</p><h2 id="overTitle"></h2><p id="overText"></p><dl class="stats" id="overStats"></dl><p id="overVerify" class="meta"></p><p id="overRematch" class="meta rematchNote"></p><div class="overBtns"><button class="plaque" id="rematch" hidden>Rematch</button><button class="plaque" id="leave">Back to port</button></div></div></div>`;
     this.telegraph(this.q('.telegraph'));
     applyCursors(this.cursor);
     // How to play, from the beam or the settings.
@@ -883,7 +883,19 @@ export class Hud {
     const rows: [string, string | number][] = [['Rounds', r.rounds], ['Shots fired', r.shots], ['Hits', r.hits], ['Accuracy', `${acc} %`], ['Ships sunk', r.sank], ['Ships lost', r.lost], ['Doubloons', r.gold], ['Cards played', r.cards]];
     if (r.krakens) rows.push(['Kraken summoned', r.krakens]);
     this.q('#overStats').innerHTML = rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
-    this.q<HTMLElement>('#rematch').hidden = !rematch;
+    const b = this.q<HTMLButtonElement>('#rematch');
+    b.hidden = !rematch; b.disabled = false; b.textContent = 'Rematch'; b.classList.remove('invited');
+    this.q('#overRematch').textContent = '';
+  }
+  /** The rematch button, online: offered, asked (waiting), invited (the other asked), starting, gone, or failed. */
+  setRematch(state: 'offer' | 'asked' | 'invited' | 'starting' | 'gone' | 'error', foe: string) {
+    const b = this.q<HTMLButtonElement>('#rematch'), note = this.q<HTMLElement>('#overRematch');
+    b.hidden = false;
+    b.disabled = state === 'asked' || state === 'starting' || state === 'gone';
+    b.classList.toggle('invited', state === 'invited');
+    b.textContent = state === 'asked' ? `Waiting for ${foe}…` : state === 'invited' ? 'Accept the rematch' : state === 'starting' ? 'Opening a new room…' : 'Rematch';
+    note.textContent = state === 'invited' ? `${foe} wants a rematch!` : state === 'gone' ? `${foe} has left port.` : state === 'error' ? 'The new room could not be opened. Try again.' : '';
+    note.className = 'meta rematchNote' + (state === 'invited' ? ' hot' : '');
   }
   setVerdict(text: string) { this.q('#overVerify').textContent = text; }
 
