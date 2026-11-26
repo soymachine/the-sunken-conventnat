@@ -1,7 +1,6 @@
 // Weather over the charts: rain under the storm front, lightning, drifting sea mist and gulls.
 // Everything that moves in numbers (rain, mist) is animated on the GPU from a time uniform.
 import * as THREE from 'three';
-import { turnToward } from './sea';
 import { gltfLoader } from './ships';
 import { N } from '../game/rules';
 
@@ -364,12 +363,13 @@ class SunRays {
 }
 
 /* ---------- wind streaks ---------- */
+const WIND_SEG = 20;
 const WIND_VERT = /* glsl */ `
 attribute vec4 seed;   // where across the area (x, z), speed, phase
 attribute vec2 corner; // along the streak (0 tail .. 1 head), across it (-1 .. 1)
-uniform float uTime, uGust, uStrength;
-uniform vec2 uDir;     // where the wind blows towards, on the water
-uniform vec2 uShift;   // how far the air has run so far (integrated frame by frame, so gusts and veers never jump)
+uniform float uTime, uGust, uStrength, uFade;
+uniform vec2 uDir;     // where this layer's wind blows towards, on the water
+uniform vec2 uShift;   // how far the air has run so far (integrated frame by frame, so gusts never jump)
 uniform vec4 uArea;    // x0, z0, width, depth
 varying float vA; varying vec2 vC;
 void main() {
@@ -377,12 +377,17 @@ void main() {
   // Each streak runs downwind across the area and wraps round, living a short while each pass.
   vec2 o = seed.xy * uArea.zw + uShift * seed.z * 2.2;
   o = mod(o, uArea.zw);
-  float life = fract(uTime * 0.35 * seed.z + seed.w);
-  float len = (0.7 + 1.4 * seed.z) * (1.0 + 0.9 * uGust);
-  vec2 xz = uArea.xy + o + uDir * (corner.x - 1.0) * len + side * corner.y * 0.045 * (1.0 + uGust);
-  // A slight lift and waver so they read as moving air.
-  float y = 0.35 + 0.12 * sin(seed.w * 20.0 + uTime * 1.3) + 0.05 * sin(corner.x * 3.0 + uTime * 4.0 + seed.w * 9.0);
-  vA = sin(life * 3.14159) * (0.35 + 0.4 * uGust) * min(1.5, uStrength);
+  float life = fract(uTime * 0.3 * seed.z + seed.w);
+  float len = (0.9 + 1.6 * seed.z) * (1.0 + 0.8 * uGust);
+  float d = corner.x * len;
+  // The thread of air snakes as it goes: a slow wave travelling down its length and a quicker, smaller one,
+  // both growing towards the tail, so the head leads and the rest follows.
+  float tail = 1.0 - corner.x;
+  float wave = 0.13 * sin(d * 1.5 - uTime * (1.2 + 0.8 * seed.z) + seed.w * 31.0) + 0.035 * sin(d * 2.9 + uTime * 0.9 + seed.w * 13.0);
+  wave *= (0.35 + 0.65 * tail) * (0.8 + 0.6 * uGust);
+  vec2 xz = uArea.xy + o + uDir * (corner.x - 1.0) * len + side * (wave + corner.y * 0.03 * (1.0 + uGust));
+  float y = 0.35 + 0.12 * sin(seed.w * 20.0 + uTime * 1.1) + 0.04 * sin(d * 2.7 + uTime * 3.0 + seed.w * 9.0);
+  vA = sin(life * 3.14159) * (0.3 + 0.35 * uGust) * min(1.5, uStrength) * uFade;
   // Fade out near the edges of the area so the wrap is never seen.
   vec2 e = min(o, uArea.zw - o);
   vA *= smoothstep(0.0, 1.5, min(e.x, e.y));
@@ -393,58 +398,88 @@ const WIND_FRAG = /* glsl */ `
 varying float vA; varying vec2 vC;
 void main() {
   // Thin at the tail, fullest just behind the head, soft across.
-  float along = smoothstep(0.0, 0.7, vC.x) * smoothstep(1.0, 0.85, vC.x);
+  float along = smoothstep(0.0, 0.75, vC.x) * smoothstep(1.0, 0.88, vC.x);
   gl_FragColor = vec4(vec3(1.0, 0.98, 0.93), vA * along * (1.0 - vC.y * vC.y) * 0.9);
 }`;
 
-/** Thin streaks of air running downwind over the charts; a gust makes them longer, quicker and brighter. */
-class WindStreaks {
+/** One set of streaks blowing one way. Two of them cross-fade when the wind veers. */
+class WindLayer {
   mesh: THREE.Mesh;
-  private mat: THREE.ShaderMaterial;
-  private dir = new THREE.Vector2(1, 0);
-  private ang = 0; private angTo = 0; private calm = 0; private calmTo = 0;
+  mat: THREE.ShaderMaterial;
+  dir = new THREE.Vector2(1, 0);
+  fade = 0;
+  fadeTo = 0;
+  constructor(count: number) {
+    const seed: number[] = [], corner: number[] = [], idx: number[] = [];
+    const per = (WIND_SEG + 1) * 2;
+    for (let i = 0; i < count; i++) {
+      const sd = [Math.random(), Math.random(), 0.6 + Math.random() * 0.8, Math.random()];
+      for (let k = 0; k <= WIND_SEG; k++) for (const b of [-1, 1]) { seed.push(...sd); corner.push(k / WIND_SEG, b); }
+      const o = i * per;
+      for (let k = 0; k < WIND_SEG; k++) { const a = o + k * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(count * per * 3), 3));
+    g.setAttribute('seed', new THREE.Float32BufferAttribute(seed, 4)); g.setAttribute('corner', new THREE.Float32BufferAttribute(corner, 2)); g.setIndex(idx);
+    this.mat = new THREE.ShaderMaterial({ vertexShader: WIND_VERT, fragmentShader: WIND_FRAG, transparent: true, depthWrite: false, side: THREE.DoubleSide,
+      uniforms: { uTime: { value: 0 }, uGust: { value: 0 }, uStrength: { value: 1 }, uFade: { value: 0 }, uShift: { value: new THREE.Vector2(Math.random() * 50, Math.random() * 50) }, uDir: { value: this.dir }, uArea: { value: new THREE.Vector4(0, 0, 1, 1) } } });
+    this.mesh = new THREE.Mesh(g, this.mat); this.mesh.frustumCulled = false; this.mesh.renderOrder = 6;
+  }
+}
+
+/**
+ * Threads of air snaking downwind over the charts; a gust makes them longer, quicker and brighter.
+ * When the wind veers the streaks do not swing round in place: the old ones thin out and die while new ones
+ * rise blowing the new way.
+ */
+class WindStreaks {
+  mesh = new THREE.Group();
+  private layers = [new WindLayer(55), new WindLayer(55)];
+  private on = 0;
+  private heading = -2;
+  private calm = 0; private calmTo = 0;
   /** How strong the wind shows (debug): speed and brightness of the streaks. */
   strength = 1;
   private gust = 0;
   private nextGust = 6 + Math.random() * 8;
   private forced = 0;
-  constructor(count = 220) {
-    const seed: number[] = [], corner: number[] = [], idx: number[] = [];
-    for (let i = 0; i < count; i++) {
-      const s = [Math.random(), Math.random(), 0.6 + Math.random() * 0.8, Math.random()];
-      for (const [a, b] of [[0, -1], [0, 1], [1, -1], [1, 1]]) { seed.push(...s); corner.push(a, b); }
-      const k = i * 4; idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2);
-    }
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(count * 12), 3));
-    g.setAttribute('seed', new THREE.Float32BufferAttribute(seed, 4)); g.setAttribute('corner', new THREE.Float32BufferAttribute(corner, 2)); g.setIndex(idx);
-    this.mat = new THREE.ShaderMaterial({ vertexShader: WIND_VERT, fragmentShader: WIND_FRAG, transparent: true, depthWrite: false, side: THREE.DoubleSide,
-      uniforms: { uTime: { value: 0 }, uGust: { value: 0 }, uStrength: { value: 1 }, uShift: { value: new THREE.Vector2() }, uDir: { value: this.dir }, uArea: { value: new THREE.Vector4(0, 0, 1, 1) } } });
-    this.mesh = new THREE.Mesh(g, this.mat); this.mesh.frustumCulled = false; this.mesh.renderOrder = 6;
-  }
-  cover(x: number, z: number, w: number, d: number) { (this.mat.uniforms.uArea.value as THREE.Vector4).set(x, z, w, d); }
-  /** Where the wind blows towards: a heading (0 east, 1 south, 2 west, 3 north). */
+  constructor() { for (const l of this.layers) this.mesh.add(l.mesh); }
+  cover(x: number, z: number, w: number, d: number) { for (const l of this.layers) (l.mat.uniforms.uArea.value as THREE.Vector4).set(x, z, w, d); }
   /** A heading (0 east, 1 south, 2 west, 3 north), or -1 for a flat calm: the streaks die away. */
   setWind(h: number) {
     this.calmTo = h < 0 ? 1 : 0;
-    if (h >= 0) this.angTo = h * Math.PI / 2;
-    if (this.fresh) { this.fresh = false; this.ang = this.angTo; this.calm = this.calmTo; this.dir.set(Math.cos(this.ang), Math.sin(this.ang)); }
+    if (h < 0 || h === this.heading) { if (this.fresh && h < 0) { this.calm = 1; this.fresh = false; } return; }
+    const a = h * Math.PI / 2;
+    if (this.fresh || this.heading < 0) {
+      // A new game (or the end of a calm): the current layer simply takes the new heading.
+      const l = this.layers[this.on]; l.dir.set(Math.cos(a), Math.sin(a)); l.fadeTo = 1;
+      if (this.fresh) { l.fade = 1; this.calm = this.calmTo; }
+    } else {
+      // The wind veers: the other layer rises blowing the new way while this one dies away.
+      this.layers[this.on].fadeTo = 0;
+      this.on = 1 - this.on;
+      const l = this.layers[this.on]; l.dir.set(Math.cos(a), Math.sin(a)); l.fade = 0; l.fadeTo = 1;
+    }
+    this.fresh = false; this.heading = h;
   }
   /** A new game: the next wind is taken as it is, with no swing. */
   fresh = true;
   /** A strong gust now (e.g. when a ship is caught in irons). */
   blow() { this.forced = 2.5; }
   update(dt: number, t: number, stormy: boolean) {
-    // The streaks swing round smoothly when the wind veers.
-    this.ang = turnToward(this.ang, this.angTo, dt * 1.2);
-    this.dir.set(Math.cos(this.ang), Math.sin(this.ang));
     if ((this.nextGust -= dt) < 0) this.nextGust = 7 + Math.random() * 10;
     this.calm += (this.calmTo - this.calm) * Math.min(1, dt * 0.8);
     const gusting = (this.nextGust < 2.2 || this.forced > 0 || stormy) && this.calmTo === 0;
     this.forced = Math.max(0, this.forced - dt);
     this.gust += ((gusting ? 1 : 0) - this.gust) * Math.min(1, dt * 2.5);
-    this.mat.uniforms.uTime.value = t; this.mat.uniforms.uGust.value = this.gust; this.mat.uniforms.uStrength.value = this.strength * (1 - this.calm);
-    (this.mat.uniforms.uShift.value as THREE.Vector2).addScaledVector(this.dir, dt * (1 + 1.6 * this.gust) * this.strength * (1 - 0.9 * this.calm));
+    for (const l of this.layers) {
+      // The dying layer fades a little quicker than the new one rises, so the crossing is brief.
+      l.fade += (l.fadeTo - l.fade) * Math.min(1, dt * (l.fadeTo > l.fade ? 0.9 : 1.4));
+      const u = l.mat.uniforms;
+      u.uTime.value = t; u.uGust.value = this.gust; u.uStrength.value = this.strength * (1 - this.calm); u.uFade.value = l.fade;
+      (u.uShift.value as THREE.Vector2).addScaledVector(l.dir, dt * (1 + 1.6 * this.gust) * this.strength * (1 - 0.9 * this.calm));
+      l.mesh.visible = l.fade > 0.003;
+    }
   }
   get gustLevel() { return this.gust; }
 }

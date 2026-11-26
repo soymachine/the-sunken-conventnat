@@ -119,7 +119,7 @@ const SINKING: Record<Kind, { dur: number; roll: number; pitch: number; depth: n
 interface ShipObj {
   root: THREE.Group; tilt: THREE.Group; model: ShipModel; decor: THREE.Group; decorKey: string;
   kind: Kind; len: number; side: Side; pos: THREE.Vector3; yaw: number; phase: number;
-  state: 'afloat' | 'sinking' | 'wreck'; sink: number; lift: number; fires: THREE.Vector3[]; cells: [number, number][]; fresh: boolean;
+  state: 'afloat' | 'sinking' | 'wreck'; sink: number; sinkAt?: number; lift: number; fires: THREE.Vector3[]; cells: [number, number][]; fresh: boolean;
   /** Smoothed speed over the water, for the wake. */
   way?: number;
   /** The deck gun is being laid on a target: leave it be. */
@@ -676,6 +676,11 @@ export class SeaScene {
       const swing = Math.atan2(Math.sin(o.yaw - o.root.rotation.y), Math.cos(o.yaw - o.root.rotation.y));
       o.root.rotation.y += swing * k;
       const sea = this.seas[o.side], p = o.root.position;
+      // A ship sunk by the last blow stays afloat a beat (she has just been hit), then her magazine goes up.
+      if (o.state === 'afloat' && o.sinkAt !== undefined && this.time >= o.sinkAt) {
+        o.state = 'sinking'; this.sound('sink'); if (SINKING[o.kind].steam) this.sound('steam');
+        this.magazine(o.pos.clone(), o.side, o.len);
+      }
       if (o.state === 'afloat') {
         // A moving hull leaves a wake and heels into its turn.
         const speed = before.distanceTo(p) / Math.max(dt, 1e-3), turning = Math.abs(swing);
@@ -981,7 +986,11 @@ export class SeaScene {
     const wreck = (o: ShipObj) => {
       if (o.state !== 'afloat') return;
       if (v.quiet) { o.state = 'wreck'; o.sink = 1; o.model.sails.visible = false; o.root.visible = false; }
-      else { o.state = 'sinking'; this.sound('sink'); if (SINKING[o.kind].steam) this.sound('steam'); const at = o.root.position.clone(), side = o.side, len = o.len; setTimeout(() => this.magazine(at, side, len), 260); }
+      else if (o.sinkAt === undefined) {
+        // She takes the blow afloat; a beat later her magazine goes up and she starts down. A ship just revealed by
+        // the shot that sank her (the enemy's) is seen whole first, a little longer.
+        o.sinkAt = this.time + (o.fresh ? 0.75 : 0.35);
+      }
     };
     for (const s of v.ships) {
       const key = 'o' + s.id, o = this.ship(key, s.kind, s.len, 'own');
