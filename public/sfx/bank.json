@@ -1,4 +1,12 @@
 {
+ "bottleThrow": {
+  "file": "bottleThrow.wav",
+  "start": 0.336,
+  "end": 1.48,
+  "gain": 1,
+  "fadeIn": 0,
+  "fadeOut": 0
+ },
  "cannon": {
   "file": "cannon-fire-distant.mp3",
   "start": 0,
