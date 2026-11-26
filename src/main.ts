@@ -164,6 +164,9 @@ async function start(s: Session, name: string) {
     if (!ok) return;
     if (replay) { quiet = true; refresh(); quiet = false; return; }
     if (m.t === 'result') for (const r of m.results) flying.add(`${m.by === c.me ? 'own' : 'enemy'}:${r.x},${r.y}`);
+    // A shot fired at me is settled by my own copy of the game the moment it arrives (my ship may already be
+    // marked sunk); its squares wait, unchanged on the chart, until the ball has landed.
+    if (m.t === 'attack' && m.by !== c.me) for (const [x, y] of m.cells) flying.add(`own:${x},${y}`);
     queue.push(m);
     if (!busy) void drain();
   };
@@ -252,7 +255,7 @@ async function drain() {
       if (m.kraken) await Promise.all(m.results.map((r, i) => wait(i * 420).then(() => scene.lash({ side, x: r.x, y: r.y }, r.r))));
       else await Promise.all(m.results.map((r, i) => wait(i * 130).then(() => scene.shot({ side, x: r.x, y: r.y }, r.r))));
     }
-    if (m.t === 'result') for (const r of m.results) flying.delete(`${mine ? 'own' : 'enemy'}:${r.x},${r.y}`);
+    if (m.t === 'result') { for (const r of m.results) flying.delete(`${mine ? 'own' : 'enemy'}:${r.x},${r.y}`); if (mine) for (const k of [...flying]) if (k.startsWith('own:')) flying.delete(k); }
     if (m.t === 'drowned') for (const r of m.results) scene.drown({ side: mine ? 'own' : 'enemy', x: r.x, y: r.y }, r.r);
     if (m.t === 'powerResult') sfx.play('glass');
     if (m.t === 'scanResult') await scene.sweep({ side: mine ? 'own' : 'enemy', x: m.x, y: m.y });

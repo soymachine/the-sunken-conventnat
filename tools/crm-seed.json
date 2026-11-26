@@ -1,0 +1,196 @@
+{
+  "leads": {
+    "crazygames": {
+      "name": "CrazyGames", "url": "https://www.crazygames.com", "devUrl": "https://developer.crazygames.com", "docsUrl": "https://docs.crazygames.com/requirements/multiplayer/",
+      "kind": "Portal", "fit": 5, "priority": "High", "stage": "Not started",
+      "audience": "Large browser-game audience, strong on desktop; says it strongly supports online multiplayer (2x long-term retention).",
+      "revenue": "Ad revenue share via its SDK; in-game purchases invite-only (Xsolla). No general split published; its 2026 jam terms gave 60% ads / 70% purchases (jam-specific).",
+      "exclusivity": "Not required for a normal launch.",
+      "requirements": "CrazyGames SDK (ads only through it); Basic Launch then Full Launch after QA and benchmarks; multiplayer: show usernames, instant-multiplayer flag, lobby sizes; any chat needs a profanity filter.",
+      "process": "Self-serve: developer dashboard, upload the build, metadata and assets, review.",
+      "fitNotes": "Best match: 1v1 online plus a bot, desktop-first, strategy. Bottle messages are free text: add a profanity filter. Show both captains' names (already shown).",
+      "contact": "", "contactEmail": "", "nextAction": "Read the requirements and plan the SDK integration", "nextDate": "",
+      "sources": "https://docs.crazygames.com/requirements/intro/ · https://docs.crazygames.com/requirements/multiplayer/ · https://app.cinevva.com/guides/publish-game-crazygames"
+    },
+    "poki": {
+      "name": "Poki", "url": "https://poki.com", "devUrl": "https://developers.poki.com", "docsUrl": "https://sdk.poki.com/requirements",
+      "kind": "Portal (curated)", "fit": 4, "priority": "High", "stage": "Not started",
+      "audience": "One of the largest web-game portals; strong on mobile and young players.",
+      "revenue": "Players Poki brings: 50/50; players you bring: 100% yours. One-time licence fee as a non-exclusive alternative.",
+      "exclusivity": "Deals ask for web exclusivity, 5 years by default (Steam and app stores stay open).",
+      "requirements": "Poki SDK; their requirements page (check initial download size: an unverified guide says under 8 MB); curated: starts with a 'web fit test'.",
+      "process": "Apply through the developer portal (web fit test), then curation.",
+      "fitNotes": "Strong reach, but web exclusivity would close the other portals, and Poki leans to mobile, which the game does not support. Decide after CrazyGames.",
+      "contact": "", "contactEmail": "", "nextAction": "Take the web fit test; weigh exclusivity", "nextDate": "",
+      "sources": "https://sdk.poki.com/ · https://sdk.poki.com/deals · https://sdk.poki.com/bonus"
+    },
+    "discord": {
+      "name": "Discord Activities", "url": "https://discord.com/build/embedded-app-sdk", "devUrl": "https://discord.com/developers", "docsUrl": "https://docs.discord.com/developers/activities/overview",
+      "kind": "Platform", "fit": 4, "priority": "Medium", "stage": "Not started",
+      "audience": "Friends playing together inside Discord voice and text channels, on desktop, web and mobile.",
+      "revenue": "In-app purchases through Discord; no ad network.",
+      "exclusivity": "None.",
+      "requirements": "Embedded App SDK: the web game runs in an iframe inside Discord; Discord sign-in; requests go through Discord's URL mapping.",
+      "process": "Self-serve: create an app in the Developer Portal, build the Activity, then apply for discovery.",
+      "fitNotes": "1v1 between friends in a channel is exactly the social case. Needs work: Discord identity instead of room codes, and the iframe proxy for Firebase.",
+      "contact": "", "contactEmail": "", "nextAction": "Prototype an Activity with a room per channel", "nextDate": "",
+      "sources": "https://discord.com/blog/build-where-the-world-plays · https://docs.discord.com/developers/developer-tools/embedded-app-sdk"
+    },
+    "armorgames": {
+      "name": "Armor Games", "url": "https://armorgames.com", "devUrl": "https://developers.armorgames.com/docs/introduction/overview", "docsUrl": "https://developers.armorgames.com/docs/introduction/overview",
+      "kind": "Portal / sponsor", "fit": 4, "priority": "Medium", "stage": "Not started",
+      "audience": "Long-standing core audience for strategy and quality browser games.",
+      "revenue": "Deals such as branding for a fee, or timed site exclusivity ('one of the highest paying options').",
+      "exclusivity": "Only in the timed-exclusivity deal.",
+      "requirements": "HTML5 only; multiplayer games may be hosted in an iframe.",
+      "process": "Through the developer site; no public form found. Its publishing studio laid off staff in 2024.",
+      "fitNotes": "Audience that likes strategy and polish. A good place for a sponsorship pitch by e-mail.",
+      "contact": "", "contactEmail": "", "nextAction": "Find the current developer contact and send the pitch", "nextDate": "",
+      "sources": "https://developers.armorgames.com/docs/introduction/overview · https://www.armorgamesstudios.com/publishing"
+    },
+    "gamedistribution": {
+      "name": "GameDistribution (Azerion)", "url": "https://gamedistribution.com", "devUrl": "https://gamedistribution.com/developers", "docsUrl": "",
+      "kind": "Distributor", "fit": 3, "priority": "Medium", "stage": "Not started",
+      "audience": "Puts the game on thousands of partner sites at once.",
+      "revenue": "33% of net revenue to the developer (its developer agreement).",
+      "exclusivity": "Non-exclusive.",
+      "requirements": "GameDistribution SDK for ads.",
+      "process": "Self-serve upload and review.",
+      "fitNotes": "Wide but thin reach; partner sites embed the game, so online play must work inside any iframe.",
+      "contact": "", "contactEmail": "", "nextAction": "After CrazyGames: add its SDK as a build variant", "nextDate": "",
+      "sources": "https://www.bountyboard.gg/blog/how-to-monetize-an-html5-game · https://portalready.world/portals/"
+    },
+    "playgama": {
+      "name": "Playgama", "url": "https://playgama.com", "devUrl": "https://playgama.com/developers", "docsUrl": "",
+      "kind": "Distributor", "fit": 3, "priority": "Low", "stage": "Not started",
+      "audience": "Network of portals reached through one 'Bridge' SDK.",
+      "revenue": "Advertises about 80% to the developer; $100 payout threshold (its own claims, to verify).",
+      "exclusivity": "Non-exclusive.",
+      "requirements": "Playgama Bridge SDK.",
+      "process": "Self-serve; says it tests and replies within 24 hours.",
+      "fitNotes": "One SDK for several portals; check the numbers in their terms before relying on them.",
+      "contact": "", "contactEmail": "", "nextAction": "Read their terms", "nextDate": "",
+      "sources": "https://playgama.com/developers"
+    },
+    "gamepix": {
+      "name": "GamePix", "url": "https://www.gamepix.com", "devUrl": "https://www.gamepix.com/developers", "docsUrl": "",
+      "kind": "Distributor", "fit": 3, "priority": "Low", "stage": "Not started",
+      "audience": "Own portal plus a distribution network.",
+      "revenue": "About 45% (portal comparisons; verify).",
+      "exclusivity": "Non-exclusive.",
+      "requirements": "GamePix SDK.",
+      "process": "Self-serve.",
+      "fitNotes": "Secondary channel once one SDK integration exists.",
+      "contact": "", "contactEmail": "", "nextAction": "", "nextDate": "",
+      "sources": "https://portalready.world/portals/"
+    },
+    "y8": {
+      "name": "Y8", "url": "https://www.y8.com", "devUrl": "https://www.y8.com/upload", "docsUrl": "https://it.y8.com/revshare",
+      "kind": "Portal", "fit": 3, "priority": "Low", "stage": "Not started",
+      "audience": "Old, large general audience.",
+      "revenue": "About 50% ad share (portal comparisons); a 'studio' is needed only to earn.",
+      "exclusivity": "Non-exclusive.",
+      "requirements": "Y8 developer account and App ID; HTML5/WebGL.",
+      "process": "Self-serve upload.",
+      "fitNotes": "Easy to list; modest returns.",
+      "contact": "", "contactEmail": "", "nextAction": "", "nextDate": "",
+      "sources": "https://www.y8.com/upload · https://it.y8.com/revshare"
+    },
+    "yandex": {
+      "name": "Yandex Games", "url": "https://yandex.com/games", "devUrl": "https://yandex.com/dev/games", "docsUrl": "https://yandex.com/dev/games/doc/en/concepts/requirements",
+      "kind": "Portal", "fit": 3, "priority": "Low", "stage": "Not started",
+      "audience": "Very large in Russian-speaking countries and Türkiye.",
+      "revenue": "Licence plus ad revenue under its publishing agreement (split not found).",
+      "exclusivity": "Check the agreement.",
+      "requirements": "Yandex Games SDK for ads and payments; playable without signing in elsewhere; moderation 3 to 5 working days.",
+      "process": "Self-serve console.",
+      "fitNotes": "Big audience, but it would want Russian (and Turkish) text and its own SDK; sign-in to Firebase accounts must stay optional (it already is).",
+      "contact": "", "contactEmail": "", "nextAction": "", "nextDate": "",
+      "sources": "https://yandex.com/dev/games/doc/en/concepts/requirements · https://yandex.com/legal/licensegames"
+    },
+    "itch": {
+      "name": "itch.io", "url": "https://itch.io", "devUrl": "https://itch.io/game/new", "docsUrl": "",
+      "kind": "Store / community", "fit": 4, "priority": "High", "stage": "Not started",
+      "audience": "Indie players and developers; good for feedback, devlogs and jams.",
+      "revenue": "Free or pay-what-you-want; you choose itch.io's share.",
+      "exclusivity": "None.",
+      "requirements": "Upload the build (or link the site); a page with screenshots.",
+      "process": "Self-serve, live in minutes.",
+      "fitNotes": "Quick first presence and a home for devlogs; low revenue, high feedback.",
+      "contact": "", "contactEmail": "", "nextAction": "Make the page with screenshots and the trailer", "nextDate": "",
+      "sources": "https://www.summerengine.com/make-great-games/publish-an-html5-game"
+    },
+    "newgrounds": {
+      "name": "Newgrounds", "url": "https://www.newgrounds.com", "devUrl": "https://www.newgrounds.com/projects/games", "docsUrl": "https://www.newgrounds.com/wiki/help-information/content-submission/games-and-movies",
+      "kind": "Community", "fit": 3, "priority": "Low", "stage": "Not started",
+      "audience": "Long-running creative community that votes on games.",
+      "revenue": "Little: no published HTML5 ad share (Newgrounds.io API for medals and scores).",
+      "exclusivity": "None.",
+      "requirements": "Zip with index.html at the root.",
+      "process": "Self-serve upload.",
+      "fitNotes": "Visibility and feedback, not income.",
+      "contact": "", "contactEmail": "", "nextAction": "", "nextDate": "",
+      "sources": "https://www.newgrounds.com/wiki/help-information/content-submission/games-and-movies"
+    },
+    "gamejolt": {
+      "name": "Game Jolt", "url": "https://gamejolt.com", "devUrl": "https://gamejolt.com/dashboard", "docsUrl": "",
+      "kind": "Community", "fit": 2, "priority": "Low", "stage": "Not started",
+      "audience": "Young indie community.",
+      "revenue": "Small; optional ad share.",
+      "exclusivity": "None.",
+      "requirements": "HTML5 upload.",
+      "process": "Self-serve.",
+      "fitNotes": "Extra visibility at little cost.",
+      "contact": "", "contactEmail": "", "nextAction": "", "nextDate": "",
+      "sources": "https://playgama.com/blog/business-faqs/how-to-submit-html5-web-games-to-newgrounds-and-game-jolt/"
+    },
+    "famobi": {
+      "name": "Famobi", "url": "https://famobi.com", "devUrl": "https://famobi.com", "docsUrl": "",
+      "kind": "Licensing (B2B)", "fit": 2, "priority": "Low", "stage": "Not started",
+      "audience": "Licenses games to publishers and brands.",
+      "revenue": "Licence deals (no published share).",
+      "exclusivity": "Per deal.",
+      "requirements": "Famobi SDK; mostly casual and mobile titles.",
+      "process": "Contact by e-mail.",
+      "fitNotes": "Leans to casual mobile games; a long shot.",
+      "contact": "", "contactEmail": "", "nextAction": "", "nextDate": "",
+      "sources": "https://playgama.com/blog/business-faqs/alternatives-to-gamedistribution-for-html5-distribution/"
+    },
+    "coolmath": {
+      "name": "Coolmath Games", "url": "https://www.coolmathgames.com", "devUrl": "https://www.coolmathgames.com/about-us", "docsUrl": "https://www.coolmathgames.com/de/node/240287",
+      "kind": "Portal (curated, kids)", "fit": 2, "priority": "Low", "stage": "Not started",
+      "audience": "Huge, school-age; logic and strategy.",
+      "revenue": "Non-exclusive licence (per a secondary source).",
+      "exclusivity": "Non-exclusive.",
+      "requirements": "Every game reviewed by staff; no shooter or violent games; no mature content.",
+      "process": "Developer portal form; licensing talks reported at games@coolmath.com (unofficial).",
+      "fitNotes": "Strategy fits, but naval cannon fire and ships sinking may count as violent; chat-like bottle notes are a risk for children.",
+      "contact": "", "contactEmail": "", "nextAction": "", "nextDate": "",
+      "sources": "https://www.coolmathgames.com/de/node/240287 · https://www.vanas.ca/en/blog/how-video-game-developers-publish-their-games-in-coolmath-games"
+    },
+    "kongregate": {
+      "name": "Kongregate", "url": "https://www.kongregate.com", "devUrl": "", "docsUrl": "",
+      "kind": "Portal", "fit": 1, "priority": "Low", "stage": "Declined",
+      "audience": "Classic browser-game audience.",
+      "revenue": "—",
+      "exclusivity": "—",
+      "requirements": "—",
+      "process": "Reported to no longer accept game submissions.",
+      "fitNotes": "Closed to new games: kept here only so it is not researched again.",
+      "contact": "", "contactEmail": "", "nextAction": "", "nextDate": "",
+      "sources": "https://developer.mozilla.org/en-US/docs/Games/Publishing_games/Game_distribution"
+    }
+  },
+  "templates": {
+    "approach": {
+      "name": "First approach",
+      "subject": "The Sunken Covenant — a 1v1 naval strategy game for {{portal}}",
+      "body": "Hi {{contact}},\n\nI'm Daniel Moya, the developer of The Sunken Covenant, a turn-based 1v1 naval strategy game for the browser, and I think it could be a good fit for {{portal}}.\n\nTwo captains hide their fleets on 16×16 charts and fight it out with action points, a hand of order cards and the weather: wind that helps or stops square-rigged ships, storms, a closing maelstrom, and a Kraken summoned with covenant seals. Five commanders change how each battle plays. Everything is rendered in 3D with an engraved, hand-inked look.\n\n- Play now: https://the-sunken-covenant.web.app\n- Online 1v1 with a room code, or against the computer\n- Guided first battle; English and Spanish\n- Desktop browsers; plain three.js and TypeScript, no plugins\n- Fairness built in: every online battle is verified from both captains' logs at the end\n\nI'd love to know whether it fits {{portal}}, and what you would need from me: SDK integration, build size, exclusivity terms or anything else. I'm happy to adapt the build.\n\nThank you for your time,\n\nDaniel Moya Teruel\nsoymachine@gmail.com\nhttps://the-sunken-covenant.web.app"
+    },
+    "followup": {
+      "name": "Follow-up (10 days later)",
+      "subject": "Re: The Sunken Covenant — a 1v1 naval strategy game for {{portal}}",
+      "body": "Hi {{contact}},\n\nJust a short follow-up on The Sunken Covenant, the 1v1 naval strategy game I wrote to you about. Since then I have {{news}}.\n\nIf it isn't a fit for {{portal}}, a quick no is very welcome too, so I can plan the release.\n\nThanks,\n\nDaniel Moya Teruel\nhttps://the-sunken-covenant.web.app"
+    }
+  }
+}

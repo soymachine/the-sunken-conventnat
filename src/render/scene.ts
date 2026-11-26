@@ -26,7 +26,7 @@ export interface View { pub: Pub; me: 0 | 1; ships: Ship[]; selectedId?: number 
 export interface Ghost { kind: Kind; len: number; x: number; y: number; dir: 'h' | 'v'; rev: boolean; from: [number, number]; pivot: [number, number]; state: 'hot' | 'idle' | 'bad';
   /** Draw the translucent ship itself (only for the turn being pointed at), not just its arrow. */
   ship: boolean }
-export type Sound = 'cannon' | 'splash' | 'hit' | 'clang' | 'sink' | 'coin' | 'glass' | 'roar' | 'thunder' | 'gull' | 'treasure' | 'plunge' | 'whistle' | 'slam' | 'explosion' | 'mast' | 'steam';
+export type Sound = 'cannon' | 'splash' | 'hit' | 'clang' | 'sink' | 'coin' | 'glass' | 'roar' | 'thunder' | 'gull' | 'treasure' | 'plunge' | 'whistle' | 'slam' | 'explosion' | 'mast' | 'steam' | 'bottleThrow' | 'bottleSplash';
 
 // Red and amber follow the colour-blind setting (src/ui/palette.ts).
 const C = { ink: 0x0d0b08, get amber() { return PAL.amber; }, parch: 0xe8d5a3, brass: 0xb08d3c, get wax() { return PAL.wax; } };
@@ -119,7 +119,7 @@ const SINKING: Record<Kind, { dur: number; roll: number; pitch: number; depth: n
 interface ShipObj {
   root: THREE.Group; tilt: THREE.Group; model: ShipModel; decor: THREE.Group; decorKey: string;
   kind: Kind; len: number; side: Side; pos: THREE.Vector3; yaw: number; phase: number;
-  state: 'afloat' | 'sinking' | 'wreck'; sink: number; lift: number; fires: THREE.Vector3[]; cells: [number, number][]; fresh: boolean;
+  state: 'afloat' | 'sinking' | 'wreck'; sink: number; sinkAt?: number; lift: number; fires: THREE.Vector3[]; cells: [number, number][]; fresh: boolean;
   /** Smoothed speed over the water, for the wake. */
   way?: number;
   /** The deck gun is being laid on a target: leave it be. */
@@ -540,7 +540,7 @@ export class SeaScene {
     const dist = a.distanceTo(land);
     const g = bottleModel();
     this.misc.add(g);
-    this.sound('splash');
+    this.sound('bottleThrow');
     return new Promise((res) => this.bottles.push({
       g, from: a, to: land, t0: this.time, dur: 1.2 + dist * 0.045, peak: 2.2 + dist * 0.22,
       yaw: Math.atan2(-(land.z - a.z), land.x - a.x), spin: 2 + Math.floor(Math.random() * 2), stay, done: res,
@@ -676,6 +676,11 @@ export class SeaScene {
       const swing = Math.atan2(Math.sin(o.yaw - o.root.rotation.y), Math.cos(o.yaw - o.root.rotation.y));
       o.root.rotation.y += swing * k;
       const sea = this.seas[o.side], p = o.root.position;
+      // A ship sunk by the last blow stays afloat a beat (she has just been hit), then her magazine goes up.
+      if (o.state === 'afloat' && o.sinkAt !== undefined && this.time >= o.sinkAt) {
+        o.state = 'sinking'; this.sound('sink'); if (SINKING[o.kind].steam) this.sound('steam');
+        this.magazine(o.pos.clone(), o.side, o.len);
+      }
       if (o.state === 'afloat') {
         // A moving hull leaves a wake and heels into its turn.
         const speed = before.distanceTo(p) / Math.max(dt, 1e-3), turning = Math.abs(swing);
@@ -794,7 +799,7 @@ export class SeaScene {
         b.g.position.copy(p);
         b.g.rotation.set(0, b.yaw, -b.spin * k * Math.PI * 2);
       } else {
-        if (!b.landed) { b.landed = t; this.fx.water(b.to.clone().setY(0.1)); this.sound('plunge'); if (b.done) { const d = b.done; b.done = undefined; d(); } }
+        if (!b.landed) { b.landed = t; this.fx.water(b.to.clone().setY(0.1)); this.sound('bottleSplash'); if (b.done) { const d = b.done; b.done = undefined; d(); } }
         // Afloat where it fell: it rides the swell, lying on its side.
         const s = t - b.landed;
         b.g.position.set(b.to.x, (calm ? 0 : waveH(b.to.x, b.to.z, t)) + 0.1 + 0.04 * Math.sin(t * 2.4) - (b.stay ? 0 : s * 0.25), b.to.z);
@@ -981,7 +986,11 @@ export class SeaScene {
     const wreck = (o: ShipObj) => {
       if (o.state !== 'afloat') return;
       if (v.quiet) { o.state = 'wreck'; o.sink = 1; o.model.sails.visible = false; o.root.visible = false; }
-      else { o.state = 'sinking'; this.sound('sink'); if (SINKING[o.kind].steam) this.sound('steam'); const at = o.root.position.clone(), side = o.side, len = o.len; setTimeout(() => this.magazine(at, side, len), 260); }
+      else if (o.sinkAt === undefined) {
+        // She takes the blow afloat; a beat later her magazine goes up and she starts down. A ship just revealed by
+        // the shot that sank her (the enemy's) is seen whole first, a little longer.
+        o.sinkAt = this.time + (o.fresh ? 0.75 : 0.35);
+      }
     };
     for (const s of v.ships) {
       const key = 'o' + s.id, o = this.ship(key, s.kind, s.len, 'own');

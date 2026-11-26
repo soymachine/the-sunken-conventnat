@@ -898,7 +898,8 @@ canvas[data-cur="helm"] { cursor: var(--cur-helm, pointer); }
 /* The shortcut key, a small brass tag at the card's foot. */
 .ocard .key { position: absolute; left: 50%; bottom: -9px; transform: translateX(-50%); min-width: 17px; height: 17px; padding: 0 4px; box-sizing: border-box; display: grid; place-items: center; font: 700 10px var(--label); color: var(--ink); background: linear-gradient(#f6dc95, #b08d3c); border: 1px solid #5e4717; border-radius: 3px; box-shadow: 0 1px 3px rgba(0, 0, 0, .6); opacity: 0; transition: opacity .2s; pointer-events: none; }
 .belt .ocard:hover .key, .belt .ocard.on .key, .belt:hover .ocard .key { opacity: 1; }
-.belt .ocard.off .key { opacity: .4 !important; }
+/* A card that cannot be played now shows no key at all. */
+.belt .ocard.off .key { display: none; }
 /* An action-point seal spent: it splits in two and the halves fall away. */
 .apSeals i { position: relative; }
 .apSeals i.crack::before, .apSeals i.crack::after { content: ''; position: absolute; inset: -2px; background: url('/ui/ap_seal.webp') center / contain no-repeat; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .7)); pointer-events: none; }
@@ -1016,3 +1017,20 @@ html.cvd .logPanel li.good span { color: #1f6fa0; }
 #lobby .version a:hover { color: var(--wax); }
 .menu .legalLinks { margin: 12px 0 0; font: 600 10px var(--label); letter-spacing: .12em; text-transform: uppercase; color: #6b5233; text-align: center; }
 .menu .legalLinks a { color: #6b5233; text-decoration: none; } .menu .legalLinks a:hover { color: var(--wax); }
+
+/* ---------- 0.42: the header's buttons as brass plates, screwed to the wood beside the name board ---------- */
+#hud #menuBtn, #hud #howBtn, #hud #logBtn {
+  height: 30px; min-width: 0; width: auto; padding: 0 8px; margin: 0; box-sizing: border-box;
+  border-style: solid; border-width: 8px 13px; border-radius: 0; background: none; box-shadow: none;
+  border-image: url('/ui/acct/plate.webp') 46 74 fill / 8px 13px stretch;
+  font: 700 10px var(--label); letter-spacing: .14em; text-transform: uppercase; line-height: 1; color: #3a2610;
+  text-shadow: 0 1px 0 rgba(255, 240, 200, .55); filter: drop-shadow(0 3px 4px rgba(0, 0, 0, .55)); cursor: pointer;
+  transition: transform .15s, filter .15s; top: 18px; }
+#hud #howBtn { width: 38px; padding: 0; font-size: 12px; }
+#hud #menuBtn:hover, #hud #howBtn:hover, #hud #logBtn:hover, #hud #menuBtn:focus-visible, #hud #howBtn:focus-visible, #hud #logBtn:focus-visible,
+#hud #menuBtn[aria-expanded="true"], #hud #logBtn[aria-expanded="true"] {
+  border-image: url('/ui/acct/plate_hot.webp') 46 74 fill / 8px 13px stretch; background: none; color: #1e1206; outline: none; }
+#hud #menuBtn:active, #hud #howBtn:active, #hud #logBtn:active { transform: translateY(1px); filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .6)); }
+#hud #menuBtn { right: calc(50% + 252px + 44px); }
+#hud #howBtn { right: calc(50% + 252px); }
+#hud #logBtn { left: calc(50% + 252px); }
