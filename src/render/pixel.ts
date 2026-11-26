@@ -21,7 +21,7 @@ uniform sampler2D tColor, tDepth;
 uniform vec2 uRes;
 uniform vec3 uPal[${N}];
 uniform vec3 uGrade;
-uniform float uNear, uFar, uDither;
+uniform float uNear, uFar, uDither, uEdge;
 varying vec2 vUv;
 float lin(float d) { float z = d * 2.0 - 1.0; return 2.0 * uNear * uFar / (uFar + uNear - z * (uFar - uNear)); }
 float bayer2(vec2 a) { a = floor(a); return fract(dot(a, vec2(0.5, a.y * 0.75))); }
@@ -34,13 +34,15 @@ void main() {
   c += (bayer4(cell) - 0.5) * uDither;
   vec3 best = uPal[0]; float bd = 1e9;
   for (int i = 0; i < ${N}; i++) { vec3 d = (c - uPal[i]) * vec3(0.9, 1.2, 0.7); float e = dot(d, d); if (e < bd) { bd = e; best = uPal[i]; } }
-  // Ink outline: this pixel is nearer than a neighbour by a clear step (a silhouette edge).
-  float d = lin(texture2D(tDepth, uv).r), step = 0.0;
-  step = max(step, lin(texture2D(tDepth, uv + vec2(px.x, 0.0)).r) - d);
-  step = max(step, lin(texture2D(tDepth, uv - vec2(px.x, 0.0)).r) - d);
-  step = max(step, lin(texture2D(tDepth, uv + vec2(0.0, px.y)).r) - d);
-  step = max(step, lin(texture2D(tDepth, uv - vec2(0.0, px.y)).r) - d);
-  if (step > 0.06 * d) best = mix(best, uPal[1], 0.85);
+  // Ink outline, drawn outside the shape as pixel art does: this pixel lies behind a neighbour that stands clearly
+  // nearer (a hull, a sail, a gull against the chart). The step is measured against the distance, so a hull a few
+  // tenths above the water still gets its line while the gentle slope of the chart itself never does.
+  float d = lin(texture2D(tDepth, uv).r), near = d;
+  near = min(near, lin(texture2D(tDepth, uv + vec2(px.x, 0.0)).r));
+  near = min(near, lin(texture2D(tDepth, uv - vec2(px.x, 0.0)).r));
+  near = min(near, lin(texture2D(tDepth, uv + vec2(0.0, px.y)).r));
+  near = min(near, lin(texture2D(tDepth, uv - vec2(0.0, px.y)).r));
+  if (d - near > uEdge * d) best = mix(best, uPal[1], 0.9);
   gl_FragColor = vec4(best, 1.0);
 }`;
 
@@ -64,7 +66,7 @@ export class Pixel {
       uniforms: {
         tColor: { value: this.rt.texture }, tDepth: { value: this.rt.depthTexture }, uRes: { value: new THREE.Vector2(2, 2) },
         uPal: { value: PALETTE.map((h) => new THREE.Color().setHex(h, THREE.LinearSRGBColorSpace)) }, uGrade: { value: new THREE.Vector3(1, 1, 1) },
-        uNear: { value: camera.near }, uFar: { value: camera.far }, uDither: { value: 0.035 },
+        uNear: { value: camera.near }, uFar: { value: camera.far }, uDither: { value: 0.035 }, uEdge: { value: 0.005 },
       },
     });
     this.quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.mat);
