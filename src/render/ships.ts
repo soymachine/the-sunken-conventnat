@@ -38,7 +38,7 @@ void main() {
 }`;
 const FRAG = /* glsl */ `
 uniform vec3 uColor, uTint, uLight;
-uniform float uTintAmt, uAlpha, uUseMap;
+uniform float uTintAmt, uAlpha, uUseMap, uReveal;
 uniform sampler2D uMap;
 uniform vec4 uClip;
 uniform vec3 uDeck;       // the band of heights decks lie in (low, high, in the model's own units) and on/off
@@ -53,6 +53,15 @@ varying vec3 vCol;
 void main() {
   // A ship seen through the Long Glass exists only inside the patch of water it shows.
   if (uClip.z > uClip.x && (vW.x < uClip.x || vW.x > uClip.z || vW.z < uClip.y || vW.z > uClip.w)) discard;
+  // Rising out of nothing (uReveal 0 → 1): specks of the ship appear from the waterline up, their edge glowing.
+  float glow = 0.0;
+  if (uReveal < 0.999) {
+    vec3 q = floor(vRoot * 70.0);
+    float speck = fract(sin(dot(q, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+    float h = 0.55 * speck + 0.45 * clamp(vRoot.y * 2.2, 0.0, 1.0);
+    if (h > uReveal) discard;
+    glow = smoothstep(uReveal - 0.12, uReveal, h);
+  }
   vec3 n = normalize(vN);
   if (!gl_FrontFacing) n = -n;
   float d = dot(n, uLight) * 0.5 + 0.5;
@@ -96,6 +105,7 @@ void main() {
     if (lum > 0.3 && mn > 0.45 * mx) lit = vec3(0.95, 0.9, 0.8) * (0.8 + 0.2 * d);
   }
   vec3 c = mix(lit, uTint, uTintAmt);
+  c = mix(c, vec3(1.0, 0.86, 0.55) * 1.6, glow * 0.85);
   gl_FragColor = vec4(c, uAlpha);
   #include <colorspace_fragment>
 }`;
@@ -104,7 +114,7 @@ void main() {
 export function inkMaterial(color: number, flutter = 0, map: THREE.Texture | null = null): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     vertexShader: VERT, fragmentShader: FRAG, side: THREE.DoubleSide,
-    uniforms: { uBand: { value: new THREE.Vector4(0, 0, 0, 0) }, uBandColor: { value: new THREE.Color(0xb07a38) }, uWaleColor: { value: new THREE.Color(0x2e2116) }, uToRoot: { value: new THREE.Matrix4() }, uDeck: { value: new THREE.Vector3(0, 0, 0) }, uDeckColor: { value: new THREE.Color(0x8a6a42) }, uColor: { value: new THREE.Color(color) }, uTint: { value: new THREE.Color(0xd9a441) }, uTintAmt: { value: 0 }, uAlpha: { value: 1 }, uLight: { value: LIGHT }, uTime: time, uFlutter: { value: flutter }, uMap: { value: map }, uUseMap: { value: map ? 1 : 0 }, uClip: { value: new THREE.Vector4(0, 0, -1, -1) } },
+    uniforms: { uBand: { value: new THREE.Vector4(0, 0, 0, 0) }, uBandColor: { value: new THREE.Color(0xb07a38) }, uWaleColor: { value: new THREE.Color(0x2e2116) }, uToRoot: { value: new THREE.Matrix4() }, uDeck: { value: new THREE.Vector3(0, 0, 0) }, uDeckColor: { value: new THREE.Color(0x8a6a42) }, uColor: { value: new THREE.Color(color) }, uTint: { value: new THREE.Color(0xd9a441) }, uTintAmt: { value: 0 }, uAlpha: { value: 1 }, uReveal: { value: 1 }, uLight: { value: LIGHT }, uTime: time, uFlutter: { value: flutter }, uMap: { value: map }, uUseMap: { value: map ? 1 : 0 }, uClip: { value: new THREE.Vector4(0, 0, -1, -1) } },
   });
 }
 

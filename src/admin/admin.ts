@@ -41,6 +41,8 @@ async function bufferFor(id: string): Promise<AudioBuffer | null> {
 
 /* ---------- page ---------- */
 document.body.innerHTML = `
+  <nav class="desks"><a href="#sounds" data-desk="sounds">Sonidos</a><a href="#fx" data-desk="fx">Explosiones</a></nav>
+  <div id="fxDesk" hidden></div>
   <header>
     <div><h1>Sonidos</h1><p>Arrastra un MP3, WAV u OGG sobre un sonido. Recórtalo moviendo las marcas, ajusta el volumen y los fundidos, y escúchalo. Los cambios se guardan en este navegador y el juego, abierto en este mismo navegador, los usa al momento. Para publicarlos para todos, descarga el paquete y súbelo a la rama.</p></div>
     <div class="actions"><button id="pack" class="primary">Descargar paquete (.zip)</button><a href="/" class="btn">Ir al juego</a></div>
@@ -246,3 +248,17 @@ void (async () => {
   [published, local] = await Promise.all([publishedBank(), localAll()]);
   for (const s of SOUNDS) void paint(s.id);
 })();
+
+/* ---------- the two desks: sounds and explosions ---------- */
+let fxMounted = false;
+function showDesk() {
+  const fx = location.hash === '#fx';
+  document.querySelectorAll<HTMLElement>('.desks a').forEach((a) => a.classList.toggle('on', (a.dataset.desk === 'fx') === fx));
+  document.querySelector<HTMLElement>('header')!.hidden = fx;
+  document.querySelector<HTMLElement>('main')!.hidden = fx;
+  const box = document.querySelector<HTMLElement>('#fxDesk')!;
+  box.hidden = !fx;
+  if (fx && !fxMounted) { fxMounted = true; void import('./blast').then((m) => m.mountBlast(box)); }
+}
+addEventListener('hashchange', showDesk);
+showDesk();

@@ -36,3 +36,23 @@ button.primary { background: var(--amber); color: var(--ink); border-color: var(
 .ctl .play, .ctl [data-act=stop] { width: 34px; padding: 6px 0; font-size: 13px; }
 .ctl .play { background: #3a2c16; }
 .grow { flex: 1; }
+
+/* the desks */
+.desks { display: flex; gap: 4px; padding: 10px 28px 0; background: #0f0c07; border-bottom: 1px solid var(--line); }
+.desks a { font: 700 12px var(--label); letter-spacing: .14em; text-transform: uppercase; color: var(--dim); text-decoration: none; padding: 8px 16px; border: 1px solid transparent; border-bottom: 0; border-radius: 4px 4px 0 0; }
+.desks a.on { color: var(--amber); background: var(--ink); border-color: var(--line); }
+[hidden] { display: none !important; }
+/* the explosion bench */
+.bench { display: grid; grid-template-columns: 330px 1fr; height: calc(100vh - 44px); }
+.bench aside { overflow-y: auto; padding: 14px 18px 30px; border-right: 1px solid var(--line); background: var(--panel); }
+.bench h2 { margin: 14px 0 8px; }
+.bench .kinds { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+.bench .kinds button.on { border-color: var(--amber); color: var(--amber); }
+.bench .go { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 8px; }
+.bench .sub { color: var(--dim); font-size: 13.5px; font-style: italic; margin: 4px 0 8px; }
+.bench label { display: grid; grid-template-columns: 1fr 120px 42px; align-items: center; gap: 8px; margin: 6px 0; font-size: 14px; color: var(--parch); }
+.bench label input { width: 100%; accent-color: var(--amber); }
+.bench label output { font: 12px ui-monospace, monospace; color: var(--dim); text-align: right; }
+.bench .stage { position: relative; }
+.bench .stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.bench .hint { position: absolute; right: 12px; bottom: 8px; margin: 0; font-size: 13px; color: rgba(239, 227, 196, .6); pointer-events: none; }

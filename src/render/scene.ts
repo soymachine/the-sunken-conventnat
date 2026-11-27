@@ -9,6 +9,7 @@ import { Kraken } from './kraken';
 import { Weather } from './weather';
 import { Post } from './post';
 import { Pixel } from './pixel';
+import { BLAST, SINK_KIND, loadSinkFx } from './sinkfx';
 import { Sea, waveH } from './sea';
 import { ShipModel, buildShip, loadPropModels, loadShipModels, propModel, setShipTime } from './ships';
 
@@ -107,20 +108,17 @@ const M = {
   lineAmber: new THREE.LineBasicMaterial({ color: C.amber }), lineWax: new THREE.LineBasicMaterial({ color: C.wax }),
 };
 
-/** How each class goes down: seconds, list (roll), bow up (+) or stern up (−), and how deep before she is gone. */
-const SINKING: Record<Kind, { dur: number; roll: number; pitch: number; depth: number; steam?: boolean }> = {
-  line: { dur: 4.4, roll: 0.62, pitch: -0.32, depth: 1.4 },
-  frigate: { dur: 3.8, roll: 0.55, pitch: 0.28, depth: 1.3 },
-  ironclad: { dur: 2.6, roll: 0.14, pitch: 0.55, depth: 1.2, steam: true },
-  schooner: { dur: 3.2, roll: 1.45, pitch: 0.1, depth: 1.1 },
-  cutter: { dur: 2.8, roll: 1.55, pitch: -0.06, depth: 1 },
-  merchant: { dur: 4, roll: 0.5, pitch: -0.24, depth: 1.3 },
-};
+// How each class goes down and how the blast looks live in ./sinkfx (tuned on the admin page's explosion bench).
+const SINKING = SINK_KIND;
 
 interface ShipObj {
   root: THREE.Group; tilt: THREE.Group; model: ShipModel; decor: THREE.Group; decorKey: string;
   kind: Kind; len: number; side: Side; pos: THREE.Vector3; yaw: number; phase: number;
-  state: 'afloat' | 'sinking' | 'wreck'; sink: number; sinkAt?: number; lift: number; fires: THREE.Vector3[]; cells: [number, number][]; fresh: boolean;
+  state: 'afloat' | 'sinking' | 'wreck'; sink: number; sinkAt?: number;
+  /** Being revealed by the ball now flying at her (she fades in from nothing as it comes). */
+  revealing?: boolean;
+  /** Her sinking was started by the blow itself (sinkNow): the redraw that follows leaves her alone. */
+  handled?: boolean; lift: number; fires: THREE.Vector3[]; cells: [number, number][]; fresh: boolean;
   /** Smoothed speed over the water, for the wake. */
   way?: number;
   /** The deck gun is being laid on a target: leave it be. */
@@ -367,6 +365,7 @@ export class SeaScene {
     }
     this.scene.add(this.marks, this.shipsGroup, this.misc, this.hl, this.fx.group, this.kraken.group, this.weather.group);
     if (this.quality === 'high') this.post = new Post(this.renderer, this.scene, this.camera);
+    void loadSinkFx();
     try { if (localStorage.getItem('tsc:style') === 'pixel') this.pixel = new Pixel(this.renderer, this.scene, this.camera); } catch { /* storage unavailable */ }
     addEventListener('resize', () => this.resize());
     canvas.addEventListener('wheel', (e) => { e.preventDefault(); this.wheel(e); }, { passive: false });
@@ -692,7 +691,7 @@ export class SeaScene {
       o.root.rotation.y += swing * k;
       const sea = this.seas[o.side], p = o.root.position;
       // A ship sunk by the last blow stays afloat a beat (she has just been hit), then her magazine goes up.
-      if (o.state === 'afloat' && o.sinkAt !== undefined && this.time >= o.sinkAt) {
+      if (o.state === 'afloat' && o.sinkAt !== undefined && !o.handled && this.time >= o.sinkAt) {
         o.state = 'sinking'; this.sound('sink'); if (SINKING[o.kind].steam) this.sound('steam');
         this.magazine(o.pos.clone(), o.side, o.len);
       }
@@ -1002,7 +1001,7 @@ export class SeaScene {
     const wreck = (o: ShipObj) => {
       if (o.state !== 'afloat') return;
       if (v.quiet) { o.state = 'wreck'; o.sink = 1; o.model.sails.visible = false; o.root.visible = false; }
-      else if (o.sinkAt === undefined) {
+      else if (o.sinkAt === undefined && !o.revealing && !o.handled) {
         // She takes the blow afloat; a beat later her magazine goes up and she starts down. A ship just revealed by
         // the shot that sank her (the enemy's) is seen whole first, a little longer.
         o.sinkAt = this.time + (o.fresh ? 0.75 : 0.35);
@@ -1021,8 +1020,10 @@ export class SeaScene {
       for (const m of o.model.mats) { m.uniforms.uTint.value.setHex(v.invalid ? C.wax : C.amber); m.uniforms.uTintAmt.value = sel ? 0.5 : 0; }
     }
     for (const s of v.pub.sides[foe].sunk) {
-      if (veiled('enemy', s)) continue;
-      const key = `e${s.kind}:${s.x},${s.y}`, o = this.ship(key, s.kind, s.len, 'enemy');
+      const key = `e${s.kind}:${s.x},${s.y}`;
+      // While the ball that sinks her is in the air she is being drawn in by the shot itself: leave her be.
+      if (veiled('enemy', s)) { if (this.ships.get(key)?.revealing || this.ships.get(key)?.state === 'sinking') seen.add(key); continue; }
+      const o = this.ship(key, s.kind, s.len, 'enemy');
       seen.add(key);
       this.aim(o, s);
       wreck(o);
@@ -1171,13 +1172,14 @@ export class SeaScene {
   /** Fire a shot at a cell and play out how it lands. Resolves on impact. */
   shot(target: Cell, outcome: ShotOutcome): Promise<void> {
     const to = cellCenter(target);
+    const doomed = outcome === 'sunk' ? this.doomedAt(target) : null;
     let from: THREE.Vector3;
     const guns = [...this.ships.values()].filter((o) => o.side === 'own' && o.state === 'afloat');
     const armed = guns.filter((o) => o.model.gun);
     if (target.side === 'enemy' && armed.length) {
       // One of the armed ships swings her deck gun onto the target and fires from its muzzle.
       const g = armed[Math.floor(Math.random() * armed.length)];
-      return this.layGun(g, to).then(() => this.fly(g.model.gun!.muzzle.getWorldPosition(new THREE.Vector3()), to, target, outcome, g)).finally(() => { g.laying = false; });
+      return this.layGun(g, to).then(() => this.fly(g.model.gun!.muzzle.getWorldPosition(new THREE.Vector3()), to, target, outcome, g, doomed)).finally(() => { g.laying = false; });
     }
     if (target.side === 'enemy' && guns.length) {
       const g = guns[Math.floor(Math.random() * guns.length)];
@@ -1189,7 +1191,38 @@ export class SeaScene {
       const c = cellCenter({ side: 'enemy', x: 2 + Math.random() * (N - 4), y: 2 + Math.random() * (N - 4) });
       from = c.setY(0.6);
     }
-    return this.fly(from, to, target, outcome);
+    return this.fly(from, to, target, outcome, undefined, doomed);
+  }
+
+  /**
+   * The ship the ball now flying will sink. An enemy ship is unseen until then: she is made now, invisible, to fade
+   * in from nothing as the ball comes. Mine is already there.
+   */
+  private doomedAt(target: Cell): ShipObj | null {
+    const v = this.last;
+    if (!v) return null;
+    if (target.side === 'own') {
+      const s = v.ships.find((x) => shipCells(x).some(([a, b]) => a === target.x && b === target.y));
+      return s ? this.ships.get('o' + s.id) ?? null : null;
+    }
+    const s = v.pub.sides[(1 - v.me) as 0 | 1].sunk.find((x) => shipCells(x).some(([a, b]) => a === target.x && b === target.y));
+    if (!s) return null;
+    const key = `e${s.kind}:${s.x},${s.y}`, had = this.ships.has(key), o = this.ship(key, s.kind, s.len, 'enemy');
+    if (o.state !== 'afloat') return o;
+    this.aim(o, s);
+    if (!had) { o.revealing = true; this.setReveal(o, 0); }
+    return o;
+  }
+  private setReveal(o: ShipObj, k: number) { for (const m of o.model.mats) m.uniforms.uReveal.value = k; o.root.traverse((c) => { c.castShadow = k >= 1; }); }
+  /** The blow that sinks her lands: no ordinary burst, her magazine goes up and down she goes. */
+  private sinkNow(o: ShipObj) {
+    if (o.revealing) { o.revealing = false; this.setReveal(o, 1); }
+    if (o.state !== 'afloat') return;
+    o.handled = true;
+    const go = () => { if (o.state !== 'afloat') return; o.state = 'sinking'; this.sound('sink'); if (SINKING[o.kind].steam) this.sound('steam'); };
+    const boom = () => this.magazine(o.pos.clone(), o.side, o.len);
+    if (BLAST.delay > 0) setTimeout(boom, BLAST.delay * 1000); else boom();
+    if (BLAST.sinkDelay > 0) setTimeout(go, BLAST.sinkDelay * 1000); else go();
   }
 
   /** Turn a ship's deck gun towards a point; resolves once it is laid. */
@@ -1212,7 +1245,7 @@ export class SeaScene {
   }
 
   /** The ball's flight and what it does where it lands. */
-  private fly(from: THREE.Vector3, to: THREE.Vector3, target: Cell, outcome: ShotOutcome, gunner?: ShipObj): Promise<void> {
+  private fly(from: THREE.Vector3, to: THREE.Vector3, target: Cell, outcome: ShotOutcome, gunner?: ShipObj, doomed: ShipObj | null = null): Promise<void> {
     if (gunner) {
       const { barrel } = gunner.model.gun!;
       this.fx.muzzle(from);
@@ -1235,9 +1268,12 @@ export class SeaScene {
         ball.position.lerpVectors(from, to, u);
         ball.position.y += Math.sin(u * Math.PI) * arc;
         this.fx.trail(ball.position);
+        // The ship the ball will sink rises out of nothing as it comes, whole by the time it lands.
+        if (doomed?.revealing) this.setReveal(doomed, Math.min(1, u / 0.85));
         if (u < 1) { requestAnimationFrame(step); return; }
         this.misc.remove(ball);
-        this.impact(target, outcome);
+        if (doomed) { this.seas[target.side].bump(target.x, target.y, 1); this.sinkNow(doomed); }
+        else this.impact(target, outcome);
         res();
       };
       step();
@@ -1255,11 +1291,11 @@ export class SeaScene {
 
   /** The powder magazine of a lost ship goes up: the great explosion, scaled to her length. */
   private magazine(at: THREE.Vector3, side: Side, len: number) {
-    const k = 0.75 + len * 0.13, base = at.clone().setY(0.45);
+    const k = (0.75 + len * 0.13) * BLAST.scale, base = at.clone().setY(0.45);
     this.fx.blast(base, k);
     this.sound('explosion');
-    this.shake(calm ? 0 : 0.55 + len * 0.08);
-    if (!calm) { this.hitStop = 0.11; this.flashAmt = 1; }
+    this.shake(calm ? 0 : (0.55 + len * 0.08) * BLAST.shake);
+    if (!calm) { this.hitStop = BLAST.hitStop; this.flashAmt = BLAST.flash; }
     // A ring of pressure races out over the water, and the sea heaves around her.
     const ring = new THREE.Mesh(new THREE.RingGeometry(0.82, 1, 64), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 1.25, 0.8), transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
     ring.rotation.x = -Math.PI / 2; ring.position.set(at.x, 0.14, at.z); ring.scale.setScalar(0.3);
@@ -1268,7 +1304,7 @@ export class SeaScene {
     const cx = Math.floor(at.x - origin[side].x), cz = Math.floor(at.z - origin[side].z);
     for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) { const d = Math.hypot(dx, dy); if (d <= 2.3 && inBoard(cx + dx, cz + dy)) this.seas[side].bump(cx + dx, cz + dy, 0.5 * (1 - d / 3)); }
     // Wreckage thrown into the air: planks (some burning) and a broken mast.
-    const n = 6 + len * 2;
+    const n = Math.round((6 + len * 2) * BLAST.chunks);
     for (let i = 0; i <= n; i++) {
       const mast = i === n, a = Math.random() * Math.PI * 2, out = (mast ? 1.2 : 1.6 + Math.random() * 2.4) * k;
       const geo = mast ? new THREE.CylinderGeometry(0.03, 0.045, 0.9 + len * 0.18, 6) : G.plank;
@@ -1304,7 +1340,7 @@ export class SeaScene {
       (b.ring.material as THREE.MeshBasicMaterial).opacity = 0.9 * (1 - u);
       if (u >= 1 && b.ring.parent) { this.misc.remove(b.ring); b.ring.geometry.dispose(); }
       // Smoke hangs over the place for a few seconds, thinning.
-      const s = 1 - age / 7;
+      const s = 1 - age / Math.max(0.5, BLAST.smoke);
       if (s > 0) this.fx.plume(b.at.clone().setY(0.3), dt, s);
       else this.blasts.splice(this.blasts.indexOf(b), 1);
     }
@@ -1342,14 +1378,19 @@ export class SeaScene {
 
   /** The Kraken brings a tentacle down on a cell. Resolves on impact. */
   async lash(target: Cell, outcome: ShotOutcome): Promise<void> {
+    const doomed = outcome === 'sunk' ? this.doomedAt(target) : null;
     if (this.kraken.active) await this.kraken.slam(cellCenter(target));
     this.sound('slam');
+    if (doomed) { this.shake(0.2); this.sinkNow(doomed); return; }
     this.shake(0.2);
     this.impact(target, outcome);
   }
 
   /** The maelstrom takes a section of a ship. */
-  drown(target: Cell, outcome: ShotOutcome) { this.impact(target, outcome === 'hit' || outcome === 'sunk' ? outcome : 'miss'); }
+  drown(target: Cell, outcome: ShotOutcome) {
+    const doomed = outcome === 'sunk' ? this.doomedAt(target) : null;
+    if (doomed) this.sinkNow(doomed); else this.impact(target, outcome === 'hit' || outcome === 'sunk' ? outcome : 'miss');
+  }
 
   /** A spyglass sweeping its 5×5 patch. */
   sweep(c: Cell): Promise<void> {
