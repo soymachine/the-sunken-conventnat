@@ -83,7 +83,13 @@ void main() {
   vec3 lit = base * band * hatch;
   // Sail cloth on the generated models (pale texels above the decks): one clean canvas colour with soft light,
   // no bands or hatching, so the few large folded triangles read as cloth rather than broken patches.
-  if (uDeck.z > 0.5 && vRoot.y > uDeck.x + 0.06) {
+  // Only parts that bring their own colours (texture or per-triangle colours) can be canvas: the plain parts added
+  // later (poop deck, stern panels) are white here only because they have no colours of their own.
+  bool painted = uUseMap > 0.5;
+  #ifdef USE_COLOR
+  painted = true;
+  #endif
+  if (painted && uDeck.z > 0.5 && vRoot.y > uDeck.x + 0.06) {
     // (Colours arrive in linear light, where pale canvas looks more saturated: compare channels by ratio.)
     vec3 t = uUseMap > 0.5 ? texture2D(uMap, vUv).rgb * vCol : vCol;
     float lum = dot(t, vec3(0.299, 0.587, 0.114)), mx = max(t.r, max(t.g, t.b)), mn = min(t.r, min(t.g, t.b));
@@ -224,8 +230,9 @@ const BAND: Partial<Record<Kind, { lo: number; hi: number; wale: number; color: 
   frigate: { lo: 0.004, hi: 0.05, wale: 0.09, color: 0xb07a38, waleColor: 0x2e2116 },
 };
 const DECK: Partial<Record<Kind, { color: number; lo: number; hi: number }>> = {
-  line: { color: 0x8a6a42, lo: 0.04, hi: 0.14 }, frigate: { color: 0x8a6a42, lo: 0.0, hi: 0.1 }, ironclad: { color: 0x58534c, lo: 0.0, hi: 0.06 },
-  schooner: { color: 0x94744a, lo: 0.03, hi: 0.17 }, cutter: { color: 0x94744a, lo: 0.09, hi: 0.17 }, merchant: { color: 0x86663e, lo: 0.04, hi: 0.18 },
+  // Dark, weathered planking on the wooden ships; the ironclad's iron deck keeps its grey.
+  line: { color: 0x4e3420, lo: 0.04, hi: 0.14 }, frigate: { color: 0x4e3420, lo: 0.0, hi: 0.1 }, ironclad: { color: 0x58534c, lo: 0.0, hi: 0.06 },
+  schooner: { color: 0x553a24, lo: 0.03, hi: 0.17 }, cutter: { color: 0x553a24, lo: 0.09, hi: 0.17 }, merchant: { color: 0x4b3220, lo: 0.04, hi: 0.18 },
 };
 
 let shipsLoading: Promise<number> | null = null;
