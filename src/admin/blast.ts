@@ -106,7 +106,7 @@ export async function mountBlast(host: HTMLElement) {
   const blastCtl = () => wire(host.querySelector('#blastCtl')!, ([
     ['delay', 'Retraso explosión (s)', 0, 1.5, 0.05, 'Segundos entre el impacto de la bala y la explosión.'],
     ['sinkDelay', 'Retraso hundimiento (s)', 0, 2, 0.05, 'Segundos entre el impacto y el comienzo del hundimiento.'],
-    ['scale', 'Tamaño', 0.4, 2, 0.05, 'Bola de fuego, humo y anillo sobre el agua.'],
+    ['scale', 'Tamaño', 0.4, 2, 0.05, 'Bola de fuego y humo.'],
     ['shake', 'Temblor de cámara', 0, 2, 0.05, '0 = sin temblor.'],
     ['hitStop', 'Congelación (s)', 0, 0.3, 0.01, 'El instante en que todo se detiene.'],
     ['flash', 'Destello', 0, 1.5, 0.05, 'El brillo cálido sobre toda la imagen.'],

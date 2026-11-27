@@ -20,7 +20,7 @@ export const BLAST = {
   delay: 0,
   /** Seconds after the ball lands before she starts going down. */
   sinkDelay: 0.15,
-  /** Size of the fireball, smoke and the ring on the water. */
+  /** Size of the fireball and smoke. */
   scale: 1,
   /** Camera shake. */
   shake: 1,

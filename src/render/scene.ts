@@ -316,8 +316,8 @@ export class SeaScene {
   private dir = new THREE.Vector3(0, 1, 0.95).normalize();
   private camPos = new THREE.Vector3();
   private shakeAmt = 0;
-  /** A ship's magazine going up: the ring on the water, the smoke that hangs after, the wreckage in the air. */
-  private blasts: { at: THREE.Vector3; side: Side; t: number; k: number; ring: THREE.Mesh }[] = [];
+  /** A ship's magazine going up: the smoke that hangs after, the wreckage in the air. */
+  private blasts: { at: THREE.Vector3; side: Side; t: number; k: number }[] = [];
   private flotsam: { m: THREE.Mesh; t: number; ph: number; v: THREE.Vector3 }[] = [];
   private chunks: { m: THREE.Mesh; v: THREE.Vector3; spin: THREE.Vector3; t: number; landed: number; burn: boolean; mast: boolean }[] = [];
   /** A beat where everything nearly stops (seconds of real time left), and a warm flash over the whole picture. */
@@ -1296,11 +1296,8 @@ export class SeaScene {
     this.sound('explosion');
     this.shake(calm ? 0 : (0.55 + len * 0.08) * BLAST.shake);
     if (!calm) { this.hitStop = BLAST.hitStop; this.flashAmt = BLAST.flash; }
-    // A ring of pressure races out over the water, and the sea heaves around her.
-    const ring = new THREE.Mesh(new THREE.RingGeometry(0.82, 1, 64), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 1.25, 0.8), transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
-    ring.rotation.x = -Math.PI / 2; ring.position.set(at.x, 0.14, at.z); ring.scale.setScalar(0.3);
-    this.misc.add(ring);
-    this.blasts.push({ at: at.clone(), side, t: this.time, k, ring });
+    // The sea heaves around her.
+    this.blasts.push({ at: at.clone(), side, t: this.time, k });
     const cx = Math.floor(at.x - origin[side].x), cz = Math.floor(at.z - origin[side].z);
     for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) { const d = Math.hypot(dx, dy); if (d <= 2.3 && inBoard(cx + dx, cz + dy)) this.seas[side].bump(cx + dx, cz + dy, 0.5 * (1 - d / 3)); }
     // Wreckage thrown into the air: planks (some burning) and a broken mast.
@@ -1335,10 +1332,7 @@ export class SeaScene {
   /** One frame of the blasts and their wreckage. */
   private blastFrame(dt: number, t: number) {
     for (const b of [...this.blasts]) {
-      const age = t - b.t, u = Math.min(1, age / 0.9);
-      b.ring.scale.setScalar(0.3 + (1 - (1 - u) ** 3) * 4.2 * b.k);
-      (b.ring.material as THREE.MeshBasicMaterial).opacity = 0.9 * (1 - u);
-      if (u >= 1 && b.ring.parent) { this.misc.remove(b.ring); b.ring.geometry.dispose(); }
+      const age = t - b.t;
       // Smoke hangs over the place for a few seconds, thinning.
       const s = 1 - age / Math.max(0.5, BLAST.smoke);
       if (s > 0) this.fx.plume(b.at.clone().setY(0.3), dt, s);
