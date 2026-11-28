@@ -753,7 +753,8 @@ export class Hud {
       order('fire', 'Fire', 'One shot at a square of enemy water.');
       order('turn', 'Turn', 'Pick one of your ships and swing her bow a quarter to port or starboard about her middle. Ships with two hits cannot turn.');
       const sunk = (kind: 'line' | 'frigate' | 'cutter', cls: string) => (c.alive(kind) ? '' : `Your ${cls} has been sunk.`);
-      tool('broadside', TOOLS.broadside.name, 2, c.can(2) && c.alive('line'), `${TOOL_HELP.broadside.text} Needs your Ship of the Line afloat.`, sunk('line', 'Ship of the Line'));
+      // No Ship of the Line in the fleet (Blitz): no broadside card at all.
+      if (c.ships.some((s) => s.kind === 'line')) tool('broadside', TOOLS.broadside.name, 2, c.can(2) && c.alive('line'), `${TOOL_HELP.broadside.text} Needs your Ship of the Line afloat.`, sunk('line', 'Ship of the Line'));
       tool('chain', TOOLS.chain.name, 2, c.can(2) && c.alive('frigate'), `${TOOL_HELP.chain.text} Needs your Frigate afloat.`, sunk('frigate', 'Frigate'));
       tool('spy', TOOLS.spy.name, 1, c.can(1) && c.alive('cutter'), `${TOOL_HELP.spy.text} Needs your Cutter afloat.`, sunk('cutter', 'Cutter'));
       for (const id of [...new Set(me.items)]) {

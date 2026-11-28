@@ -26,8 +26,8 @@ export const FLEETS: Record<Role, typeof FLEET> = {
   admiral: [pick('line'), pick('frigate'), pick('ironclad'), pick('cutter'), { kind: 'merchant', cls: 'Merchantman', len: 3, trait: 'Cargo' }],
   corsair: [pick('frigate'), pick('schooner'), pick('schooner'), pick('cutter'), pick('cutter')],
 };
-/** Blitz: a 10×10 chart and four ships (no Schooner). */
-export const BLITZ_FLEET = [pick('line'), pick('frigate'), pick('ironclad'), pick('cutter')];
+/** Blitz: a 10×10 chart and the four smallest ships (no Ship of the Line). */
+export const BLITZ_FLEET = [pick('frigate'), pick('ironclad'), pick('schooner'), pick('cutter')];
 /** Set the chart's size and the fleet for a battle: Blitz plays on 10×10 with four ships, the rest on 16×16. */
 export function useBoard(blitz: boolean) {
   N = blitz ? 10 : 16;
