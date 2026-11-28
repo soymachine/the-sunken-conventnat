@@ -709,3 +709,26 @@ describe('the Kraken', () => {
     }
   });
 });
+
+describe('blitz', () => {
+  it('plays on a 10×10 chart with four ships, and bots finish and verify', async () => {
+    for (let seed = 1; seed <= 12; seed++) {
+      const bus = new Bus(), rnd = seeded(seed * 97);
+      const a = new Client(0, seed, bus.send, rnd, 'A', 'blitz'), b = new Client(1, seed, bus.send, rnd, 'B', 'blitz');
+      expect(N).toBe(10);
+      expect(a.ships.length).toBe(4);
+      expect(a.ships.every((s) => shipCells(s).every(([x, y]) => x < 10 && y < 10))).toBe(true);
+      bus.subscribe((m) => a.receive(m));
+      bus.subscribe((m) => b.receive(m));
+      botAct(a, rnd); botAct(b, rnd);
+      while (a.pub.phase === 'placement') await tick();
+      driveBot(a, null, rnd); driveBot(b, null, rnd);
+      expect(a.pub.phase).toBe('over');
+      expect(a.pub.ring).toBeLessThanOrEqual(2);
+      expect(await verify(bus.log, 0, a.role, seed, 'blitz')).toBeNull();
+      expect(await verify(bus.log, 1, b.role, seed, 'blitz')).toBeNull();
+    }
+    new Client(0, 1, () => {}, seeded(1), 'A', 'classic');
+    expect(N).toBe(16);
+  });
+});

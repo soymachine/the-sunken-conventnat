@@ -115,7 +115,7 @@ export function botAct(c: Client, rnd: Rnd = Math.random): boolean {
   if (cmdAct !== null) return cmdAct;
 
   // The maelstrom is coming: bring ships in from the rim before it takes them.
-  if (p.mode === 'classic' && p.round >= MAELSTROM_ROUND - 3 && p.ap >= 2) {
+  if (p.mode !== 'convoy' && p.round >= MAELSTROM_ROUND - 3 && p.ap >= 2) {
     const risk = (s: Pick<Ship, 'x' | 'y' | 'dir' | 'len'>) => shipCells(s).filter(([x, y]) => !safe(p.ring + 1, x, y)).length;
     for (const s of c.ships) {
       if (s.sunk || !risk(s)) continue;

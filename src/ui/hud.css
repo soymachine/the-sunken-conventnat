@@ -1042,3 +1042,13 @@ html.cvd .logPanel li.good span { color: #1f6fa0; }
 .over #rematch.invited { animation: rematchGlow 1.4s ease-in-out infinite; }
 .over #rematch:disabled { opacity: .7; cursor: default; }
 @keyframes rematchGlow { 50% { box-shadow: 0 0 0 3px rgba(140, 47, 27, .35), 0 0 18px rgba(255, 190, 110, .7); } }
+
+/* ---------- the turn row: action points ── whose turn ── the round, and the clock under it ---------- */
+#hud .status .turnRow { display: flex; align-items: center; gap: 12px; width: 460px; margin: 0 auto; }
+#hud .status .turnRow #turnTitle { display: inline; flex: none; }
+#hud .status .turnRow #turnSub { flex: none; margin: 0; min-width: 72px; text-align: right; }
+#hud .status .turnRow .apSeals { flex: none; min-width: 72px; padding: 0; justify-content: flex-start; }
+#hud .status .turnRow .rule { flex: 1; height: 1px; background: linear-gradient(90deg, rgba(176, 141, 60, .15), rgba(176, 141, 60, .75), rgba(176, 141, 60, .15)); box-shadow: 0 1px 3px #000; }
+#hud .status .clock { width: 220px; margin-top: 9px; }
+#hud .status .turnRow.solo { justify-content: center; }
+#hud .status .turnRow.solo .rule, #hud .status .turnRow.solo .apSeals { display: none; }

@@ -4,11 +4,14 @@
 import { Order, pickOrder } from './orders';
 import { ITEMS, Item, MAX_ITEMS, START_DOUBLOONS } from './powerups';
 import {
-  headingOf, AP_PER_TURN, CellResult, Dir, KRAKEN_SEALS, Kind, MAELSTROM_MAX_RING, MAELSTROM_ROUND, N, Revealed, Rnd, Role, Ship, XY, attackCells, countScan, inBoard, inKraken, inZone, legalPlacement, peekFits, safe, peekShips, randomFleet, zoneFits,
+  headingOf, useBoard, AP_PER_TURN, CellResult, Dir, KRAKEN_SEALS, Kind, MAELSTROM_MAX_RING, MAELSTROM_ROUND, N, Revealed, Rnd, Role, Ship, XY, attackCells, countScan, inBoard, inKraken, inZone, legalPlacement, peekFits, safe, peekShips, randomFleet, zoneFits,
   repairShip, rimCells, resolveAttack, driftFleet, sailReach, sailShip, shipAt, shipCells, turnShip, canTurnShip, Way,
 } from './rules';
 
-export type Mode = 'classic' | 'convoy';
+/** Blitz is the classic battle on a smaller chart with a smaller fleet and a short clock. */
+export type Mode = 'classic' | 'convoy' | 'blitz';
+/** How long a turn lasts; in the last seconds the clock ticks, and at 0 the turn ends by itself. */
+export const TURN_SECONDS: Record<Mode, number> = { classic: 90, convoy: 90, blitz: 30 };
 /** Longest message in a bottle, in characters. */
 export const NOTE_MAX = 80;
 /** Rounds the Admiral has to bring the cargo home. */
@@ -146,7 +149,7 @@ export interface Pub {
 /** Rounds until the maelstrom swallows its next ring (1 = at the start of the next round), or null once spent or
  *  outside the classic battle. */
 export function maelstromIn(p: Pub): number | null {
-  if (p.mode !== 'classic' || p.ring >= MAELSTROM_MAX_RING || p.phase === 'over') return null;
+  if (p.mode === 'convoy' || p.ring >= MAELSTROM_MAX_RING || p.phase === 'over') return null;
   if (p.nextRing !== undefined) return Math.max(1, p.nextRing - p.round);
   let next = Math.max(MAELSTROM_ROUND, p.round + 1);
   if (next % 2) next++;
@@ -167,6 +170,7 @@ const COST: Record<AttackSrc, number> = { shot: 1, broadside: 2, chain: 2, fires
 export const attackCost = (src: AttackSrc) => COST[src];
 
 export function newPub(seed: number, mode: Mode = 'classic'): Pub {
+  useBoard(mode === 'blitz');
   const side = (): SidePub => ({ name: '', ready: false, hash: '', shots: [], debris: [], sunk: [], spotted: [], scans: [], fogs: [], wakes: [], doubloons: START_DOUBLOONS, seals: 0, items: [] });
   return { phase: 'placement', current: 0, ap: AP_PER_TURN, round: 1, winner: null, pending: false, windsUsed: false, rng: seed >>> 0 || 1, sides: [side(), side()], treasures: [],
     mode, admiral: mode === 'convoy' ? ((((seed >>> 0) >> 3) & 1) as 0 | 1) : null, cargo: CRATES, power: [false, false], ring: 0, wind: ((seed >>> 0) >> 5) & 3, pacts: [false, false] };
@@ -265,7 +269,7 @@ export function reduce(p: Pub, m: Msg): boolean {
   if (m.t === 'ready') {
     if (p.phase !== 'placement' || mine.ready) return false;
     mine.ready = true; mine.hash = m.hash; mine.name = m.name;
-    if (m.cmd && p.mode === 'classic' && CMDS.includes(m.cmd)) {
+    if (m.cmd && p.mode !== 'convoy' && CMDS.includes(m.cmd)) {
       mine.cmd = m.cmd; mine.cmdUses = 0;
       if (m.cmd === 'spymaster') mine.doubloons = 0; // the Spymaster spends on informers, not on stores
     }
@@ -435,7 +439,7 @@ export function reduce(p: Pub, m: Msg): boolean {
         if (p.storm && p.round > p.storm.until) p.storm = undefined;
         if (p.round % 5 === 0) tide(p);
         // From round 20 the maelstrom swallows the outer ring of both charts every other round.
-        if (p.mode === 'classic' && p.ring < MAELSTROM_MAX_RING) {
+        if (p.mode !== 'convoy' && p.ring < MAELSTROM_MAX_RING) {
           const due = p.nextRing ?? (p.round >= MAELSTROM_ROUND && p.round % 2 === 0 ? p.round : Infinity);
           if (p.round >= due) { p.ring++; p.nextRing = p.round + 2; }
         }

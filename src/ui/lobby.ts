@@ -1,5 +1,5 @@
 // The port: choose a name and how to play.
-import { Mode } from '../game/engine';
+import { Mode, TURN_SECONDS } from '../game/engine';
 import { Lang, getLang, setLang } from './i18n';
 import { openHowTo } from './howto';
 import { openShipViewer } from './shipViewer';
@@ -40,8 +40,9 @@ export class Lobby {
         <input id="capName" maxlength="20" autocomplete="off" placeholder="Sign your name" />
         <p class="field" id="modeLbl">Kind of battle</p>
         <div class="modes" role="radiogroup" aria-labelledby="modeLbl">
-          <button class="mode on" data-mode="classic" role="radio" aria-checked="true"><b>Classic</b><span>Sink the whole enemy fleet.</span></button>
-          <button class="mode" data-mode="convoy" role="radio" aria-checked="false"><b>Convoy</b><span>One escorts the cargo home, the other plunders it. Roles are drawn by lot.</span></button>
+          <button class="mode on" data-mode="classic" role="radio" aria-checked="true"><b>Classic</b><span>16×16 charts, a fleet of 5 ships and ${TURN_SECONDS.classic} s a turn</span></button>
+          <button class="mode" data-mode="blitz" role="radio" aria-checked="false"><b>Blitz</b><span>10×10 charts, a fleet of 4 ships and ${TURN_SECONDS.blitz} s a turn</span></button>
+          <!-- Convoy is still in the game, but no longer offered here. -->
         </div>
         <div class="row"><button class="plaque" id="vsBot">Play the machine</button></div>
         <div class="row"><button class="plaque dark" id="ships3d" type="button">3D Ships</button></div>

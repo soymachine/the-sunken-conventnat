@@ -87,7 +87,7 @@
               ".validate": "newData.val() === 'machine' || newData.val() === 'online'"
             },
             "mode": {
-              ".validate": "newData.val() === 'classic' || newData.val() === 'convoy'"
+              ".validate": "newData.val() === 'classic' || newData.val() === 'convoy' || newData.val() === 'blitz'"
             },
             "result": {
               ".validate": "newData.val() === 'win' || newData.val() === 'loss'"

@@ -1,7 +1,7 @@
 // Controller: lobby → session → one Client driving the scene and the HUD.
 import './ui/fonts';
 import './ui/hud.css';
-import { CMDS, Client, Msg, Snapshot, afloat, krakenSeals, roleOf } from './game/engine';
+import { CMDS, Client, TURN_SECONDS, Msg, Snapshot, afloat, krakenSeals, roleOf } from './game/engine';
 import { recordMatch } from './net/account';
 import { ITEMS, Item } from './game/powerups';
 import { Dir, Ship, Way, ZONE, ahead, attackCells, bowCell, cellName, clampZone, fits, headingOf, inBoard, legalPlacement, pivotCell, randomFleet, shipAt, shipCells, turned, MAELSTROM_ROUND, N, becalmed } from './game/rules';
@@ -433,7 +433,7 @@ function weather() {
   }
   seen.seals = n;
   // Warn two rounds ahead that the sea will start to close in.
-  if (p.mode === 'classic' && p.phase === 'battle' && p.round === MAELSTROM_ROUND - 2 && seen.warned !== p.round) { seen.warned = p.round; hud.log(`The sea darkens at the edges: from round ${MAELSTROM_ROUND} the maelstrom swallows the outer ring every other round. Bring your ships in!`, 'bad'); }
+  if (p.mode !== 'convoy' && p.phase === 'battle' && p.round === MAELSTROM_ROUND - 2 && seen.warned !== p.round) { seen.warned = p.round; hud.log(`The sea darkens at the edges: from round ${MAELSTROM_ROUND} the maelstrom swallows the outer ring every other round. Bring your ships in!`, 'bad'); }
   if (p.ring !== seen.ring) { seen.ring = p.ring; if (p.ring) hud.log('The maelstrom swallows another ring of the chart!', 'bad'); }
 }
 
@@ -524,18 +524,20 @@ function soundtrack() {
   sfx.setWind(p.phase !== 'battle' ? 0.3 : (p.wind ?? 0) < 0 ? 0 : p.storm ? 1 : 0.55);
 }
 
-/* ---------- online: the turn's clock and the link to the other captain ---------- */
-/** An online turn lasts this long; in the last 15 seconds the clock ticks, and at 0 your turn ends by itself. */
-const TURN_SECONDS = 90;
+/* ---------- the turn's clock, and (online) the link to the other captain ---------- */
+// A turn lasts TURN_SECONDS of its mode; in the last seconds the clock ticks, and at 0 your turn ends by itself.
+// Against the machine it runs too, but not in the guided first battle, and it stops while the tab is hidden.
 let turnStart = performance.now(), lastTick = -1, foeGoneAt = 0;
 const mmss = (t: number) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
 setInterval(() => {
   const online = !!session?.code;
-  if (!online || c.pub.phase !== 'battle') hud.setClock(null);
+  if (!session || !c || c.pub.phase !== 'battle' || (!online && tutorial.active)) hud.setClock(null);
   else {
-    const left = Math.max(0, TURN_SECONDS - (performance.now() - turnStart) / 1000);
-    hud.setClock(left, TURN_SECONDS, c.myTurn);
-    if (c.myTurn && left > 0 && left <= 15 && Math.ceil(left) !== lastTick) { lastTick = Math.ceil(left); sfx.play('tick'); }
+    if (!online && document.hidden) turnStart += 250;
+    const total = TURN_SECONDS[session.mode], warn = Math.min(15, Math.round(total / 3));
+    const left = Math.max(0, total - (performance.now() - turnStart) / 1000);
+    hud.setClock(left, total, c.myTurn, warn);
+    if (c.myTurn && left > 0 && left <= warn && Math.ceil(left) !== lastTick) { lastTick = Math.ceil(left); sfx.play('tick'); }
     if (c.myTurn && left <= 0 && c.can() && !busy) { hud.log('The glass ran out: your turn is over.', 'bad'); c.endTurn(); }
   }
   // The link: the other captain gone quiet, or this browser off the net.

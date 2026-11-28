@@ -15,7 +15,7 @@ export interface MatchRecord {
   at: number;
   /** 'machine' or 'online'. */
   vs: 'machine' | 'online';
-  mode: 'classic' | 'convoy';
+  mode: 'classic' | 'convoy' | 'blitz';
   /** The captain's role in Convoy (admiral / corsair), or classic. */
   role: string;
   opponent: string;

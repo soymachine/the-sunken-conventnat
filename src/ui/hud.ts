@@ -233,13 +233,15 @@ export class Hud {
     this.q<HTMLElement>('#logMenu').onclick = () => { this.q<HTMLElement>('#menu').hidden = true; void openLog(); };
     this.q<HTMLElement>('#logMenu').hidden = !accountsAvailable;
     this.q<HTMLElement>('#shipsMenu').onclick = () => { this.q<HTMLElement>('#menu').hidden = true; void openShipViewer(); };
-    // The action points sit under the turn header, where the eye goes as a turn begins.
-    this.q('#turnSub').after(this.q('#apSeals'));
-    // The latest event reads right under them: lower down, a raised card would cover it.
+    // One row where the eye goes as a turn begins: the action points, whose turn it is, the round; the turn's
+    // clock right under it, and the latest event under that (lower down, a raised card would cover it).
+    const row = document.createElement('div');
+    row.className = 'turnRow';
+    this.q('#turnTitle').before(row);
+    row.append(this.q('#apSeals'), Object.assign(document.createElement('i'), { className: 'rule' }), this.q('#turnTitle'), Object.assign(document.createElement('i'), { className: 'rule' }), this.q('#turnSub'));
+    row.insertAdjacentHTML('afterend', '<div class="clock" id="turnClock" hidden><i></i><b></b></div>');
     const toast = this.q<HTMLElement>('#toast');
-    this.q('#apSeals').after(toast);
-    // Online, the turn's clock sits between the action points and the note.
-    this.q('#apSeals').insertAdjacentHTML('afterend', '<div class="clock" id="turnClock" hidden><i></i><b></b></div>');
+    this.q('#turnClock').after(toast);
     this.root.insertAdjacentHTML('beforeend', '<div class="linkBanner" id="linkBanner" role="alert" hidden><span></span><button type="button" class="plaque" hidden>Back to port</button></div>');
     this.q<HTMLElement>('#linkBanner button').onclick = () => on.leave();
     toast.addEventListener('animationend', () => toast.classList.remove('show'));
@@ -660,6 +662,7 @@ export class Hud {
     this.q('#turnTitle').textContent = p.phase === 'placement' ? 'Deploy your fleet' : p.phase === 'over' ? 'Battle over' : mine ? 'Your turn' : 'Enemy turn';
     this.q('#turnWx').textContent = p.phase === 'battle' && p.storm ? `Storm over ${(p.storm.rows ?? 3) === 1 ? `row ${p.storm.row + 1}` : `rows ${p.storm.row + 1}–${p.storm.row + (p.storm.rows ?? 3)}`} · no guns or glasses there` : '';
     this.q('#turnSub').textContent = p.phase === 'battle' ? `Round ${p.round}` : '';
+    this.q('.turnRow').classList.toggle('solo', p.phase !== 'battle');
     // The wind gauge: its needle points where the wind blows, and trembles with it.
     const wg = this.q<HTMLElement>('#windg'), w = p.wind ?? 0;
     wg.hidden = p.phase !== 'battle';
@@ -837,7 +840,7 @@ export class Hud {
     if (p.kraken) parts.push(`<span><b>The Kraken</b>holds ${p.kraken.side === c.me ? 'your' : 'enemy'} ships</span>`);
     // The maelstrom gauge: a brass instrument whose whirlpool turns faster as the next ring nears.
     const g = this.q<HTMLElement>('#mael'), left = maelstromIn(p);
-    g.hidden = p.mode !== 'classic' || p.phase !== 'battle';
+    g.hidden = p.mode === 'convoy' || p.phase !== 'battle';
     if (!g.hidden) {
       g.classList.toggle('soon', left === 1); g.classList.toggle('spent', left === null);
       g.querySelector('b')!.textContent = left === null ? '—' : String(left);
@@ -865,15 +868,15 @@ export class Hud {
     }
   }
 
-  /** The turn's clock (online): seconds left of `total`, or null to hide it; it warns in the last 15 seconds. */
-  setClock(left: number | null, total = 90, mine = false) {
+  /** The turn's clock: seconds left of `total`, or null to hide it; it warns in the last `warn` seconds. */
+  setClock(left: number | null, total = 90, mine = false, warn = 15) {
     const k = this.q<HTMLElement>('#turnClock');
     k.hidden = left === null;
     if (left === null) return;
     const s = Math.ceil(left);
     k.querySelector<HTMLElement>('i')!.style.width = `calc((100% - 46px) * ${(left / total).toFixed(4)})`;
     k.querySelector('b')!.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-    k.classList.toggle('mine', mine); k.classList.toggle('low', s <= 15);
+    k.classList.toggle('mine', mine); k.classList.toggle('low', s <= warn);
   }
   /** A banner when the link to the other captain (or our own) is lost; `leave` offers the way back to port. */
   setLink(text: string | null, leave = false) {

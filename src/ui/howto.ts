@@ -57,7 +57,7 @@ const SECTIONS: Section[] = [
   { id: 'goal', title: { en: 'The aim', es: 'El objetivo' }, img: 'table',
     body: [
       { en: 'Two captains, two charts. Your fleet sails on the left chart; the enemy\'s lies hidden on the right. You never see their ships — you find them by firing, looking and reasoning.', es: 'Dos capitanes, dos cartas. Tu flota navega en la carta de la izquierda; la enemiga está oculta en la de la derecha. Nunca ves sus barcos: los encuentras disparando, observando y razonando.' },
-      { en: 'Classic: sink the whole enemy fleet before they sink yours. Convoy: one captain escorts a merchantman to port, the other hunts its cargo.', es: 'Clásica: hunde toda la flota enemiga antes de que hundan la tuya. Convoy: un capitán escolta un mercante hasta puerto y el otro va a por su carga.' },
+      { en: 'Classic: sink the whole enemy fleet before they sink yours, on 16×16 charts. Blitz: the same battle on 10×10 charts, with four ships a side and 30 seconds a turn.', es: 'Clásica: hunde toda la flota enemiga antes de que hundan la tuya, en mapas de 16×16. Rápida: la misma batalla en mapas de 10×10, con cuatro barcos por bando y 30 segundos por turno.' },
     ] },
   { id: 'deploy', title: { en: 'Deploy your fleet', es: 'Despliega tu flota' }, img: 'deploy',
     body: [

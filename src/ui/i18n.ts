@@ -16,7 +16,7 @@ const EXACT: Record<string, string> = {
   // Home
   'A competitive multiplayer naval strategy game inspired by the golden age of sailing warfare.': 'Un juego multijugador competitivo de estrategia naval inspirado en la edad de oro de la guerra a vela.',
   "Captain's name": 'Nombre del capitán', 'Sign your name': 'Firma con tu nombre', 'Kind of battle': 'Tipo de batalla',
-  Classic: 'Clásica', 'Sink the whole enemy fleet.': 'Hunde toda la flota enemiga.', Convoy: 'Convoy',
+  Classic: 'Clásica', 'Sink the whole enemy fleet.': 'Hunde toda la flota enemiga.', Convoy: 'Convoy', Blitz: 'Rápida',
   'One escorts the cargo home, the other plunders it. Roles are drawn by lot.': 'Uno escolta la carga hasta puerto, el otro la saquea. Los papeles se sortean.',
   'Play the machine': 'Jugar contra la máquina', 'or sail against a friend': 'o navega contra un amigo', 'Create a room': 'Crear una sala',
   Join: 'Unirse', 'Your room': 'Tu sala', 'Copy code': 'Copiar código', 'Copy invite link': 'Copiar enlace', CODE: 'CÓDIGO', 'Room code': 'Código de sala',
@@ -157,6 +157,7 @@ const EXACT: Record<string, string> = {
 
 /** Patterns for sentences that carry numbers, squares or names. Each group may itself be translated (tr). */
 const PATTERNS: [RegExp, (m: RegExpMatchArray) => string][] = [
+  [/^(\d+)×(\d+) charts, a fleet of (\d+) ships and (\d+) s a turn$/, (m) => `Mapas de ${m[1]}×${m[2]}, flota de ${m[3]} barcos y ${m[4]} s por turno`],
   [/^(.*) Needs your (.+) afloat\.$/, (m) => `${tr(m[1])} Necesita tu ${ship(m[2])} a flote.`],
   [/^(.*) Bought from the quartermaster; used up once played\.$/, (m) => `${tr(m[1])} Comprado al intendente; se gasta al jugarlo.`],
   [/^Your captain's power\. (.*)$/, (m) => `El poder de tu capitán. ${tr(m[1])}`],

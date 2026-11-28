@@ -1,6 +1,7 @@
 // Pure geometry and resolution rules on a single fleet. No rendering, no network.
 
-export const N = 16;
+/** Squares along each side of a chart: 16 in the Classic battle, 10 in Blitz. Set by `useBoard` as a battle begins. */
+export let N = 16;
 export const AP_PER_TURN = 3;
 /** Scans and fog banks cover a square of this radius around their centre (2 → 5×5). */
 export const ZONE = 2;
@@ -25,6 +26,15 @@ export const FLEETS: Record<Role, typeof FLEET> = {
   admiral: [pick('line'), pick('frigate'), pick('ironclad'), pick('cutter'), { kind: 'merchant', cls: 'Merchantman', len: 3, trait: 'Cargo' }],
   corsair: [pick('frigate'), pick('schooner'), pick('schooner'), pick('cutter'), pick('cutter')],
 };
+/** Blitz: a 10×10 chart and four ships (no Schooner). */
+export const BLITZ_FLEET = [pick('line'), pick('frigate'), pick('ironclad'), pick('cutter')];
+/** Set the chart's size and the fleet for a battle: Blitz plays on 10×10 with four ships, the rest on 16×16. */
+export function useBoard(blitz: boolean) {
+  N = blitz ? 10 : 16;
+  MAELSTROM_ROUND = blitz ? 12 : 20;
+  MAELSTROM_MAX_RING = (N - 6) / 2;
+  FLEETS.classic = blitz ? BLITZ_FLEET : FLEET;
+}
 /** The merchantman must start within this many columns of the western edge (the Colony). */
 export const START_COLS = 3;
 
@@ -59,9 +69,9 @@ export interface CellResult { x: number; y: number; r: ShotOutcome; ship?: Revea
 
 /** Seals needed to summon the Kraken, and the round the maelstrom begins (classic battles). */
 export const KRAKEN_SEALS = 3;
-export const MAELSTROM_ROUND = 20;
-/** The maelstrom stops once five rings have gone under, leaving the middle 6×6 of the chart. */
-export const MAELSTROM_MAX_RING = 5;
+export let MAELSTROM_ROUND = 20;
+/** The maelstrom stops once the middle 6×6 of the chart is left (five rings on the 16×16 chart, two on Blitz's 10×10). */
+export let MAELSTROM_MAX_RING = 5;
 /** The Kraken holds a 3×3 patch around its centre. */
 export const inKraken = (cx: number, cy: number, x: number, y: number) => Math.abs(x - cx) <= 1 && Math.abs(y - cy) <= 1;
 /** True while a cell is still inside the chart after `ring` outer rings have gone under. */

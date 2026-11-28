@@ -161,7 +161,7 @@ export async function joinRoom(code: string): Promise<FirebaseSession> {
   void sweep();
   const meta = (await get(ref(db, `rooms/${code}/meta`))).val();
   if (!meta) throw new Error('No room with that code, or its battle is over.');
-  const mode: Mode = meta.mode === 'convoy' ? 'convoy' : 'classic';
+  const mode: Mode = meta.mode === 'convoy' || meta.mode === 'blitz' ? meta.mode : 'classic';
   if (meta.host === uid) return new FirebaseSession(code, 0, meta.seed, mode);
   if (!meta.guest) await set(ref(db, `rooms/${code}/meta/guest`), uid).catch(() => { throw new Error('That room is already full.'); });
   else if (meta.guest !== uid) throw new Error('That room is already full.');

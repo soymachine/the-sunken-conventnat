@@ -32,11 +32,17 @@ export type Sound = 'cannon' | 'splash' | 'hit' | 'clang' | 'sink' | 'coin' | 'g
 
 // Red and amber follow the colour-blind setting (src/ui/palette.ts).
 const C = { ink: 0x0d0b08, get amber() { return PAL.amber; }, parch: 0xe8d5a3, brass: 0xb08d3c, get wax() { return PAL.wax; } };
-const HALF = N / 2;
-/** World position of each chart's (0,0) corner. Stacked on tall screens, side by side on wide ones. */
 export type Quality = 'auto' | 'high' | 'low';
-const STACKED: Record<Side, { x: number; z: number }> = { enemy: { x: -HALF, z: -(N + 0.5) }, own: { x: -HALF, z: 0.5 } };
-const ABREAST: Record<Side, { x: number; z: number }> = { own: { x: -(N + 0.75), z: -HALF }, enemy: { x: 0.75, z: -HALF } };
+/** World position of each chart's (0,0) corner. Stacked on tall screens, side by side on wide ones; worked out
+ *  again whenever the charts change size (Blitz plays on smaller ones). */
+let HALF = N / 2;
+let STACKED: Record<Side, { x: number; z: number }> = { enemy: { x: 0, z: 0 }, own: { x: 0, z: 0 } }, ABREAST = STACKED;
+function layOut() {
+  HALF = N / 2;
+  STACKED = { enemy: { x: -HALF, z: -(N + 0.5) }, own: { x: -HALF, z: 0.5 } };
+  ABREAST = { own: { x: -(N + 0.75), z: -HALF }, enemy: { x: 0.75, z: -HALF } };
+}
+layOut();
 let origin = STACKED;
 const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -329,6 +335,8 @@ export class SeaScene {
   /** What the player chose: 'auto' lowers the quality by itself on slow machines. */
   private qualityPref: Quality = 'auto';
   private paperShadows: THREE.Mesh[] = [];
+  /** The size the charts were built for. */
+  private boardN = N;
   private frames = 0; private slow = 0; private laid = false;
   private time = 0;
 
@@ -547,7 +555,7 @@ export class SeaScene {
   bottle(to: Side, stay: boolean): Promise<void> {
     const from: Side = to === 'own' ? 'enemy' : 'own';
     // From a square near the middle of the thrower's chart to one near the middle of the other.
-    const mid = () => 5 + Math.floor(Math.random() * 6);
+    const mid = () => Math.floor(N / 2) - 3 + Math.floor(Math.random() * 6);
     const a = cellCenter({ side: from, x: mid(), y: mid() }).setY(0.6), land = cellCenter({ side: to, x: mid(), y: mid() }).setY(0.1);
     const dist = a.distanceTo(land);
     const g = bottleModel();
@@ -567,8 +575,29 @@ export class SeaScene {
     this.sound('splash'); setTimeout(() => this.sound('splash'), 900);
   }
 
+  /** Build the charts again at the current size (N), when a battle on a different size begins. */
+  private rebuildBoard() {
+    this.boardN = N;
+    layOut();
+    for (const side of ['enemy', 'own'] as Side[]) {
+      const old = this.seas[side];
+      this.scene.remove(old.mesh); old.mesh.geometry.dispose();
+      const mat = old.mesh.material as THREE.ShaderMaterial;
+      (mat.uniforms.uMap?.value as THREE.Texture | undefined)?.dispose(); mat.dispose();
+      this.seas[side] = new Sea(side === 'enemy');
+      this.scene.add(this.seas[side].mesh);
+    }
+    for (const sh of this.shadowPlanes) { sh.geometry.dispose(); sh.geometry = new THREE.PlaneGeometry(N, N, 32, 32).rotateX(-Math.PI / 2); }
+    for (const ps of this.paperShadows) { ps.geometry.dispose(); ps.geometry = new THREE.PlaneGeometry(N + 4, N + 4); }
+    const sc = this.sun.shadow.camera;
+    sc.left = -N - 3; sc.right = N + 3; sc.top = N + 3; sc.bottom = -N - 3; sc.updateProjectionMatrix();
+    origin = STACKED; this.laid = false; this.zoom = 1; this.target.set(0, 0, 0);
+    this.resize();
+  }
+
   /** Forget every ship and mark: a new battle is starting. */
   reset() {
+    if (this.boardN !== N) this.rebuildBoard();
     for (const o of this.ships.values()) this.shipsGroup.remove(o.root);
     this.ships.clear(); this.marks.clear(); this.misc.clear(); this.hl.clear();
     this.blasts.length = 0; this.chunks.length = 0; this.flotsam.length = 0; this.flashAmt = 0; this.hitStop = 0;

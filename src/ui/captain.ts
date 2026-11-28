@@ -144,7 +144,7 @@ function history(rows: MatchRecord[]) {
       <th>${L({ en: 'Result', es: 'Resultado' })}</th><th>${L({ en: 'Rounds', es: 'Rondas' })}</th><th>${L({ en: 'Accuracy', es: 'Puntería' })}</th><th>${L({ en: 'Ships', es: 'Barcos' })}</th></tr></thead><tbody>
     ${rows.map((r) => `<tr class="${r.result}">
       <td>${when(r.at)}</td>
-      <td>${r.vs === 'machine' ? L({ en: 'The machine', es: 'La máquina' }) : esc(r.opponent || '?')}${r.mode === 'convoy' ? ` <em>${L({ en: 'Convoy', es: 'Convoy' })}</em>` : ''}${r.vs === 'online' && r.fair === false ? ` <em class="bad" title="${L({ en: 'Their log did not add up', es: 'Su cuaderno no cuadraba' })}">⚠</em>` : ''}</td>
+      <td>${r.vs === 'machine' ? L({ en: 'The machine', es: 'La máquina' }) : esc(r.opponent || '?')}${r.mode === 'convoy' ? ` <em>${L({ en: 'Convoy', es: 'Convoy' })}</em>` : ''}${r.mode === 'blitz' ? ` <em>${L({ en: 'Blitz', es: 'Rápida' })}</em>` : ''}${r.vs === 'online' && r.fair === false ? ` <em class="bad" title="${L({ en: 'Their log did not add up', es: 'Su cuaderno no cuadraba' })}">⚠</em>` : ''}</td>
       <td class="faces">${face(r.cmd)}<span>v</span>${face(r.foeCmd, true)}</td>
       <td><b>${r.result === 'win' ? L({ en: 'Victory', es: 'Victoria' }) : L({ en: 'Defeat', es: 'Derrota' })}</b><small>${L(REASON[r.reason] ?? { en: r.reason, es: r.reason })}</small></td>
       <td>${r.rounds}</td><td>${r.shots ? pct(r.hits, r.shots) + ' %' : '—'}</td><td>${r.sank} / ${r.lost}</td></tr>`).join('')}
