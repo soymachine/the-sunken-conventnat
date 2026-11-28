@@ -189,7 +189,8 @@ export class Hud {
         <h2>A message in a bottle</h2>
         <label for="noteText" class="meta">One a turn, for the other captain's eyes. It costs nothing.</label>
         <textarea id="noteText" maxlength="80" rows="2" placeholder="Fair winds, and a fair fight…"></textarea>
-        <div class="row"><span class="count" id="noteCount">0 / 80</span><button type="button" class="plaque dark" id="noteCancel">Keep it</button><button type="submit" class="plaque" id="noteSend">Seal &amp; cast</button></div>
+        <span class="count" id="noteCount">0 / 80</span>
+        <div class="row"><button type="button" class="plaque dark" id="noteCancel">Keep it</button><button type="submit" class="plaque" id="noteSend">Seal &amp; cast</button></div>
       </form>
       <div class="letter" id="letter" hidden role="dialog" aria-labelledby="letterHead">
         <div class="card"><p class="meta" id="letterHead">A bottle washes up on your waters</p><p class="ink" id="letterText"></p><p class="sign" id="letterSign"></p><button class="plaque" id="letterOk">Fold it away</button></div>

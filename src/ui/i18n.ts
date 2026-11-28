@@ -322,7 +322,8 @@ function doText(n: Text) {
   written.set(n, want);
 }
 function doAttrs(el: Element) {
-  if (skip(el)) return;
+  // A textarea's words are the player's, but its placeholder is ours.
+  if (el.tagName === 'TEXTAREA' ? skip(el.parentElement ?? el) : skip(el)) return;
   const o = attrOriginal.get(el) ?? {};
   for (const a of ATTRS) {
     const v = el.getAttribute(a);

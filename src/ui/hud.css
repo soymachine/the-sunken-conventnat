@@ -293,8 +293,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); out
 .compose .meta { display: block; font-size: 14px; margin: 0 0 8px; }
 .compose textarea { width: 100%; box-sizing: border-box; resize: none; background: rgba(255, 250, 232, .35); border: 1px solid rgba(13, 11, 8, .35); border-radius: 3px; padding: 8px 10px; font: italic 19px/1.3 var(--body); color: var(--ink); }
 .compose textarea:focus { outline: none; border-color: var(--wax); }
-.compose .row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
-.compose .count { flex: 1; font: 600 10px var(--label); letter-spacing: .1em; color: #6b5233; }
+.compose .row { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.compose .row .plaque { flex: 1; white-space: nowrap; }
+.compose .count { display: block; text-align: right; margin-top: 3px; font: 600 10px var(--label); letter-spacing: .1em; color: #6b5233; white-space: nowrap; }
 .compose .plaque { padding: 9px 12px; font-size: 11px; }
 .letter { position: absolute; inset: 0; display: grid; place-items: center; z-index: 8; background: rgba(13, 11, 8, .35); pointer-events: auto; }
 .letter .card { width: min(440px, 86vw); text-align: center; padding: 30px 40px 26px; transform-origin: 50% 0; }
